@@ -1,183 +1,310 @@
 <!DOCTYPE html>
 <html lang="fi">
+
 <head>
-<meta charset="UTF-8">
-<title>Tuloskooste Navisport JSON:sta</title>
-<style>
-body { font-family: Arial, sans-serif; margin: 2rem; }
-.series-block { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-.series-block h2 { margin-top: 0; }
-ol, .full-list { padding-left: 1.5rem; }
-.selected-team { font-weight: bold; color: darkblue; }
-.highlight-top { background-color: #ffeb3b; font-weight: bold; }
-.quick-links {
-  display: flex;
-  flex-wrap: wrap;  /* Rivittää linkit usealle riville */
-  gap: 10px;
-  margin: 20px 0;
-  padding: 10px;
-  background-color: #e9ecef;
-  border-radius: 5px;
-}
-.quick-links a { margin-right: 10px; }
-</style>
+    <meta charset="UTF-8">
+    <title>Tuloskooste Navisport JSON:sta</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 80%;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1,
+        h2 {
+            color: #0056b3;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-top: 30px;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 5px;
+        }
+
+
+        li {
+            margin-bottom: 10px;
+        }
+
+
+
+        button {
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #004085;
+        }
+
+        .series-block {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .series-block h2 {
+            margin-top: 0;
+        }
+
+        ol,
+        .full-list {
+            padding-left: 1.5rem;
+        }
+
+        .selected-team {
+            font-weight: bold;
+            color: darkblue;
+        }
+
+        .highlight-top {
+            background-color: #ffeb3b;
+            font-weight: bold;
+        }
+
+        .quick-links {
+            display: flex;
+            flex-wrap: wrap;
+            /* Rivittää linkit usealle riville */
+            gap: 10px;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
+
+        .quick-links a {
+            margin-right: 10px;
+        }
+    </style>
 </head>
+
 <body>
-<h1>Tuloskooste Navisportin  JSON:sta</h1>
+    <h1>Tuloskooste Navisportin JSON:sta</h1>
 
-<div>
-  <label for="clubSelect">Valitse seura:</label>
-  <select id="clubSelect"><option value="">-- Valitse seura --</option></select>
-  <button id="processBtn">Näytä tulokset</button>
-</div>
+    <div>
+        <label for="clubSelect">Valitse seura:</label>
+        <select id="clubSelect">
+            <option value="">-- Valitse seura --</option>
+        </select>
+        <button id="processBtn">Näytä tulokset</button>
+    </div>
 
-<div id="quickLinks" class="quick-links"></div>
+    <div id="quickLinks" class="quick-links"></div>
 
-<div>
-  <label><input type="radio" name="mode" value="all" checked> Kaikki</label>
-  <label><input type="radio" name="mode" value="am"> Vain AM</label>
-</div>
+    <div>
+        <label><input type="radio" name="mode" value="all" checked> Kaikki</label>
+        <label><input type="radio" name="mode" value="am"> Vain AM</label>
+    </div>
 
-<div>
-  Näytä tulokset: 
-  <label><input type="radio" name="topN" value="3" checked> Top 3</label>
-  <label><input type="radio" name="topN" value="5"> Top 5</label>
-  <label><input type="radio" name="topN" value="10"> Top 10</label>
-  <label><input type="radio" name="topN" value="all"> Kaikki</label>
-</div>
+    <div>
+        Näytä tulokset:
+        <label><input type="radio" name="topN" value="3" checked> Top 3</label>
+        <label><input type="radio" name="topN" value="5"> Top 5</label>
+        <label><input type="radio" name="topN" value="10"> Top 10</label>
+        <label><input type="radio" name="topN" value="all"> Kaikki</label>
+    </div>
 
-<div id="standingsContainer"></div>
+    <div id="standingsContainer"></div>
 
-<script>
-let globalData = [];
-let classMap = {};
-let currentEventId = "";
-let allowedClubs = [];
-let topNSetting = 3;
+    <script>
+        let globalData = [];
+        let classMap = {};
+        let currentEventId = "";
+        let allowedClubs = [];
+        let topNSetting = 3;
 
-window.addEventListener('DOMContentLoaded', () => {
-  applyUrlParams();
-  document.querySelectorAll("input[name='mode']").forEach(radio => { radio.addEventListener("change", renderIfReady); });
-  document.querySelectorAll("input[name='topN']").forEach(radio => { radio.addEventListener("change", ()=>{ topNSetting=radio.value==="all"?"all":parseInt(radio.value,10); renderIfReady(); }); });
-});
+        window.addEventListener('DOMContentLoaded', () => {
+            applyUrlParams();
+            document.querySelectorAll("input[name='mode']").forEach(radio => {
+                radio.addEventListener("change", renderIfReady);
+            });
+            document.querySelectorAll("input[name='topN']").forEach(radio => {
+                radio.addEventListener("change", () => {
+                    topNSetting = radio.value === "all" ? "all" : parseInt(radio.value, 10);
+                    renderIfReady();
+                });
+            });
+        });
 
-function renderIfReady(){
-  const club=document.getElementById('clubSelect').value.trim().toLowerCase();
-  if(globalData.length) showStandings(club);
-}
+        function renderIfReady() {
+            const club = document.getElementById('clubSelect').value.trim().toLowerCase();
+            if (globalData.length) showStandings(club);
+        }
 
-function applyUrlParams(){
-  const params = new URLSearchParams(window.location.search);
-  const eventParam = params.get("event");
-  const clubParam = params.get("club");
-  const topParam = params.get("top");
+        function applyUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const eventParam = params.get("event");
+            const clubParam = params.get("club");
+            const topParam = params.get("top");
 
-  if(!eventParam){ document.getElementById('standingsContainer').innerHTML="<p style='color:red'>Virhe: anna tapahtuma URL-parametrina ?event=EVENTID voit myös lisätä &club=CLUBNAME&top=5</p>"; return; }
-  currentEventId=eventParam;
-  if(topParam){ topNSetting=topParam==="all"?"all":parseInt(topParam); }
+            if (!eventParam) {
+                document.getElementById('standingsContainer').innerHTML = "<p style='color:red'>Virhe: anna tapahtuma URL-parametrina ?event=EVENTID voit myös lisätä &club=CLUBNAME&top=5</p>";
+                return;
+            }
+            currentEventId = eventParam;
+            if (topParam) {
+                topNSetting = topParam === "all" ? "all" : parseInt(topParam);
+            }
 
-  loadJsonData(currentEventId).then(()=>{
-    if(clubParam && allowedClubs.includes(clubParam.toLowerCase())){
-      document.getElementById('clubSelect').value=clubParam.toLowerCase();
-    }
-    renderIfReady();
-  });
-}
+            loadJsonData(currentEventId).then(() => {
+                if (clubParam && allowedClubs.includes(clubParam.toLowerCase())) {
+                    document.getElementById('clubSelect').value = clubParam.toLowerCase();
+                }
+                renderIfReady();
+            });
+        }
 
-async function loadJsonData(eventId){
-  try{
-    const eventRes = await fetch(`https://navisport.com/api/events/${eventId}`);
-    const eventData = await eventRes.json();
-    classMap = {};
-    if(eventData.courseClasses) classMap = Object.fromEntries(eventData.courseClasses.map(c=>[c.id,c.name]));
+        async function loadJsonData(eventId) {
+            try {
+                const eventRes = await fetch(`https://navisport.com/api/events/${eventId}`);
+                const eventData = await eventRes.json();
+                classMap = {};
+                if (eventData.courseClasses) classMap = Object.fromEntries(eventData.courseClasses.map(c => [c.id, c.name]));
 
-    const resultsRes = await fetch(`https://navisport.com/api/events/${eventId}/results`);
-    globalData = await resultsRes.json();
+                const resultsRes = await fetch(`https://navisport.com/api/events/${eventId}/results`);
+                globalData = await resultsRes.json();
 
-    allowedClubs = [...new Set(globalData.map(r=>r.club).filter(Boolean))];
-    populateClubSelect();
-  } catch(err){ console.error("JSON-haku epäonnistui:", err); }
-}
+                allowedClubs = [...new Set(globalData.map(r => r.club).filter(Boolean))];
+                populateClubSelect();
+            } catch (err) {
+                console.error("JSON-haku epäonnistui:", err);
+            }
+        }
 
-function populateClubSelect(){
-  const select = document.getElementById('clubSelect');
-  select.innerHTML='<option value="">-- Valitse seura --</option>';
-  allowedClubs.sort().forEach(club=>{
-    const opt=document.createElement('option');
-    opt.value=club.toLowerCase();
-    opt.textContent=club;
-    select.appendChild(opt);
-  });
-}
+        function populateClubSelect() {
+            const select = document.getElementById('clubSelect');
+            select.innerHTML = '<option value="">-- Valitse seura --</option>';
+            allowedClubs.sort().forEach(club => {
+                const opt = document.createElement('option');
+                opt.value = club.toLowerCase();
+                opt.textContent = club;
+                select.appendChild(opt);
+            });
+        }
 
-document.getElementById('processBtn').addEventListener('click', renderIfReady);
+        document.getElementById('processBtn').addEventListener('click', renderIfReady);
 
-function showStandings(club){
-  const mode = document.querySelector("input[name='mode']:checked").value;
-  const container = document.getElementById('standingsContainer');
-  container.innerHTML='';
-  document.getElementById('quickLinks').innerHTML='';
+        function showStandings(club) {
+            const mode = document.querySelector("input[name='mode']:checked").value;
+            const container = document.getElementById('standingsContainer');
+            container.innerHTML = '';
+            document.getElementById('quickLinks').innerHTML = '';
 
-  const seriesMap={};
-  globalData.forEach(r=>{ const className=classMap[r.classId]||r.classId; (seriesMap[className]||=[]).push(r); });
+            const seriesMap = {};
+            globalData.forEach(r => {
+                const className = classMap[r.classId] || r.classId;
+                (seriesMap[className] ||= []).push(r);
+            });
 
-  // Suodata sarjat seuran mukaan
-  let seriesKeys=Object.keys(seriesMap);
-  if(club) seriesKeys=seriesKeys.filter(sarja=>seriesMap[sarja].some(r=>r.club && r.club.toLowerCase()===club));
+            // Suodata sarjat seuran mukaan
+            let seriesKeys = Object.keys(seriesMap);
+            if (club) seriesKeys = seriesKeys.filter(sarja => seriesMap[sarja].some(r => r.club && r.club.toLowerCase() === club));
 
-  // QuickLinks: D alku ensin, sitten H, muut loppuun
-  seriesKeys.sort((a,b)=>{
-    const getPrefixOrder=s=>s.startsWith("D")?0:s.startsWith("H")?1:2;
-    const pa=getPrefixOrder(a), pb=getPrefixOrder(b);
-    if(pa!==pb) return pa-pb;
-    return a.localeCompare(b);
-  });
+            // QuickLinks: D alku ensin, sitten H, muut loppuun
+            seriesKeys.sort((a, b) => {
+                const getPrefixOrder = s => s.startsWith("D") ? 0 : s.startsWith("H") ? 1 : 2;
+                const pa = getPrefixOrder(a),
+                    pb = getPrefixOrder(b);
+                if (pa !== pb) return pa - pb;
+                return a.localeCompare(b);
+            });
 
-  seriesKeys.forEach((sarja, idx)=>{
-    const competitorsAll=seriesMap[sarja];
-    const total=competitorsAll.length;
-    const accepted=competitorsAll.filter(c=>c.status==="Ok");
+            seriesKeys.forEach((sarja, idx) => {
+                const competitorsAll = seriesMap[sarja];
+                const total = competitorsAll.length;
+                const accepted = competitorsAll.filter(c => c.status === "Ok");
 
-    let competitors=[...accepted];
-    competitors.sort((a,b)=> (a.position||9999)-(b.position||9999));
-    if(mode==="am"){ competitors=competitors.filter(c=>c.name.includes("(AM)")); competitors.forEach((c,i)=>c.AM_Sija=i+1); }
+                let competitors = [...accepted];
+                competitors.sort((a, b) => (a.position || 9999) - (b.position || 9999));
+                if (mode === "am") {
+                    competitors = competitors.filter(c => c.name.includes("(AM)"));
+                    competitors.forEach((c, i) => c.AM_Sija = i + 1);
+                }
 
-    if(!competitors.length) return;
+                if (!competitors.length) return;
 
-    const showN = topNSetting==="all"?competitors.length:topNSetting;
-    const subset=competitors.slice(0,showN);
-    const selected=competitors.filter(c=>c.club && c.club.toLowerCase()===club);
+                const showN = topNSetting === "all" ? competitors.length : topNSetting;
+                const subset = competitors.slice(0, showN);
+                const selected = competitors.filter(c => c.club && c.club.toLowerCase() === club);
 
-    const div=document.createElement('div'); div.classList.add('series-block'); div.id="sarja"+idx;
-    const h2=document.createElement('h2'); h2.textContent=`${sarja} (Osallistujia: ${total}, Hyväksyttyjä: ${accepted.length})`; div.appendChild(h2);
+                const div = document.createElement('div');
+                div.classList.add('series-block');
+                div.id = "sarja" + idx;
+                const h2 = document.createElement('h2');
+                h2.textContent = `${sarja} (Osallistujia: ${total}, Hyväksyttyjä: ${accepted.length})`;
+                div.appendChild(h2);
 
-    const ol=document.createElement('ol');
-    subset.forEach(r=>{
-      const li=document.createElement('li');
-      li.textContent=`${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
-      if(r.club && r.club.toLowerCase()===club) li.classList.add("highlight-top");
-      ol.appendChild(li);
-    });
-    div.appendChild(ol);
+                const ol = document.createElement('ol');
+                subset.forEach(r => {
+                    const li = document.createElement('li');
+                    li.textContent = `${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
+                    if (r.club && r.club.toLowerCase() === club) li.classList.add("highlight-top");
+                    ol.appendChild(li);
+                });
+                div.appendChild(ol);
 
-    if(selected.length>0){
-      const selTitle=document.createElement('p'); selTitle.textContent=`Valitun seuran (${club}) kilpailijat:`; div.appendChild(selTitle);
-      selected.forEach(r=>{
-        const p=document.createElement('p'); p.classList.add('selected-team');
-        p.textContent=`${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
-        if(selected.indexOf(r)<showN) p.classList.add("highlight-top");
-        div.appendChild(p);
-      });
-    }
+                if (selected.length > 0) {
 
-    const link=document.createElement('a'); link.href="#"+div.id; link.innerText=sarja;
-    document.getElementById('quickLinks').appendChild(link);
-    container.appendChild(div);
-  });
-}
+                    // Luodaan joukko topN-listassa näkyvistä osallistujista
+                    const topSet = new Set(subset.map(r => r.id)); // r.id = osallistujan uniikki id
 
-function formatTime(sec){ if(!sec) return "-"; const h=Math.floor(sec/3600); const m=Math.floor((sec%3600)/60); const s=sec%60; return (h>0?h+":" :"") + (m<10?"0":"")+m + ":" + (s<10?"0":"")+s; }
-</script>
+                    // Valitun seuran listassa suodatetaan pois topN:ssa jo näkyvät
+                    const selectedFiltered = selected.filter(r => !topSet.has(r.id));
+                    // Näytetään valitun seuran lista vain, jos on jotain jäljellä
+                    if (selectedFiltered.length > 0 && topNSetting !== "all") {
+                        const selTitle = document.createElement('p');
+                        selTitle.textContent = `Valitun seuran muut(${club}) kilpailijat:`;
+                        div.appendChild(selTitle);
+
+                        selectedFiltered.forEach((r, i) => {
+                            const sija = (mode === "am" ? r.AM_Sija : r.position);
+                            const p = document.createElement('p');
+                            p.classList.add('selected-team');
+                            p.textContent = `${sija}. ${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
+                            if (parseInt(sija) <= showN) p.classList.add("highlight-top");
+                            div.appendChild(p);
+                        });
+                    }
+                }
+
+                const link = document.createElement('a');
+                link.href = "#" + div.id;
+                link.innerText = sarja;
+                document.getElementById('quickLinks').appendChild(link);
+                container.appendChild(div);
+            });
+        }
+
+        function formatTime(sec) {
+            if (!sec) return "-";
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            return (h > 0 ? h + ":" : "") + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+        }
+    </script>
 </body>
-</html>
-
