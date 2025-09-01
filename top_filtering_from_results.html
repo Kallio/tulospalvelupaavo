@@ -10,7 +10,15 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
 ol, .full-list { padding-left: 1.5rem; }
 .selected-team { font-weight: bold; color: darkblue; }
 .highlight-top { background-color: #ffeb3b; font-weight: bold; }
-.quick-links { margin: 1em 0; padding: 0.5em; border: 1px solid #ccc; background: #f9f9f9; }
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;  /* Rivittää linkit usealle riville */
+  gap: 10px;
+  margin: 20px 0;
+  padding: 10px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+}
 .quick-links a { margin-right: 10px; }
 </style>
 </head>
