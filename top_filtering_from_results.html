@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Tuloskooste Navisport JSON:sta</title>
+    <title>Tuloskooste Navisport JSON:sta https://github.com/Kallio/tulospalvelupaavo/blob/main/top_filtering_from_results.html</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -12,6 +12,19 @@
             margin: 0;
             padding: 0;
         }
+input[type="radio"] {
+  width: 40px;     /* Suurempi nappi */
+  height: 40px;
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+
+label {
+  font-size: 1.2em;   /* Helpompi napauttaa */
+  margin-right: 1em;  /* Väli labelien välillä */
+  display: inline-flex;
+  align-items: center;
+}
 
         .container {
             width: 80%;
@@ -86,7 +99,8 @@
         }
 
         .quick-links {
-            display: flex;
+            display: flex; font-size: 1.5rem;
+
             flex-wrap: wrap;
             /* Rivittää linkit usealle riville */
             gap: 10px;
@@ -194,7 +208,6 @@
                 console.error("JSON-haku epäonnistui:", err);
             }
         }
-
         function populateClubSelect() {
             const select = document.getElementById('clubSelect');
             select.innerHTML = '<option value="">-- Valitse seura --</option>';
@@ -219,7 +232,7 @@
                 const className = classMap[r.classId] || r.classId;
                 (seriesMap[className] ||= []).push(r);
             });
-
+	    
             // Suodata sarjat seuran mukaan
             let seriesKeys = Object.keys(seriesMap);
             if (club) seriesKeys = seriesKeys.filter(sarja => seriesMap[sarja].some(r => r.club && r.club.toLowerCase() === club));
@@ -237,6 +250,8 @@
                 const competitorsAll = seriesMap[sarja];
                 const total = competitorsAll.length;
                 const accepted = competitorsAll.filter(c => c.status === "Ok");
+                const dnf = competitorsAll.filter(c => c.status === "Dnf");
+                const dsq = competitorsAll.filter(c => c.status === "Dsq");
 
                 let competitors = [...accepted];
                 competitors.sort((a, b) => (a.position || 9999) - (b.position || 9999));
@@ -255,13 +270,13 @@
                 div.classList.add('series-block');
                 div.id = "sarja" + idx;
                 const h2 = document.createElement('h2');
-                h2.textContent = `${sarja} (Osallistujia: ${total}, Hyväksyttyjä: ${accepted.length})`;
+                h2.textContent = `${sarja} (Osallistujia: ${total}, Hyväksyttyjä: ${accepted.length}, Keskeyttäneitä: ${dnf.length}, Hylättyjä: ${dsq.length} )`;
                 div.appendChild(h2);
 
                 const ol = document.createElement('ol');
                 subset.forEach(r => {
                     const li = document.createElement('li');
-                    li.textContent = `${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
+                    li.textContent = `${r.name} (${r.club||"-"})  ${formatTime(r.time)}`;
                     if (r.club && r.club.toLowerCase() === club) li.classList.add("highlight-top");
                     ol.appendChild(li);
                 });
@@ -284,7 +299,7 @@
                             const sija = (mode === "am" ? r.AM_Sija : r.position);
                             const p = document.createElement('p');
                             p.classList.add('selected-team');
-                            p.textContent = `${sija}. ${r.name} (${r.club||"-"}) – ${formatTime(r.time)}`;
+                            p.textContent = `${sija}. ${r.name} (${r.club||"-"})  ${formatTime(r.time)}`;
                             if (parseInt(sija) <= showN) p.classList.add("highlight-top");
                             div.appendChild(p);
                         });
