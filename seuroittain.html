@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Startlist Viewer — seurakohtainen</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:#f7f9fb;color:#111}
+header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+select,input{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1}
+table{border-collapse:collapse;width:100%;background:white;border-radius:8px;overflow:hidden}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #eef2f7}
+th{cursor:pointer;user-select:none;position:relative}
+th .hint{font-size:12px;color:#6b7280;margin-left:6px}
+th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:#374151}
+tbody tr:hover{background:#f1f5f9}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.small{font-size:12px;color:#64748b}
+#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}
+#classLinks a{padding:4px 8px;background:#e2e8f0;border-radius:6px;text-decoration:none;color:#111;font-size:14px}
+#classLinks a:hover{background:#cbd5e1}
+</style>
+</head>
+<body>
+<header>
+  <h2>Startlist Viewer</h2>
+  <div class="controls">
+    <label class="small">Seura:</label>
+    <select id="clubSelect"><option>Kaikki seurat</option></select>
+    <label class="small">Haku:</label>
+    <input id="search" placeholder="nimi, nro, chip, luokka..." />
+  </div>
+</header>
+
+<div id="classLinks"></div>
+
+<main>
+  <table id="results">
+    <thead id="tableHead"></thead>
+    <tbody></tbody>
+  </table>
+</main>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get('event');
+const DATA_URL = eventId ? `https://navisport.com/api/events/${eventId}` : 'startlist.json';
+
+let rawData=null, rows=[], sortState={key:null, asc:true}, stageCount=1;
+
+function parseName(name){
+  if(!name) return {surname:'', givenName:''};
+  const parts=name.trim().split(/\s+/);
+  if(parts.length===1) return {surname:parts[0], givenName:''};
+  return {surname:parts[0], givenName:parts.slice(1).join(' ')};
+}
+
+function formatTime(date){ return date ? new Date(date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit',hour12: false}) : ''; }
+
+async function loadData(){
+  try{
+    const mainJson = await (await fetch(DATA_URL)).json();
+    rawData = mainJson;
+    const events = mainJson.events || [];
+    stageCount = events.length || 1;
+
+    const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
+    document.querySelector('h2').textContent = eventName;
+
+    // viralliset tiedot sivusto
+    if(eventId){
+      const link=document.createElement('a');
+      link.href=`https://navisport.com/events/${eventId}`;
+      link.target="_blank";
+      link.textContent='Viralliset tiedot';
+      link.style.display='block'; link.style.marginTop='16px';
+      document.body.appendChild(link);
+    }
+
+    // courseClasses pääeventistä
+    const mainCourseClasses = {};
+    if(mainJson.courseClasses){ mainJson.courseClasses.forEach(c=>{ mainCourseClasses[c.id]=c.name; }); }
+
+    const multistage = mainJson.eventKind === 'Multistage event';
+    if(multistage){
+      const allResults=[];
+      for(const ev of events){
+        const stageJson = await (await fetch(`https://navisport.com/api/events/${ev.id}`)).json();
+        const stageCourseClasses = {};
+        if(stageJson.courseClasses){ stageJson.courseClasses.forEach(c=>{ stageCourseClasses[c.id]=c.name; }); }
+        allResults.push({stageNumber:ev.stageNumber, results:stageJson.results||[], stageCourseClasses});
+      }
+      prepareRowsMultistage(allResults, mainCourseClasses);
+    } else {
+      prepareRows(mainJson, mainCourseClasses);
+    }
+
+    createTableHeader();
+    populateClubSelect();
+    populateClassLinks();
+    render();
+  } catch(err){
+    console.error(err);
+    document.body.insertAdjacentHTML('afterbegin', `<div style="color:crimson">Virhe ladattaessa dataa: ${err.message}<br> Muistitko lisätä tapahtuman eventid:n url kenttään ( seuroittain.html?eventid=) <br> tämä ja muita avustavia koodeja löytyy osoitteesta https://github.com/Kallio/tulospalvelupaavo </div>`);
+  }
+}
+
+function createTableHeader(){
+  const head=document.getElementById('tableHead'); head.innerHTML='';
+  const tr=document.createElement('tr');
+
+  tr.innerHTML=`<th data-key="className">Sarja <span class="hint">(sorttaa)</span></th>`;
+  for(let i=0;i<stageCount;i++){
+    tr.innerHTML+=`<th data-key="startTime${i+1}">Lähtöaika ${i+1} <span class="hint">(sorttaa)</span></th>`;
+  }
+  tr.innerHTML+=`<th data-key="bibNumber">Nro</th>
+  <th data-key="chip">Emit</th>
+  <th data-key="surname">Sukunimi <span class="hint">(sorttaa)</span></th>
+  <th data-key="givenName">Etunimi</th>
+  <th data-key="club">Seura</th>`;
+  head.appendChild(tr);
+}
+
+function prepareRows(json, mainCourseClasses){
+  const list=json.results||[];
+  const tempMap={};
+  for(const r of list){
+    const {surname,givenName}=parseName(r.name||'');
+    const className = r.className || mainCourseClasses[r.classId] || '';
+    const key=`${r.bibNumber||''}||${r.chip||''}`;
+    if(!tempMap[key]){
+      tempMap[key]={id:r.id,bibNumber:r.bibNumber||'',surname,givenName,className,startTimes:[formatTime(r.startTime)],club:r.club||'',chip:r.chip||''};
+    }
+  }
+  rows=Object.values(tempMap);
+}
+
+function prepareRowsMultistage(allResults, mainCourseClasses){
+  const tempMap={};
+  for(const stageData of allResults){
+    const stageNumber=stageData.stageNumber;
+    const stageCourseClasses=stageData.stageCourseClasses || {};
+    for(const r of stageData.results){
+      const {surname,givenName}=parseName(r.name||'');
+      const key=`${r.bibNumber||''}||${r.chip||''}`;
+      if(!tempMap[key]){
+        tempMap[key]={id:r.id,bibNumber:r.bibNumber||'',surname,givenName,classNames:[],startTimes:Array(stageResultsCount(allResults)).fill(''),club:r.club||'',chip:r.chip||''};
+      }
+      const className = r.className || stageCourseClasses[r.classId] || mainCourseClasses[r.classId] || '';
+      tempMap[key].startTimes[stageNumber-1]=formatTime(r.startTime);
+      tempMap[key].classNames.push(className);
+    }
+  }
+
+  rows=Object.values(tempMap).map(j=>{
+    const classSet=new Set(j.classNames.filter(v=>v && v.trim()));
+    j.className = classSet.size===1 ? Array.from(classSet)[0] : Array.from(classSet).join(' / ');
+    return j;
+  });
+}
+
+function stageResultsCount(allResults){ return allResults.length; }
+
+function populateClubSelect(){
+  const sel=document.getElementById('clubSelect'); sel.innerHTML='<option>Kaikki seurat</option>';
+  const clubs=Array.from(new Set(rows.map(r=>r.club).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+  clubs.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
+  sel.addEventListener('change',()=>render());
+}
+
+function populateClassLinks(){
+  const container=document.getElementById('classLinks'); container.innerHTML='';
+  const classes=Array.from(new Set(rows.map(r=>r.className).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+  classes.forEach(cn=>{
+    const a=document.createElement('a'); a.href='#'; a.textContent=cn;
+    a.addEventListener('click',e=>{e.preventDefault(); document.getElementById('search').value=cn; render();});
+    container.appendChild(a);
+  });
+}
+
+function render(){
+  const selClub=document.getElementById('clubSelect').value;
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  let filtered=rows.filter(r=>{
+    if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
+    if(!q) return true;
+    return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club].some(v=>String(v||'').toLowerCase().includes(q));
+  });
+
+  if(sortState.key){
+    const k=sortState.key;
+    filtered.sort((a,b)=>{
+      let va,vb;
+      if(k.startsWith('startTime')){ const idx=parseInt(k.replace('startTime',''),10)-1; va=a.startTimes[idx]||''; vb=b.startTimes[idx]||''; }
+      else{ va=a[k]; vb=b[k]; }
+      if(typeof va==='string') va=va.toLowerCase();
+      if(typeof vb==='string') vb=vb.toLowerCase();
+      if(va<vb) return sortState.asc?-1:1;
+      if(va>vb) return sortState.asc?1:-1;
+      return 0;
+    });
+  }
+
+  const tbody=document.querySelector('#results tbody'); tbody.innerHTML='';
+  for(const r of filtered){
+    const tr=document.createElement('tr');
+    let html=`<td>${r.className||''}</td>`;
+    for(let i=0;i<stageCount;i++){ html+=`<td>${r.startTimes[i]||''}</td>`; }
+    html+=`<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname}</td><td>${r.givenName}</td><td>${r.club||''}</td>`;
+    tr.innerHTML=html;
+    tbody.appendChild(tr);
+  }
+
+  document.querySelectorAll('th').forEach(th=>{ th.classList.remove('sorted'); th.removeAttribute('data-order'); });
+  if(sortState.key){
+    const header=document.querySelector(`th[data-key="${sortState.key}"]`);
+    if(header){ header.classList.add('sorted'); header.setAttribute('data-order',sortState.asc?'▲':'▼'); }
+  }
+}
+
+document.addEventListener('click',e=>{
+  const th=e.target.closest('th'); if(!th) return; const key=th.dataset.key; if(!key) return;
+  if(sortState.key===key){ sortState.asc=!sortState.asc; } else { sortState.key=key; sortState.asc=true; }
+  render();
+});
+
+document.getElementById('search').addEventListener('input',()=>render());
+
+loadData();
+</script>
+</body>
+</html>
