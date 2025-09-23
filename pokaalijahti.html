@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pokaalijahti - tuloslaskuri (Navisport JSON)</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;color:#111}
+  h1{font-size:20px}
+  textarea{width:100%;height:160px;font-family:monospace}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #ddd;padding:6px;text-align:left}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .small{font-size:13px;color:#555}
+  .badge{display:inline-block;padding:2px 6px;border-radius:6px;background:#eef}
+  .trophy{color:#b8860b;font-weight:700}
+  .ok{color:green}
+  .bad{color:red}
+</style>
+</head>
+<body>
+<h1>Pokaalijahti - Navisport JSON -laskuri</h1>
+<p class="small">Vain seuraavat sarjat huomioidaan laskennassa: D8RR, H8RR, D10RR, H10RR, D10, H10, D12TR, H12TR, D12, H12, D14, H14, D16, H16, RR Avoin, TR Avoin, 10 Avoin, 12 Avoin, 14 Avoin, 16 Avoin.</p>
+
+<div class="controls">
+  <label><input id="fileInput" type="file" accept="application/json"> Lataa JSON-tiedosto</label>
+  <button id="parseBtn">Laske tulokset</button>
+  <button id="sampleBtn">Lataa esimerkki-JSON</button>
+  <button id="exportCsvBtn">Vie CSV</button>
+</div>
+
+<textarea id="jsonInput" placeholder='Paina "Esimerkki" nähdäksesi muodon...'></textarea>
+
+<div id="output"></div>
+
+<script>
+// --- Asetukset ---
+const OPEN_KEYWORDS = ['avoin','open'];
+const MIN_POINTS_FOR_DNF = 10;
+const WINNER_POINTS = 100;
+const TOP_N_SCORES_TO_SUM = 3;
+const TIME_ROUNDING = 'round';
+
+// Sallitut sarjat
+const ALLOWED_SERIES = [
+  'D8RR','H8RR','D10RR','H10RR','D10','H10','D12TR','H12TR','D12','H12','D14','H14','D16','H16',
+  'RR Avoin','TR Avoin','10 Avoin','12 Avoin','14 Avoin','16 Avoin'
+].map(s=>s.toLowerCase());
+
+function isSeriesAllowed(series){
+  if(!series) return false;
+  return ALLOWED_SERIES.includes(series.toLowerCase());
+}
+
+// --- URL param käsittely ---
+const params = new URLSearchParams(window.location.search);
+const eventParam = params.get('event') || params.get('eventid') || params.get('eventId');
+let eventIds = [];
+if(eventParam){
+  eventIds = eventParam.split(',').map(s=>s.trim()).filter(Boolean);
+}
+
+// --- Apufunktiot ---
+function isOpenSeries(seriesName){
+  if(!seriesName) return false;
+  const s = seriesName.toString().toLowerCase();
+  return OPEN_KEYWORDS.some(k => s.includes(k));
+}
+
+function parseTimeToSeconds(t){
+  if(t===null || t===undefined) return null;
+  if(typeof t === 'number') return t;
+  const str = String(t).trim();
+  if(!str) return null;
+  if(/^P/i.test(str) && /S$/i.test(str)){
+    const m = str.match(/PT(\d+(?:\.\d+)?)S/i);
+    if(m) return parseFloat(m[1]);
+  }
+  const parts = str.split(':').map(x=>x.trim());
+  if(parts.length===1){
+    const n = Number(parts[0].replace(',', '.'));
+    if(!isNaN(n)) return n;
+    return null;
+  }
+  let seconds = 0;
+  if(parts.length===2){
+    seconds = Number(parts[0])*60 + Number(parts[1]);
+  } else if(parts.length===3){
+    seconds = Number(parts[0])*3600 + Number(parts[1])*60 + Number(parts[2]);
+  } else {
+    return null;
+  }
+  if(isNaN(seconds)) return null;
+  return seconds;
+}
+
+function secondsToMinRounded(secs){
+  const mins = secs/60;
+  if(TIME_ROUNDING==='floor') return Math.floor(mins);
+  if(TIME_ROUNDING==='ceil') return Math.ceil(mins);
+  return Math.round(mins);
+}
+
+function scoreEvent(event){
+  const participants = (event.participants||[]).map(p=>({...p}));
+  const bySeries = {};
+  participants.forEach(p=>{
+    const series = p.series || '---';
+    if(!isSeriesAllowed(series)) return; // ohitetaan muut sarjat
+    if(!bySeries[series]) bySeries[series]=[];
+    bySeries[series].push(p);
+  });
+  const results = [];
+  for(const series in bySeries){
+    const list = bySeries[series];
+    const open = isOpenSeries(series);
+    list.forEach(p=>{
+      p._timeSecs = parseTimeToSeconds(p.time);
+      p._status = (p.status||'').toString().toLowerCase();
+      if(['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x))){
+        p._ok=false;
+      } else {
+        p._ok = (p._timeSecs!==null);
+      }
+    });
+    const ranked = list.filter(p=>p._ok).sort((a,b)=>a._timeSecs - b._timeSecs);
+    const winnerTime = ranked.length?ranked[0]._timeSecs:null;
+    list.forEach(p=>{
+      if(open){
+        p._points = 0;
+      } else if(!p._ok){
+        p._points = MIN_POINTS_FOR_DNF;
+      } else {
+        if(winnerTime===null){
+          p._points = 0;
+        } else {
+          const diffSec = Math.max(0, p._timeSecs - winnerTime);
+          const diffMin = secondsToMinRounded(diffSec);
+          const pts = Math.max(0, WINNER_POINTS - diffMin);
+          p._points = pts;
+        }
+      }
+    });
+    results.push({series,open,list});
+  }
+  return results;
+}
+
+function calculateTotals(events){
+  const athletes = {};
+  events.forEach(ev=>{
+    const perSeries = scoreEvent(ev);
+    perSeries.forEach(sobj=>{
+      const series = sobj.series;
+      const open = sobj.open;
+      sobj.list.forEach(p=>{
+        const key = p.id || (p.name+'|'+(p.club||''));
+        if(!athletes[key]) athletes[key] = {id:p.id,name:p.name||'?',club:p.club||'',series:series,results:[]};
+        athletes[key].results.push({
+          eventName: ev.name||ev.title||'',
+          date: ev.date||ev.dateTime||'',
+          series: series,
+          time: p.time,
+          timeSecs: p._timeSecs,
+          status: p.status||(p._ok? 'OK':'HYL'),
+          points: p._points || 0,
+          isOpenSeries: open
+        });
+      });
+    });
+  });
+  const out = Object.values(athletes).map(a=>{
+    const pointsList = a.results.filter(r=>!r.isOpenSeries).map(r=>r.points||0).sort((a,b)=>b-a);
+    const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
+    const participationCount = a.results.filter(r => !r.isOpenSeries).length;
+    return {...a,pointsList,topSum,participationCount};
+  });
+  out.sort((x,y)=>y.topSum - x.topSum || y.pointsList[0]-x.pointsList[0]);
+  return out;
+}
+
+function renderTable(totals){
+  const out = document.getElementById('output');
+  out.innerHTML = '';
+  const h = document.createElement('div');
+  h.innerHTML = `<p>Löytyi ${totals.length} juoksijaa valituista sarjoista. Näytetään kokonaistulokset (kolmen parhaan summa).</p>`;
+  out.appendChild(h);
+  const table = document.createElement('table');
+  table.innerHTML = `<thead><tr><th>#</th><th>Nimi</th><th>Seura</th><th>Osallistumiset</th><th>3 parasta pisteitä (lista)</th><th>Yhteispisteet</th><th>Pokaali</th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+  totals.forEach((t,i)=>{
+    const tr = document.createElement('tr');
+    const trophy = t.participationCount >= 3 ? '<span class="trophy">🏆</span>' : '';
+    tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.club||'')}</td><td>${t.participationCount}</td><td>${t.pointsList.join(', ')}</td><td><strong>${t.topSum}</strong></td><td>${t.participationCount>=3? 'Kyllä '+trophy:'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  out.appendChild(table);
+
+  const details = document.createElement('div');
+  details.style.marginTop='12px';
+  totals.forEach(t=>{
+    const d = document.createElement('details');
+    d.innerHTML = `<summary>${escapeHtml(t.name)} — yhteispisteet ${t.topSum} — osallistumiset ${t.participationCount}</summary>`;
+    const inner = document.createElement('table');
+    inner.innerHTML = `<thead><tr><th>Tapahtuma</th><th>Pvm</th><th>Sarja</th><th>Aika</th><th>Status</th><th>Pisteet</th></tr></thead>`;
+    const tb = document.createElement('tbody');
+    t.results.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(r.eventName)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.series)}</td><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.status)}</td><td>${r.points}</td>`;
+      tb.appendChild(tr);
+    });
+    inner.appendChild(tb);
+    d.appendChild(inner);
+    details.appendChild(d);
+  });
+  out.appendChild(details);
+}
+
+function exportCsv(totals){
+  const rows = [];
+  rows.push(['rank','name','club','participations','top_scores','total_points']);
+  totals.forEach((t,i)=>{
+    rows.push([i+1,t.name,t.club,t.participationCount,'"'+t.pointsList.join(';')+'"',t.topSum]);
+  });
+  rows.push([]);
+  rows.push(['name','event','date','series','time','status','points']);
+  totals.forEach(t=>{
+    t.results.forEach(r=> rows.push([t.name,r.eventName,r.date,r.series,r.time,r.status,r.points]));
+  });
+
+  const csv = rows.map(r=>r.map(c=>(''+(c===undefined?'':c)).replace(/\r|\n/g,' ')).map(field=>{
+    if(field.includes(',')||field.includes('"')||field.includes('\n')) return '"'+field.replace(/"/g,'""')+'"';
+    return field;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pokaalijahti_tulokset.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let lastTotals = [];
+document.getElementById('sampleBtn').addEventListener('click',()=>{
+  const sample = {
+    events:[
+      {name:'Tapahtuma 1',date:'2025-04-10',participants:[
+        {id:1,name:'Matti Meikäläinen',club:'EsSu',series:'P12',time:'14:32',status:'OK'},
+        {id:2,name:'Liisa O.',club:'EsSu',series:'D12',time:'15:10',status:'OK'},
+        {id:3,name:'Antti',club:'EsSu',series:'Avoin',time:'18:00',status:'OK'}
+      ]}
+    ]
+  };
+  document.getElementById('jsonInput').value = JSON.stringify(sample,null,2);
+});
+
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=> document.getElementById('jsonInput').value = r.result;
+  r.readAsText(f);
+});
+
+document.getElementById('parseBtn').addEventListener('click', ()=>{
+  const txt = document.getElementById('jsonInput').value.trim();
+  if(!txt) return alert('Liitä tai lataa JSON-data ensin tai käytä URL-parametria event.');
+  let parsed;
+  try{ parsed = JSON.parse(txt); } catch(err){ alert('JSON-virhe: '+err.message); return; }
+  let events = [];
+  if(Array.isArray(parsed)) events = parsed;
+  else if(parsed.events && Array.isArray(parsed.events)) events = parsed.events;
+  else if(parsed.tapahtumat && Array.isArray(parsed.tapahtumat)) events = parsed.tapahtumat;
+  else { alert('Tuntematon JSON-rakenne.'); return; }
+  const totals = calculateTotals(events);
+  lastTotals = totals;
+  renderTable(totals);
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+  if(!lastTotals || !lastTotals.length) return alert('Ei vientiä: laske tulokset ensin.');
+  exportCsv(lastTotals);
+});
+
+async function fetchEventsByIds(ids){
+  const results = [];
+  for(const id of ids){
+    try{
+      const res = await fetch(`https://navisport.com/api/events/${id}/results`);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      if(Array.isArray(data)){
+        results.push({name:`Tapahtuma ${id}`,participants:data});
+      } else if(data && data.participants){
+        results.push(data);
+      } else {
+        console.warn('Tuntematon dataformaatti tapahtumalle',id);
+      }
+    }catch(e){ console.error('Virhe haettaessa event',id,e); }
+  }
+  return results;
+}
+
+if(eventIds.length){
+  fetchEventsByIds(eventIds).then(events=>{
+    if(events.length){
+      const totals = calculateTotals(events);
+      lastTotals = totals;
+      renderTable(totals);
+    } else {
+      document.getElementById('output').innerHTML = '<p class="bad">Yhtään tulosta ei saatu haettua.</p>';
+    }
+  });
+}
+
+</script>
+</body>
+</html>
