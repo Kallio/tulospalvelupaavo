@@ -92,11 +92,11 @@ if(!params.toString()){
     description: "Esimerkkiasetukset: lisää URL-parametreja käyttääksesi hakua.",
     exampleUrl: window.location.origin + window.location.pathname + "?eventid=1234,5678&series=H14&noclublimit",
     params: {
-      eventid: "CSV-lista event-id:itä, esim. '1234,5678' (pakollinen, muuten näytetään tämä summary)",
+      eventid: "CSV-lista navisport event-id:itä, esim. '1234,5678' (pakollinen, muuten näytetään tämä summary)",
       series: "Valinnaiset sarjat pilkulla eroteltuna, esim. 'H14,D14' (nimet ovat kirjain-koodimuodossa)",
-      notrophy: "lipuke — jos annettu, pokaalilistaa ei näytetä",
-      noclublimit: "lipuke — jos annettu, kaikki seurat sallitaan",
-      noserieslimit: "lipuke — jos annettu, sarjarajoitusta ei käytetä"
+      notrophy: " jos annettu, pokaalilistaa ei näytetä",
+      noclublimit: "  jos annettu, kaikki seurat sallitaan",
+      noserieslimit: "  jos annettu, sarjarajoitusta ei käytetä"
     },
     defaults: {
       TOP_N_SCORES_TO_SUM,
