@@ -15,9 +15,9 @@
 </style>
 </head>
 <body>
-<h1>Pokaalijahti - tuloslaskuri</h1>
+<h1>Tuloslaskuri</h1>
 <div id="seriesLinks"></div>
-<div id="output"><p>Ladataan tuloksia… ( kai muistit liittää urliin ?eventid=event1,event2,event3 ?) </p></div>
+<div id="output"><p>Ladataan tuloksia… </p></div>
 <button id="exportCsvBtn">Vie CSV</button>
 
 <script>
@@ -44,6 +44,14 @@ function normalizeSeriesName(name){
              .trim();
 }
 
+function normalizeSeriesName(name){
+  if(!name) return '';
+  return name.replace(/\s+/g,'')
+             .replace(/\(.*?\)/g,'')
+             .toLowerCase()
+             .trim();
+}
+
 function isSeriesAllowed(series){
   if(ALLOWED_SERIES==='all') return true;
   const norm = normalizeSeriesName(series);
@@ -51,6 +59,7 @@ function isSeriesAllowed(series){
 }
 
 function isClubAllowed(club){
+  if(noClubLimit) return true;
   if(ALLOWED_CLUBS==='all') return true;
   if(!club || !club.trim()) club='EsSu';
   return ALLOWED_CLUBS.includes(club.trim());
@@ -72,7 +81,45 @@ function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 // --- URL param ---
 const params = new URLSearchParams(window.location.search);
 const eventIds = (params.get('eventid')||'').split(',').map(s=>s.trim()).filter(Boolean);
+const noTrophy = params.has('notrophy');
+const noClubLimit = params.has('noclublimit');
+const noSeriesLimit = params.has('noserieslimit');
+const customSeries = (params.get('series')||'').split(',').map(s=>s.trim()).filter(Boolean);
 
+// Jos ei yhtään parametria, näytetään staattinen summary ja lopetetaan
+if(!params.toString()){
+  const staticSummary = {
+    description: "Esimerkkiasetukset: lisää URL-parametreja käyttääksesi hakua.",
+    exampleUrl: window.location.origin + window.location.pathname + "?eventid=1234,5678&series=H14&noclublimit",
+    params: {
+      eventid: "CSV-lista event-id:itä, esim. '1234,5678' (pakollinen, muuten näytetään tämä summary)",
+      series: "Valinnaiset sarjat pilkulla eroteltuna, esim. 'H14,D14' (nimet ovat kirjain-koodimuodossa)",
+      notrophy: "lipuke — jos annettu, pokaalilistaa ei näytetä",
+      noclublimit: "lipuke — jos annettu, kaikki seurat sallitaan",
+      noserieslimit: "lipuke — jos annettu, sarjarajoitusta ei käytetä"
+    },
+    defaults: {
+      TOP_N_SCORES_TO_SUM,
+      WINNER_POINTS,
+      MIN_POINTS_FOR_DNF
+    }
+  };
+
+  document.getElementById('output').innerHTML = `<pre>${JSON.stringify(staticSummary, null, 2)}</pre>`;
+  // estetään muu suoritus
+  throw new Error('No URL parameters — showing static summary');
+}
+
+// Käytetään sarjarajoituksen ohitusta
+let seriesToShow;
+
+if(noSeriesLimit){
+    seriesToShow = null; // tarkoittaa "näytä kaikki"
+} else if(customSeries.length){
+    seriesToShow = customSeries;
+} else {
+    seriesToShow = ALLOWED_SERIES;
+}
 // --- Apufunktiot ---
 function parseTimeToSeconds(t){
   if(t===null || t===undefined) return null;
@@ -195,24 +242,26 @@ function renderTableBySeries(totals){
   const out = document.getElementById('output');
   out.innerHTML = '';
 
-  // Pokaalin ansainneiden lista
-  const trophyList = totals.filter(t=>t.participationCount>=3);
-  if(trophyList.length){
-    const div = document.createElement('div');
-    div.innerHTML = `<h2 id="trophyList">🏆 Pokaalin ansainneita (${trophyList.length})</h2>`;
-    const table = document.createElement('table');
-    table.innerHTML = `<thead><tr><th>#</th><th>Nimi</th><th>Osallistumisia</th><th>Pokaali</th></tr></thead>`;
-    const tbody = document.createElement('tbody');
-    trophyList.forEach((t,i)=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(t.name)}</td><td>${t.participationCount}</td><td>🏆</td>`;
-      tbody.appendChild(tr);
-    });
+ 
+  if(!noTrophy){
+    // Pokaalin ansainneiden lista
+    const trophyList = totals.filter(t=>t.participationCount>=3);
+    if(trophyList.length){
+      const div = document.createElement('div');
+      div.innerHTML = `<h2 id="trophyList">🏆 Pokaalin ansainneita (${trophyList.length})</h2>`;
+      const table = document.createElement('table');
+      table.innerHTML = `<thead><tr><th>#</th><th>Nimi</th><th>Osallistumisia</th><th>Pokaali</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+      trophyList.forEach((t,i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(t.name)}</td><td>${t.participationCount}</td><td>🏆</td>`;
+        tbody.appendChild(tr);
+      });
     table.appendChild(tbody);
     div.appendChild(table);
     out.appendChild(div);
   }
-
+  }
   // Ryhmittele sarjoihin, yksi rivi per juoksija
   const seriesMap = {};
   totals.forEach(t=>{
@@ -247,13 +296,12 @@ function renderTableBySeries(totals){
 
     const table = document.createElement('table');
     table.innerHTML = `<thead><tr>
-      <th>#</th><th>Nimi</th><th>Seura</th><th>Osallistumiset</th><th>Top pisteet</th><th>Yhteispisteet</th><th>Pokaali</th>
+      <th>#</th><th>Nimi</th><th>Seura</th><th>Osallistumiset</th><th>Top pisteet</th><th>Yhteispisteet</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
 
     // Sortataan yhteispisteiden mukaan laskevasti
     seriesMap[series].sort((a,b)=>b.topSum - a.topSum).forEach((t,i)=>{
-      const trophy = t.participationCount>=3?'<span class="trophy">🏆</span>':'—';
       tbody.innerHTML += `<tr>
         <td>${i+1}</td>
         <td>${escapeHtml(t.name)}</td>
@@ -261,7 +309,6 @@ function renderTableBySeries(totals){
         <td>${t.participationCount}</td>
         <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
         <td>${t.topSum}</td>
-        <td>${trophy}</td>
       </tr>`;
     });
 
@@ -324,7 +371,15 @@ async function fetchEventsByIds(ids){
   if(!eventIds.length){ document.getElementById('output').innerHTML='<p>Ei eventid-parametreja</p>'; return; }
   const events = await fetchEventsByIds(eventIds);
   const totals = calculateTotals(events);
-  renderTableBySeries(totals);
+ const filteredTotals = totals.filter(t => {
+  if(!seriesToShow) return true; // noserieslimit
+  // Onko jollain tuloksella sarja mukana?
+  return t.results.some(r => seriesToShow.includes(r.series));
+});
+
+  console.log(filteredTotals);
+  console.log(seriesToShow)
+  renderTableBySeries(filteredTotals);
   document.getElementById('exportCsvBtn').addEventListener('click',()=>exportCsv(totals));
 })();
 </script>
