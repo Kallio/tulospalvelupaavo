@@ -39,36 +39,34 @@ const ALLOWED_CLUBS = ['EsSu','Espoon Suunta'];
 function normalizeSeriesName(name){
   if(!name) return '';
   return name.replace(/\s+/g,'')
-             .replace(/\(.*?\)/g,'')
+             .replace(/$.*?$/g,'')
              .toLowerCase()
              .trim();
+}
+function normalizeName(name){
+  if(!name) return '';
+  const cleaned = String(name)
+    .replace(/\s*\(.*?\)\s*/g, ' ') // poistaa kaikki sulkumerkinnät ja niiden sisällön
+    .replace(/\s+/g, ' ')           // tiivistää välilyönnit
+    .trim()
+    .toLowerCase();
+  return cleaned;
 }
 
-function normalizeSeriesName(name){
-  if(!name) return '';
-  return name.replace(/\s+/g,'')
-             .replace(/\(.*?\)/g,'')
-             .toLowerCase()
-             .trim();
-}
+
 
 function isSeriesAllowed(series){
   if(noSeriesLimit) return true;
   if(!seriesToShow) return true;
-  const norm = normalizeSeriesName(series);
+  const norm = normalizeSeriesName(series || '');
   return seriesToShow.some(s => normalizeSeriesName(s) === norm);
 }
 
 function isClubAllowed(club){
   if(noClubLimit) return true;
-  if(ALLOWED_CLUBS==='all') return true;
+  if(ALLOWED_CLUBS === 'all') return true;
   if(!club || !club.trim()) club='EsSu';
   return ALLOWED_CLUBS.includes(club.trim());
-}
-
-function normalizeName(name){
-  if(!name) return '';
-  return name.replace(/\s*\(.*?\)\s*/g,'').toLowerCase().trim();
 }
 
 function isOpenSeries(seriesName){
@@ -121,12 +119,15 @@ if(noSeriesLimit){
 } else {
     seriesToShow = ALLOWED_SERIES;
 }
+
 // --- Apufunktiot ---
 function parseTimeToSeconds(t){
   if(t===null || t===undefined) return null;
   if(typeof t==='number') return t;
   const str = String(t).trim();
   if(!str) return null;
+  // Erityistapaus: "0" tai "0:00" -> palautetaan 0 (merkityksellinen, mutta käsitellään erikseen)
+  if(/^0+$/.test(str) || /^0+:0+(:0+)?$/.test(str)) return 0;
   if(/^P/i.test(str) && /S$/i.test(str)){
     const m = str.match(/PT(\d+(?:\.\d+)?)S/i);
     if(m) return parseFloat(m[1]);
@@ -148,7 +149,7 @@ function secondsToMinRounded(secs){
   return Math.round(mins);
 }
 
-// --- Score laskenta ---
+// --- Score laskenta per event, per series ---
 function scoreEvent(event){
   const participants = (event.participants||[]).map(p=>({...p}));
   const bySeries = {};
@@ -161,9 +162,12 @@ function scoreEvent(event){
 
     p._timeSecs = parseTimeToSeconds(p.time);
     p._status = (p.status||'').toLowerCase();
-    const dns = p._status.includes("Registered") || p._status.includes('registered') || p._timeSecs===null;
-    p._ok = !['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x)) && p._timeSecs!==null;
-    p._validParticipation = !dns;
+    const isDnsStatus = /registered|registered/i.test(p._status) || p._status.includes('dns');
+    // pätevä suoritus = ei dnf/dsq/keskeytys ja aika ei ole null
+    const isDisq = ['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x));
+    p._ok = !isDisq && p._timeSecs !== null;
+    // Merkintä validParticipation tarkoittaa, että laskemme tämän osallistumiseksi (voi olla myös aika 0)
+    p._validParticipation = !isDnsStatus && !isDisq && p._timeSecs !== null;
 
     bySeries[series].push(p);
   });
@@ -172,19 +176,42 @@ function scoreEvent(event){
   for(const series in bySeries){
     const list = bySeries[series];
     const open = isOpenSeries(series);
-    const ranked = list.filter(p=>p._ok).sort((a,b)=>a._timeSecs-b._timeSecs);
+
+    // Erotellaan pätevät (ok) ja muut
+    const validRunners = list.filter(p => p._ok && p._timeSecs !== 0); // aika 0 käsitellään erityisesti
+    const zeroTimeRunners = list.filter(p => p._ok && p._timeSecs === 0); // "no time" tasan 0 -> sijoitus viimeiseksi
+    const invalidRunners = list.filter(p => !p._ok || p._timeSecs === null);
+
+    // Ranking ottaa huomioon vain validRunners (aika >0). zeroTimeRunners pidetään viimeisinä eikä pääse voittajaksi.
+    const ranked = validRunners.sort((a,b)=>a._timeSecs-b._timeSecs);
     const winnerTime = ranked.length ? ranked[0]._timeSecs : null;
+
+    // Laske pisteet:
     list.forEach(p=>{
-      if(open) p._points = 0;
-      else if(!p._ok) p._points = MIN_POINTS_FOR_DNF;
-      else p._points = winnerTime===null?0:Math.max(0, WINNER_POINTS - secondsToMinRounded(Math.max(0,p._timeSecs - winnerTime)));
+      if(open){
+        p._points = 0;
+      } else if(!p._ok || p._timeSecs === null){
+        // DNF/DSQ/tms -> osallistumispisteet
+        p._points = MIN_POINTS_FOR_DNF;
+      } else if(p._timeSecs === 0){
+        // Erityisesti "no time" = 0 sek -> viimeinen sijoitus, vain osallistumispisteet
+        p._points = MIN_POINTS_FOR_DNF;
+      } else {
+        // normaali suoritettu aika
+        if(winnerTime===null) p._points = 0;
+        else p._points = Math.max(0, WINNER_POINTS - secondsToMinRounded(Math.max(0,p._timeSecs - winnerTime)));
+      }
     });
+
     results.push({series, open, list});
   }
   return results;
 }
 
-// --- Laske top 3 pistettä ---
+// --- Laske top N pistettä ---
+// Huom: trophy-osion laskenta: yhdestä tapahtumasta maksimissaan yksi valid osallistumiskerta per juoksija.
+// Eli jos sama juoksija juoksi useassa sarjassa samassa tapahtumassa, se lasketaan vain kerran osallistumiseksi / trophyä varten.
+// Samoin toplaskennassa eri tapahtumien pisteet voivat tulla eri sarjoista (lasketaan per result-objekti), mutta samasta tapahtumasta vain yksi valid result huomioidaan osallistumisissa.
 function calculateTotals(events){
   const athletes = {};
 
@@ -202,10 +229,11 @@ function calculateTotals(events){
 
         athletes[key].results.push({
           eventName: ev.name,
+          eventId: ev.id,
           date: ev.date,
           series: sobj.series,
           time: p.time,
-          status: p._ok?'OK':'HYL',
+          status: p._ok ? 'OK' : 'HYL',
           points: p._points,
           validParticipation: p._validParticipation,
           eventUrl: p.eventUrl
@@ -214,12 +242,22 @@ function calculateTotals(events){
     });
   });
 
+  // Nyt aggregated per athlete:
   return Object.values(athletes)
     .map(a=>{
+      // Järjestetään tulokset niin, että kustakin tapahtumasta otetaan erikseen jokainen sarja (results sisältää sarjat erikseen),
+      // mutta trophy-laskennassa ja osallistumisten laskennassa varmistetaan, että yhdestä eventistä lasketaan korkeintaan yksi valid osallistuminen.
       const validResults = a.results.filter(r => r.validParticipation);
-      const pointsList = validResults.map(r=>r.points).sort((a,b)=>b-a);
-      const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-      const participationCount = validResults.length;
+
+      // Points: sallitaan useita pisteitä samasta tapahtumasta (eri sarjoista) — tämä on alkuperäisen laskennan oletus.
+      const pointsList = a.results.filter(r=>r.points!==undefined && r.points!==null).map(r=>r.points).sort((a,b)=>b-a);
+    
+      // Osallistumisten määrä per tapahtuma: yhdestä eventistä max 1 validParticipation
+      const eventsWithValid = new Set(validResults.map(r => `${r.eventName}||${r.date}`));
+      const participationCount = eventsWithValid.size;
+
+      //const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
+      const topSum = pointsList.sort((a,b) => b - a).slice(0, TOP_N_SCORES_TO_SUM).reduce((s,x) => s + x, 0);
       const club = Array.from(a.clubs).join('/');
       return {...a,pointsList,topSum,participationCount,club};
     })
@@ -238,14 +276,12 @@ function renderSeriesLinks(seriesList){
   });
 }
 
-
 function renderTableBySeries(totals){
   const out = document.getElementById('output');
   out.innerHTML = '';
 
- 
   if(!noTrophy){
-    // Pokaalin ansainneiden lista
+    // Pokaalin ansainneiden lista (osallistumisia >=3 tapahtumaa)
     const trophyList = totals.filter(t=>t.participationCount>=3);
     if(trophyList.length){
       const div = document.createElement('div');
@@ -258,12 +294,13 @@ function renderTableBySeries(totals){
         tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(t.name)}</td><td>${t.participationCount}</td><td>🏆</td>`;
         tbody.appendChild(tr);
       });
-    table.appendChild(tbody);
-    div.appendChild(table);
-    out.appendChild(div);
+      table.appendChild(tbody);
+      div.appendChild(table);
+      out.appendChild(div);
+    }
   }
-  }
-  // Ryhmittele sarjoihin, yksi rivi per juoksija
+
+  // Ryhmittele sarjoihin, yksi rivi per juoksija per sarja
   const seriesMap = {};
   totals.forEach(t=>{
     const perSeries = {};
@@ -274,21 +311,23 @@ function renderTableBySeries(totals){
 
     Object.keys(perSeries).forEach(series=>{
       if(!seriesMap[series]) seriesMap[series] = [];
-      const exists = seriesMap[series].some(x=>x.name===t.name);
-      if(!exists){
-        const resultsForSeries = perSeries[series];
-        const pointsList = resultsForSeries.map(r=>r.points);
-        const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-        const participationCount = resultsForSeries.length;
-        const club = t.club;
-        seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
-      }
+      // sama nimi voi esiintyä useassa sarjassa — lisätään erikseen per sarja
+      const resultsForSeries = perSeries[series];
+      const pointsList = resultsForSeries.map(r=>r.points);
+      const topSum = pointsList.sort((a,b) => b - a).slice(0, TOP_N_SCORES_TO_SUM).reduce((s,x) => s + x, 0);
+      
+      //      const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
+      // Participation count per series = montako kertaa juoksija osallistui tähän sarjaan (samassakin eventissä voi olla useita luokkia, mutta täällä lasketaan per-rivi)
+      const participationCount = resultsForSeries.length;
+      const club = t.club;
+      seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
     });
   });
 
-  renderSeriesLinks(Object.keys(seriesMap).sort());
+  const seriesKeys = Object.keys(seriesMap).sort();
+  renderSeriesLinks(seriesKeys);
 
-  Object.keys(seriesMap).sort().forEach(series=>{
+  seriesKeys.forEach(series=>{
     const h = document.createElement('h2');
     h.className='series-title';
     h.id = `series-${series.replace(/\s+/g,'_')}`;
@@ -301,7 +340,6 @@ function renderTableBySeries(totals){
     </tr></thead>`;
     const tbody = document.createElement('tbody');
 
-    // Sortataan yhteispisteiden mukaan laskevasti
     seriesMap[series].sort((a,b)=>b.topSum - a.topSum).forEach((t,i)=>{
       tbody.innerHTML += `<tr>
         <td>${i+1}</td>
@@ -323,10 +361,10 @@ function exportCsv(totals){
   const rows=[['rank','name','club','series','participations','top_scores','total_points']];
   totals.forEach(t=>{
     t.results.forEach(r=>{
-      rows.push([1,t.name,t.club,r.series,t.participationCount,t.pointsList.join(';'),t.topSum]);
+      rows.push([1,t.name,t.club,r.series,t.participationCount,t.pointsList? t.pointsList.join(';') : '',t.topSum]);
     });
   });
-  const csv = rows.map(r=>r.map(f=>('"'+f.toString().replace(/"/g,'""')+'"')).join(',')).join('\n');
+  const csv = rows.map(r=>r.map(f=>('"'+(f||'').toString().replace(/"/g,'""')+'"')).join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -354,7 +392,7 @@ async function fetchEvent(eventId){
       return {...p, series: classMap[p.classId] || '---', eventUrl:`https://navisport.com/events/${eventId}`};
     }).filter(p=>isSeriesAllowed(p.series) && isClubAllowed(p.club));
 
-    return {name:data.name,date:data.begin,participants:filteredParticipants};
+    return {id:eventId, name:data.name,date:data.begin,participants:filteredParticipants};
   } catch(e){ console.error('Virhe haettaessa event',eventId,e); return null; }
 }
 
@@ -372,17 +410,16 @@ async function fetchEventsByIds(ids){
   if(!eventIds.length){ document.getElementById('output').innerHTML='<p>Ei eventid-parametreja</p>'; return; }
   const events = await fetchEventsByIds(eventIds);
   const totals = calculateTotals(events);
- const filteredTotals = totals.filter(t => {
-  if(!seriesToShow) return true; // noserieslimit
-  // Onko jollain tuloksella sarja mukana?
-  return t.results.some(r => seriesToShow.includes(r.series));
-});
+  const filteredTotals = totals.filter(t => {
+    if(!seriesToShow) return true; // noserieslimit
+    // Onko jollain tuloksella sarja mukana?
+    return t.results.some(r => seriesToShow.includes(r.series));
+  });
 
-  console.log(filteredTotals);
-  console.log(seriesToShow)
   renderTableBySeries(filteredTotals);
   document.getElementById('exportCsvBtn').addEventListener('click',()=>exportCsv(totals));
 })();
 </script>
 </body>
 </html>
+
