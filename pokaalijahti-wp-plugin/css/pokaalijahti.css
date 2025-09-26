@@ -7,9 +7,16 @@
 #pokaali-sort, #pokaali-sort-label {
   display: none;
 }
+#exportCsvBtn {
+  display: none;
+}
+#seriesLinks {
+  display: flex;
+  flex-wrap: wrap; /* rivitetään jos tilaa ei riitä */
+  gap: 10px;       /* automaattinen väli linkkien välillä */
+}
 /* responsiivisuus */
 .pokaali-container table{ display:block; overflow:auto; width:100%; }
 
 /* linkkien ja painikkeiden perinteinen teemaväri */
 .pokaali-container a, .pokaali-container button { color: var(--wp--preset--color--primary, #0073aa); }
-
