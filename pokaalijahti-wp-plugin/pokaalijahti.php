@@ -3,7 +3,7 @@
  * Plugin Name: Pokaalijahti - tuloslaskuri
  * Description: Shortcode [pokaalijahti] joka lataa tuloslaskurin ja proxyttää + cachettaa Navisport-API-kutsut.
  * Version: 1.1
- * Author: You
+ * Author: Pietari Hyvärinen
  */
 
 if (!defined('ABSPATH')) exit;
@@ -33,14 +33,30 @@ function pokaalijahti_shortcode($atts){
         'noserieslimit' => '0',
         'series' => '',
     ), $atts, 'pokaalijahti');
+     $series_safe = sanitize_text_field($a['series']);
+     $valid_event_ids = array();
 
+    foreach ($event_ids as $id) {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) {
+            $valid_event_ids[] = $id;
+        }
+    }
+
+// Pilkotaan mahdolliset eventid:t pilkuilla
+    $event_ids = array_map('trim', explode(',', $a['eventid']));
+    $valid_event_ids = array();
+
+    foreach ($event_ids as $id) {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) {
+            $valid_event_ids[] = $id;
+        }
+    }
     $data = array(
-        'eventids' => $a['eventid'],
+        'eventids' => $valid_event_ids,
         'noclublimit' => $a['noclublimit'],
         'noserieslimit' => $a['noserieslimit'],
-        'series' => $a['series'],
+        'series' => $series_safe,
     );
-
     $data_attr = esc_attr(json_encode($data));
 
     return '<div id="pokaali-app" data-config="'. $data_attr .'">
@@ -142,10 +158,11 @@ function pokaalijahti_settings_page(){
     $page_url = $page ? get_permalink($page) : admin_url('options-general.php?page=pokaalijahti-settings');
     ?>
     <div class="wrap">
-      <h1>Pokaalijahti</h1>
-      <p>Täällä voit luoda demo-/ohjesivun jolla on valmiit shortcode-esimerkit.</p>
-      <p><a class="button button-primary" href="<?php echo esc_url($page_url); ?>">Avaa demo-sivu</a></p>
-      <h2>Shortcode-esimerkit</h2>
+      <h1>Pokaalijahti - pistelasku plugin</h1>
+käytössä oletuksena seuraavat säännöt: 
+Osakilpailun voittaja saa 100 pistettä. Seuraaviksi tulleet saavat 100 pistettä miinus aikaeroa vastaava vähennys, 1 min. = 1 piste. Keskeyttäneet ja hylätyt tulokset = 10 p. Yhteistuloksiin lasketaan 3 suurinta pistemäärää.
+    Koodi otetaan käyttöön halutulla sivulla sijoittamalla shortcode sivulle.
+        <h2>Shortcode-esimerkit</h2>
       <pre>
 [pokaalijahti eventid="579dc02d-ef31-47aa-955d-6e55bcd6256b"]
 [pokaalijahti eventid="id1,id2" noclublimit="1"]

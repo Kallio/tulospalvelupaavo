@@ -73,6 +73,7 @@ const noTrophy = urlParams.has('notrophy')? true : (cfg.notrophy === '1');
 const rawSeries = urlParams.get('series') || cfg.series || '';
 const SERIES_FILTER_LIST = rawSeries ? rawSeries.split(',').map(s=>s.trim()).filter(Boolean) : null;
 
+
 // --- Time parsing ---
 function parseTimeToSeconds(t){
   if(t===null || t===undefined) return null;
@@ -323,9 +324,20 @@ async function fetchEventsByIds(ids){
 
 // --- Run ---
 (async()=>{
-  if(!eventIds.length){ document.getElementById('output').innerHTML='<p>Ei eventid-parametreja</p>'; return; }
+  const outputEl = document.getElementById('output');
+  if(!outputEl || !eventIds.length){
+    if(outputEl) outputEl.innerHTML='<p>Ei eventid-parametreja</p>';
+    return; // Ei shortcode-elementtiä, lopetetaan
+  }
+
   const events = await fetchEventsByIds(eventIds);
   const totals = calculateTotals(events);
+
   renderTableBySeries(totals);
-  document.getElementById('exportCsvBtn').addEventListener('click',()=>exportCsv(totals));
+
+  const exportBtn = document.getElementById('exportCsvBtn');
+  if(exportBtn){
+    exportBtn.addEventListener('click',()=>exportCsv(totals));
+  }
 })();
+
