@@ -44,7 +44,6 @@ function pokaalijahti_shortcode($atts){
     $data_attr = esc_attr(json_encode($data));
 
     return '<div id="pokaali-app" data-config="'. $data_attr .'">
-      <h1>Pokaalijahti - tuloslaskuri</h1>
       <div id="seriesLinks"></div>
       <div id="output"><p>Ladataan tuloksia…</p></div>
       <button id="exportCsvBtn">Vie CSV</button>

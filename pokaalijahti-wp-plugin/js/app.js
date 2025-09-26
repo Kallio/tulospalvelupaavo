@@ -40,8 +40,8 @@ function isSeriesAllowed(series){
 function normalizeName(name){
   if(!name) return '';
   const cleaned = String(name)
-    .replace(/\s*\(.*?\)\s*/g, ' ') // poistaa kaikki sulkumerkinnät ja niiden sisällön
-    .replace(/\s+/g, ' ')           // tiivistää välilyönnit
+    .replace(/\s*\(.*?\)\s*/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
   return cleaned;
@@ -55,7 +55,7 @@ function isOpenSeries(seriesName){
 
 function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// --- Lue konfiguraatio: shortcode data-config JSON ja URL params (URL voittaa) ---
+// --- Lue konfiguraatio ---
 const rootEl = document.getElementById('pokaali-app');
 let cfg = { eventids: '', noclublimit: '0', noserieslimit: '0', series: '', notrophy:'' };
 if (rootEl && rootEl.dataset && rootEl.dataset.config) {
@@ -66,15 +66,12 @@ const urlEventIds = (urlParams.get('eventid') || '').trim();
 const rawEventIds = urlEventIds || (cfg.eventids || '');
 const eventIds = (rawEventIds || '').toString().split(',').map(s=>s.trim()).filter(Boolean);
 
-// boolean flags: URL-parametrit voittavat data-configin
 const noClubLimit = urlParams.has('noclublimit') ? true : (cfg.noclublimit === '1');
 const noSeriesLimit = urlParams.has('noserieslimit') ? true : (cfg.noserieslimit === '1');
-const noTrophy = urlParams.has('notrophy')? true : (cfg.notrophy === '1');;
+const noTrophy = urlParams.has('notrophy')? true : (cfg.notrophy === '1');
 
-// series-filter: URL voittaa, voi olla useampi pilkulla eroteltu
 const rawSeries = urlParams.get('series') || cfg.series || '';
 const SERIES_FILTER_LIST = rawSeries ? rawSeries.split(',').map(s=>s.trim()).filter(Boolean) : null;
-
 
 // --- Time parsing ---
 function parseTimeToSeconds(t){
@@ -82,6 +79,7 @@ function parseTimeToSeconds(t){
   if(typeof t==='number') return t;
   const str = String(t).trim();
   if(!str) return null;
+  if(/^0+$/.test(str) || /^0+:0+(:0+)?$/.test(str)) return 0; // erityinen 0-tapaus
   if(/^P/i.test(str) && /S$/i.test(str)){
     const m = str.match(/PT(\d+(?:\.\d+)?)S/i);
     if(m) return parseFloat(m[1]);
@@ -116,9 +114,10 @@ function scoreEvent(event){
 
     p._timeSecs = parseTimeToSeconds(p.time);
     p._status = (p.status||'').toLowerCase();
-    const dns = p._status.includes("registered") || p._timeSecs===null;
-    p._ok = !['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x)) && p._timeSecs!==null;
-    p._validParticipation = !dns;
+    const isDnsStatus = p._status.includes('dns') || p._status.includes('registered');
+    const isDisq = ['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x));
+    p._ok = !isDisq && p._timeSecs !== null;
+    p._validParticipation = !isDnsStatus && !isDisq && p._timeSecs !== null;
 
     bySeries[series].push(p);
   });
@@ -127,13 +126,23 @@ function scoreEvent(event){
   for(const series in bySeries){
     const list = bySeries[series];
     const open = isOpenSeries(series);
-    const ranked = list.filter(p=>p._ok).sort((a,b)=>a._timeSecs-b._timeSecs);
+
+    const validRunners = list.filter(p => p._ok && p._timeSecs !== 0);
+    const ranked = validRunners.sort((a,b)=>a._timeSecs-b._timeSecs);
     const winnerTime = ranked.length ? ranked[0]._timeSecs : null;
+
     list.forEach(p=>{
-      if(open) p._points = 0;
-      else if(!p._ok) p._points = MIN_POINTS_FOR_DNF;
-      else p._points = winnerTime===null?0:Math.max(0, WINNER_POINTS - secondsToMinRounded(Math.max(0,p._timeSecs - winnerTime)));
+      if(open) {
+        p._points = 0;
+      } else if(!p._ok || p._timeSecs === null) {
+        p._points = MIN_POINTS_FOR_DNF;
+      } else if(p._timeSecs === 0) {
+        p._points = MIN_POINTS_FOR_DNF;
+      } else {
+        p._points = winnerTime===null ? 0 : Math.max(0, WINNER_POINTS - secondsToMinRounded(Math.max(0,p._timeSecs - winnerTime)));
+      }
     });
+
     results.push({series, open, list});
   }
   return results;
@@ -156,10 +165,11 @@ function calculateTotals(events){
 
         athletes[key].results.push({
           eventName: ev.name,
+          eventId: ev.id,
           date: ev.date,
           series: sobj.series,
           time: p.time,
-          status: p._ok?'OK':'HYL',
+          status: p._ok ? 'OK' : 'HYL',
           points: p._points,
           validParticipation: p._validParticipation,
           eventUrl: p.eventUrl
@@ -171,9 +181,10 @@ function calculateTotals(events){
   return Object.values(athletes)
     .map(a=>{
       const validResults = a.results.filter(r => r.validParticipation);
-      const pointsList = validResults.map(r=>r.points).sort((a,b)=>b-a);
+      const pointsList = a.results.filter(r=>r.points!==undefined && r.points!==null).map(r=>r.points).sort((a,b)=>b-a);
+      const eventsWithValid = new Set(validResults.map(r => `${r.eventName}||${r.date}`));
+      const participationCount = eventsWithValid.size;
       const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-      const participationCount = validResults.length;
       const club = Array.from(a.clubs).join('/');
       return {...a,pointsList,topSum,participationCount,club};
     })
@@ -192,10 +203,10 @@ function renderSeriesLinks(seriesList){
   });
 }
 
-let currentTotals = []; // säilyttää viimeisimmät tulokset taulukon päivitykseen/sorttiin
+let currentTotals = [];
 
 function renderTableBySeries(totals){
-  currentTotals = totals; // talletus
+  currentTotals = totals;
   const out = document.getElementById('output');
   out.innerHTML = '';
 
@@ -229,34 +240,17 @@ function renderTableBySeries(totals){
 
     Object.keys(perSeries).forEach(series=>{
       if(!seriesMap[series]) seriesMap[series] = [];
-      const exists = seriesMap[series].some(x=>x.name===t.name);
-      if(!exists){
-        const resultsForSeries = perSeries[series];
-        const pointsList = resultsForSeries.map(r=>r.points);
-        const topSum = pointsList.slice(0,TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-        const participationCount = resultsForSeries.length;
-        const club = t.club;
-        seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
-      }
+      const resultsForSeries = perSeries[series];
+      const pointsList = resultsForSeries.map(r=>r.points);
+      const topSum = pointsList.sort((a,b)=>b-a).slice(0, TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
+      const participationCount = resultsForSeries.length;
+      const club = t.club;
+      seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
     });
   });
 
   const seriesKeys = Object.keys(seriesMap).sort();
   renderSeriesLinks(seriesKeys);
-
-  // Sort controls container
-  const controls = document.createElement('div');
-  controls.style.margin = '12px 0';
-  controls.innerHTML = `
-    <label>Järjestä: </label>
-    <select id="pokaali-sort">
-      <option value="topSum_desc">Pokaalit (määriin) desc</option>
-      <option value="name_asc">Nimi A→Z</option>
-      <option value="name_desc">Nimi Z→A</option>
-    </select>
-  `;
-  out.appendChild(controls);
-  document.getElementById('pokaali-sort').addEventListener('change',()=>applySortAndRerender(seriesMap));
 
   seriesKeys.forEach(series=>{
     const h = document.createElement('h2');
@@ -273,7 +267,6 @@ function renderTableBySeries(totals){
     const tbody = document.createElement('tbody');
 
     seriesMap[series].sort((a,b)=>b.topSum - a.topSum).forEach((t,i)=>{
-      const trophy = t.participationCount>=3?'<span class="trophy">🏆</span>':'—';
       tbody.innerHTML += `<tr>
         <td>${i+1}</td>
         <td>${escapeHtml(t.name)}</td>
@@ -281,61 +274,6 @@ function renderTableBySeries(totals){
         <td>${t.participationCount}</td>
         <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
         <td>${t.topSum}</td>
-      </tr>`;
-    });
-
-    table.appendChild(tbody);
-    out.appendChild(table);
-  });
-}
-
-function applySortAndRerender(seriesMap){
-  const val = document.getElementById('pokaali-sort').value;
-  // For each series, sort its array in place according to selection
-  Object.keys(seriesMap).forEach(series=>{
-    if(val === 'topSum_desc'){
-      seriesMap[series].sort((a,b)=>b.topSum - a.topSum);
-    } else if(val === 'name_asc'){
-      seriesMap[series].sort((a,b)=>a.name.localeCompare(b.name,'fi'));
-    } else if(val === 'name_desc'){
-      seriesMap[series].sort((a,b)=>b.name.localeCompare(a.name,'fi'));
-    }
-  });
-
-  // Re-render tables quickly: clear output and rebuild only series tables (keep controls)
-  const out = document.getElementById('output');
-  const controls = document.getElementById('pokaali-sort')?.parentNode;
-  out.innerHTML = '';
-  if(controls) out.appendChild(controls);
-
-  // Reuse render logic but avoid duplicating the sort control again; create a minimal render for seriesMap
-  const seriesKeys = Object.keys(seriesMap).sort();
-  renderSeriesLinks(seriesKeys);
-
-  seriesKeys.forEach(series=>{
-    const h = document.createElement('h2');
-    h.className='series-title';
-    h.id = `series-${series.replace(/\s+/g,'_')}`;
-    h.textContent = series;
-    out.appendChild(h);
-
-    const table = document.createElement('table');
-    table.className = 'pokaali-table';
-    table.innerHTML = `<thead><tr>
-      <th>#</th><th>Nimi</th><th>Seura</th><th>Osallistumiset</th><th>Top pisteet</th><th>Yhteispisteet</th><th>Pokaali</th>
-    </tr></thead>`;
-    const tbody = document.createElement('tbody');
-
-    seriesMap[series].forEach((t,i)=>{
-      const trophy = t.participationCount>=3?'<span class="trophy">🏆</span>':'—';
-      tbody.innerHTML += `<tr>
-        <td>${i+1}</td>
-        <td>${escapeHtml(t.name)}</td>
-        <td>${escapeHtml(t.club)}</td>
-        <td>${t.participationCount}</td>
-        <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
-        <td>${t.topSum}</td>
-        <td>${trophy}</td>
       </tr>`;
     });
 
@@ -349,10 +287,10 @@ function exportCsv(totals){
   const rows=[['rank','name','club','series','participations','top_scores','total_points']];
   totals.forEach(t=>{
     t.results.forEach(r=>{
-      rows.push([1,t.name,t.club,r.series,t.participationCount,t.pointsList.join(';'),t.topSum]);
+      rows.push([1,t.name,t.club,r.series,t.participationCount,t.pointsList? t.pointsList.join(';') : '',t.topSum]);
     });
   });
-  const csv = rows.map(r=>r.map(f=>('"'+f.toString().replace(/"/g,'""')+'"')).join(',')).join('\n');
+  const csv = rows.map(r=>r.map(f=>('"'+(f||'').toString().replace(/"/g,'""')+'"')).join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -391,4 +329,3 @@ async function fetchEventsByIds(ids){
   renderTableBySeries(totals);
   document.getElementById('exportCsvBtn').addEventListener('click',()=>exportCsv(totals));
 })();
-
