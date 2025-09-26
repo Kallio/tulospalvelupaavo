@@ -1,0 +1,15 @@
+/* perustyyli siirretty */
+.pokaali-container { font-family: inherit; color: inherit; margin: 18px; }
+.pokaali-container h1 { font-size: 1.25rem; margin-bottom: 12px; }
+.pokaali-container table { width:100%; border-collapse:collapse; margin-top:12px; }
+.pokaali-container th, .pokaali-container td { border:1px solid var(--wp-admin-border-color, #ddd); padding:6px; text-align:left; background:transparent; }
+.pokaali-container .trophy{ color:#b8860b; font-weight:700; }
+#pokaali-sort, #pokaali-sort-label {
+  display: none;
+}
+/* responsiivisuus */
+.pokaali-container table{ display:block; overflow:auto; width:100%; }
+
+/* linkkien ja painikkeiden perinteinen teemaväri */
+.pokaali-container a, .pokaali-container button { color: var(--wp--preset--color--primary, #0073aa); }
+
