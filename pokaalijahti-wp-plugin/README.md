@@ -5,6 +5,8 @@
 
 **Pokaalijahti** is a WordPress plugin that allows you to display tournament results from multiple [Navisport](https://navisport.com) events on your WordPress site. The plugin isn’t limited to a single club, so you’re welcome to collaborate with other clubs in your area.
 
+If you enjoy using the plugin, feel free to show your support—perhaps with a coffee or a kisamakkara at the next event, or simply cheering me on to the finish line!
+
 ## Installation
 
 ### 1. Download the Plugin
