@@ -184,15 +184,13 @@ function prepareRows(json, mainCourseClasses){
     const className = r.className || mainCourseClasses[r.classId] || '';
     const rawTime = r.resultTime || r.time || (r.result && r.result.time) || r.totalTime || '';
     const totalSec = parseDurationToSeconds(rawTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-//    const rank = r.rank || r.resultRank || (r.result && r.result.rank) ||(r.result && r.result.position) || '';
-//const rank = r.rank || r.resultRank || (r.result && r.result.rank) ||(r.result && r.result.position) || '';
-const rank = (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) ?? '';
-
+const rank = (r.status === "Ok") 
+  ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
+  : '';
 
     const status = r.status || r.resultStatus || '';
     // per-stage arrays (yksivaiheisessa vain index 0)
-    console.log("JSON result row:", r);
-
+    
     return {
       id: r.id || null,
       bibNumber: r.bibNumber || '',
@@ -253,7 +251,6 @@ function prepareRowsMultistage(allResults, mainCourseClasses){
       const sec = parseDurationToSeconds(rawStageTime) ?? parseDurationToSeconds(r.seconds) ?? null;
       if(sec!=null){ item.stageSeconds[idx] = sec; item.stageTimes[idx] = formatSeconds(sec); }
       else if(rawStageTime) { item.stageTimes[idx] = rawStageTime; }
-//      item.stageRanks[idx] = r.rank || r.resultRank || (r.result && r.result.rank) || item.stageRanks[idx];
       item.stageRanks[idx] = r.rank || r.resultRank || (r.result && r.result.rank) || item.stageRanks[idx];
 
       item.stageStatuses[idx] = r.status || r.resultStatus || item.stageStatuses[idx];
@@ -291,12 +288,7 @@ item.resultRank = '';
     for(const r of rawData.results){
       const key = r.id ? `ID_${r.id}` : `${r.bibNumber||''}||${r.chip||''}||${r.name||''}`;
       const totalSec = parseDurationToSeconds(r.resultTime) ?? parseDurationToSeconds(r.totalTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-     // mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || (r.result && r.result.rank) || null, status: r.status || r.resultStatus || null });
-     mainMap.set(key, { 
-  totalSec, 
-  rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null, 
-  status: r.status || r.resultStatus || null 
-});
+      mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null,  status: r.status || r.resultStatus || null });
    
     }
     rows.forEach(row=>{
