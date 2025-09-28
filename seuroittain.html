@@ -16,9 +16,9 @@ th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size
 tbody tr:hover{background:#f1f5f9}
 .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .small{font-size:12px;color:#64748b}
-.rank-1 {  background-color: lightgreen; }
-.rank-2 {  background-color: lightblue;}
-.rank-3 { background-color: lightyellow;
+.rank-1 {  background-color: gold; }
+.rank-2 {  background-color: silver;}
+.rank-3 { background-color: #cd7f32;
 }
 #classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}
 #classLinks a{padding:4px 8px;background:#e2e8f0;border-radius:6px;text-decoration:none;color:#111;font-size:14px}
@@ -184,12 +184,11 @@ function prepareRows(json, mainCourseClasses){
     const className = r.className || mainCourseClasses[r.classId] || '';
     const rawTime = r.resultTime || r.time || (r.result && r.result.time) || r.totalTime || '';
     const totalSec = parseDurationToSeconds(rawTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-const rank = (r.status === "Ok") 
-  ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
-  : '';
+    const rank = (r.status === "Ok") 
+      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
+      : '';
 
     const status = r.status || r.resultStatus || '';
-    // per-stage arrays (yksivaiheisessa vain index 0)
     
     return {
       id: r.id || null,
@@ -206,10 +205,40 @@ const rank = (r.status === "Ok")
       totalTime: totalSec!=null ? formatSeconds(totalSec) : (rawTime||''),
       resultRank: rank,
       status,
-      club: r.club || ''
+      club: r.club || '',
+      resultRankClass: ''   // lisätään paikka luokalle
     };
   });
+
+  // --- Laske sarjakohtaiset sijoitukset ja värit ---
+  const byClass = new Map();
+  rows.forEach(r=>{
+    const cls = r.className || '__no_class__';
+    if(!byClass.has(cls)) byClass.set(cls, []);
+    byClass.get(cls).push(r);
+  });
+
+  for(const [cls, list] of byClass.entries()){
+    const withTotal = list.filter(r=>r.totalSeconds!=null);
+    if(withTotal.length){
+      withTotal.sort((a,b)=>a.totalSeconds-b.totalSeconds);
+      for(let i=0;i<withTotal.length;i++){
+        withTotal[i].resultRank = i+1;
+
+        // väritä sijoitus
+        let rankClass = '';
+        if(i===0) rankClass = 'rank-1';
+        else if(i===1) rankClass = 'rank-2';
+        else if(i===2) rankClass = 'rank-3';
+        withTotal[i].resultRankClass = rankClass;
+
+        // myös stageRanks[0] voi saada saman luokan (halutessa näkyviin suoraan stage-sarakkeessa)
+        // withTotal[i].stageRankClass = rankClass; 
+      }
+    }
+  }
 }
+
 function showValue(v) {
   return (v === null || v === undefined || v === '') ? '-' : v;
 }
@@ -316,7 +345,14 @@ item.resultRank = '';
       withSec.sort((a,b)=>a.stageSeconds[s]-b.stageSeconds[s]);
       for(let i=0;i<withSec.length;i++){
         withSec[i].stageRanks[s] = i+1;
+       // Väriluokka vain, jos halutaan näyttää heti
+    let rankClass = '';
+    if(i === 0) rankClass = 'rank-1';
+    else if(i === 1) rankClass = 'rank-2';
+    else if(i === 2) rankClass = 'rank-3';
       }
+      
+
       // jätä muille stageRanks[s] sellaisenaan (mahdollisesti tyhjä)
     }
   }
@@ -328,13 +364,24 @@ item.resultRank = '';
     if(!byClass2.has(cls)) byClass2.set(cls, []);
     byClass2.get(cls).push(r);
   });
-  for(const [cls, list] of byClass2.entries()){
-    const withTotal = list.filter(r=>r.totalSeconds!=null);
-    if(withTotal.length){
-      withTotal.sort((a,b)=>a.totalSeconds-b.totalSeconds);
-      for(let i=0;i<withTotal.length;i++) withTotal[i].resultRank = i+1;
+// --- resultRank ja soluväritys ---
+for(const [cls, list] of byClass2.entries()){
+  const withTotal = list.filter(r=>r.totalSeconds!=null); // vain valmiit rivit
+  if(withTotal.length){
+    withTotal.sort((a,b)=>a.totalSeconds-b.totalSeconds);
+    for(let i=0;i<withTotal.length;i++){
+      withTotal[i].resultRank = i+1;
+
+      // lisätään solutasoinen väriluokka
+      let rankClass = '';
+      if(i===0) rankClass = 'rank-1';
+      else if(i===1) rankClass = 'rank-2';
+      else if(i===2) rankClass = 'rank-3';
+      withTotal[i].resultRankClass = rankClass;
     }
   }
+}
+
 }
 
 function stageResultsCount(allResults){ return allResults.length || 1; }
@@ -399,15 +446,20 @@ function render(){
   const tbody = document.querySelector('#results tbody'); tbody.innerHTML = '';
   for(const r of filtered){
     const tr=document.createElement('tr');
+    const rankClass = r.resultRankClass ? ` class="${r.resultRankClass}"` : '';
     let html = `<td>${r.className||''}</td>`;
     for(let i=0;i<stageCount;i++){
     html += `<td>${showValue(r.startTimes[i])}</td>`;
-html += `<td>${showValue(r.stageTimes[i])}</td>`;
-html += `<td>${showValue(r.stageRanks[i])}</td>`;
-html += `<td>${showValue(r.stageStatuses[i])}</td>`;
+    html += `<td>${showValue(r.stageTimes[i])}</td>`;
+    html += `<td${rankClass}>${showValue(r.stageRanks[i])}</td>`;
+    html += `<td>${showValue(r.stageStatuses[i])}</td>`;
     }
     html += `<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname||''}</td><td>${r.givenName||''}</td><td>${r.club||''}</td>`;
-    html += `<td>${r.totalTime || ''}</td><td>${r.resultRank || ''}</td><td>${r.status || ''}</td>`;
+    //html += `<td>${r.totalTime || ''}</td><td>${r.resultRank || ''}</td><td>${r.status || ''}</td>`;
+    
+    html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td><td>${showValue(r.status)}</td>`;
+
+
     tr.innerHTML = html;
     tbody.appendChild(tr);
   }
