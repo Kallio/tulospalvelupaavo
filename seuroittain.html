@@ -4,25 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Startlist Viewer — seurakohtainen</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:#f7f9fb;color:#111}
-header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-select,input{padding:6px 8px;border-radius:6px;border:1px solid #cbd5e1}
-table{border-collapse:collapse;width:100%;background:white;border-radius:8px;overflow:hidden}
-th,td{padding:8px 8px;text-align:left;border-bottom:1px solid #eef2f7}
-th{cursor:pointer;user-select:none;position:relative}
-th .hint{font-size:12px;color:#6b7280;margin-left:6px}
-th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color: red}
-tbody tr:hover{background:#c1d6ea}
-.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.small{font-size:12px;color:#64748b}
-.rank-1 { background-color: gold; }
-.rank-2 { background-color: silver;}
-.rank-3 { background-color: #cd7f32;}
-#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}
-#classLinks a{padding:4px 8px;background:#e2e8f0;border-radius:6px;text-decoration:none;color:#111;font-size:14px}
-#classLinks a:hover{background:#cbd5e1}
-</style>
+<style>:root{--bg-body:#f7f9fb;--txt-body:#111;--bg-table:#fff;--border-table:#eef2f7;--bg-select:#fff;--border-select:#cbd5e1;--bg-link:#e2e8f0;--txt-link:#111;--bg-link-hover:#cbd5e1;--row-hover:#c1d6ea;--hint:#6b7280;--sorted:#ff0000;--rank1-txt:#111}@media (prefers-color-scheme:dark){:root{--bg-body:#121212;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{background:var(--bg-link-hover)}</style>
+
 </head>
 <body>
 <header>
@@ -113,6 +96,7 @@ async function loadData(){
   try{
     const mainJson = await (await fetch(DATA_URL)).json();
     rawData = mainJson;
+    eventState = mainJson.state || null;  
     const events = mainJson.events || [];
     stageCount = events.length || 1;
     const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
@@ -165,16 +149,22 @@ function createTableHeader(){
   const tr2 = document.createElement('tr'); // alaotsikot (jos tarvitaan)
   tr1.innerHTML = `<th rowspan="2" data-key="className">Sarja <span class="hint">(sorttaa)</span></th>`;
   for(let i=0;i<stageCount;i++){
-    tr1.innerHTML += `<th colspan="4">Stage ${i+1}</th>`;
+    if(eventState === "Complete"){
+    tr1.innerHTML += `<th colspan="3">Stage ${i+1}</th>`;
+    }else {
+    tr1.innerHTML += `<th colspan="4">Stage ${i+1}</th>`;}
   }
-  console.log (stageCount);
   tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">Nro</th><th rowspan="2" data-key="chip">Emit</th><th rowspan="2" data-key="surname">Sukunimi <span class="hint">(sorttaa)</span></th><th rowspan="2" data-key="givenName">Etunimi</th><th rowspan="2" data-key="club">Seura</th>`;
   if(stageCount > 1){
-  tr1.innerHTML += `<th rowspan="2" data-key="totalTime">Yhteisaika</th><th rowspan="2" data-key="resultRank">Yhteissija</th><th rowspan="2" data-key="status">Tila</th>`;
+  tr1.innerHTML += `<th rowspan="2" data-key="totalTime">Yhteisaika</th><th rowspan="2" data-key="resultRank">Yhteissija</th>`;
   }
   // alimman rivin otsikot per stage
   for(let i=0;i<stageCount;i++){
+    if(eventState === "Complete"){
+      tr2.innerHTML += `<th data-key="stageTime${i+1}">Aika ${i+1}</th><th data-key="stageRank${i+1}">Sija ${i+1}</th><th data-key="stageStatus${i+1}">Tila ${i+1}</th>`;
+    }else{
     tr2.innerHTML += `<th data-key="startTime${i+1}">Lähtö ${i+1} <span class="hint">(sorttaa)</span></th><th data-key="stageTime${i+1}">Aika ${i+1}</th><th data-key="stageRank${i+1}">Sija ${i+1}</th><th data-key="stageStatus${i+1}">Tila ${i+1}</th>`;
+    }
   }
   head.appendChild(tr1);
   head.appendChild(tr2);
@@ -465,7 +455,9 @@ function render(){
     let html = `<td>${r.className||''}</td>`;
     for(let i=0;i<stageCount;i++){
   const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
+  if(eventState != "Complete"){
   html += `<td>${showValue(r.startTimes[i])}</td>`;
+  }
   html += `<td>${showValue(r.stageTimes[i])}</td>`;
   html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
   html += `<td>${showValue(r.stageStatuses[i])}</td>`;
@@ -474,7 +466,7 @@ function render(){
     html += `<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname||''}</td><td>${r.givenName||''}</td><td>${r.club||''}</td>`;
     //html += `<td>${r.totalTime || ''}</td><td>${r.resultRank || ''}</td><td>${r.status || ''}</td>`;
     if(stageCount > 1){
-    html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td><td>${showValue(r.status)}</td>`;
+    html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td>`;
     }
 
     tr.innerHTML = html;
