@@ -114,52 +114,99 @@ function formatSeconds(sec){
   return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 }
 
-async function loadData(){
-  try{
+async function mapResultsWithClubs(results) {
+  let clubs = [];
+
+  try {
+    const response = await fetch('https://espoonsuunta.fi/online/clubs.json');
+    console.log(response);
+
+    if (!response.ok) throw new Error('Clubs JSON not found');
+    clubs = await response.json();
+  } catch (error) {
+    console.warn('Could not load clubs.json, proceeding without club mapping:', error);
+  }
+  return results.map((result) => {
+    if (!clubs.length || !result.club) {
+      return result; // Ei muuteta, jos clubs.json ei saatavilla
+    }
+
+    const resultClub = result.club.trim().toLowerCase();
+
+    const mappedClub =
+      clubs.find(
+        ({ abbreviation, name }) =>
+          abbreviation.toLowerCase() === resultClub || name.toLowerCase() === resultClub
+      )?.name;
+
+    return {
+      ...result,
+      club: mappedClub || result.club, // Säilytetään alkuperäinen, jos ei löytynyt
+    };
+  });
+}
+
+async function loadData() {
+  try {
     const mainJson = await (await fetch(DATA_URL)).json();
     rawData = mainJson;
-    eventState = mainJson.state || null;  
+
     const events = mainJson.events || [];
     stageCount = events.length || 1;
     const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
     document.title = eventName + " – seuroittain" ;
     document.querySelector('h2').textContent = eventName;
 
-    if(eventId){
+    if (eventId) {
       const link = document.createElement('a');
       link.href = `https://navisport.com/events/${eventId}`;
       link.target = "_blank";
       link.textContent = 'Viralliset tiedot';
-      link.style.display = 'block'; link.style.marginTop = '16px';
       document.body.appendChild(link);
     }
 
     const mainCourseClasses = {};
-    if(mainJson.courseClasses){ mainJson.courseClasses.forEach(c=>{ mainCourseClasses[c.id]=c.name; }); }
+    if (mainJson.courseClasses) {
+      mainJson.courseClasses.forEach(c => { mainCourseClasses[c.id] = c.name; });
+    }
 
-    const multistage = mainJson.eventKind === 'Multistage event' || (events.length>1);
-    if(multistage){
+    const multistage = mainJson.eventKind === 'Multistage event' || (events.length > 1);
+    if (multistage) {
       const allResults = [];
-      for(const ev of events){
-        try{
+      for (const ev of events) {
+        try {
           const stageJson = await (await fetch(`https://navisport.com/api/events/${ev.id}`)).json();
           const stageCourseClasses = {};
-          if(stageJson.courseClasses){ stageJson.courseClasses.forEach(c=>{ stageCourseClasses[c.id]=c.name; }); }
-          allResults.push({ stageNumber: ev.stageNumber || (events.indexOf(ev)+1), results: stageJson.results||[], stageCourseClasses });
-        } catch(errStage){
+          if (stageJson.courseClasses) {
+            stageJson.courseClasses.forEach(c => { stageCourseClasses[c.id] = c.name; });
+          }
+
+          // Mapataan klubit stage-tuloksille
+          const resultsWithClubs = await mapResultsWithClubs(stageJson.results || []);
+
+          allResults.push({
+            stageNumber: ev.stageNumber || (events.indexOf(ev) + 1),
+            results: resultsWithClubs,
+            stageCourseClasses
+          });
+        } catch (errStage) {
           console.warn('Alatapahtuman lataus epäonnistui', ev.id, errStage);
         }
       }
       prepareRowsMultistage(allResults, mainCourseClasses);
     } else {
-      prepareRows(mainJson, mainCourseClasses);
+      // Mapataan klubit yksivaiheisille tuloksille
+      const rawResults = mainJson.results || [];
+      const resultsWithClubs = await mapResultsWithClubs(rawResults);
+
+      prepareRows({ ...mainJson, results: resultsWithClubs }, mainCourseClasses);
     }
 
     createTableHeader();
     populateClubSelect();
     populateClassLinks();
     render();
-  } catch(err){
+  } catch (err) {
     console.error(err);
     document.body.insertAdjacentHTML('afterbegin', `<div style="color:crimson">Virhe ladattaessa dataa: ${err.message}</div>`);
   }
