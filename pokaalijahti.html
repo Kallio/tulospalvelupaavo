@@ -372,7 +372,55 @@ function exportCsv(totals){
   document.body.appendChild(a); a.click(); a.remove();
 }
 
-// --- Hae tapahtumat ---
+
+// --- Club cache + helper ---
+let clubsCache = null;
+
+async function loadClubs() {
+  if (clubsCache) return clubsCache;
+  try {
+    const response = await fetch('https://espoonsuunta.fi/online/clubs.json');
+    if (!response.ok) throw new Error('Clubs JSON not found');
+    const clubs = await response.json();
+
+    // clubMap: key = lowercased abbreviation OR lowercased full name -> canonicalName (prefer abbreviation)
+    const clubMap = {};
+    clubs.forEach(({ name, abbreviation }) => {
+      const canonical = (abbreviation && abbreviation.trim()) ? abbreviation.trim() : (name && name.trim()) || '';
+      if (abbreviation) clubMap[abbreviation.trim().toLowerCase()] = canonical;
+      if (name) clubMap[name.trim().toLowerCase()] = canonical;
+    });
+
+    clubsCache = { clubs, clubMap };
+    return clubsCache;
+  } catch (err) {
+    console.warn('Could not load clubs.json, proceeding without mapping:', err);
+    clubsCache = { clubs: [], clubMap: {} };
+    return clubsCache;
+  }
+}
+
+// --- Map participants' club to canonical form (abbreviation if available) ---
+async function mapResultsWithClubs(results) {
+  const { clubMap } = await loadClubs();
+
+  return results.map((result) => {
+    if (!result.club) return result;
+    const key = String(result.club).trim().toLowerCase();
+    const mapped = clubMap[key];
+
+    // Jos löytyi, käytetään canonical (yleensä abbreviation). Muuten säilytetään alkuperäinen
+    const canonicalClub = mapped || result.club;
+    return {
+      ...result,
+      club: canonicalClub,
+      // jos haluat säilyttää myös pitkä nimen, voit etsiä sen clubsCache.clubs listasta
+      // longName: clubsCache.clubs.find(c=> (c.abbreviation && c.abbreviation.toLowerCase()===key) || (c.name && c.name.toLowerCase()===key) )?.name || null
+    };
+  });
+}
+
+// --- Muutos fetchEvent: mapataan ENNEN suodatusta ---
 async function fetchEvent(eventId){
   try {
     const resEvent = await fetch(`https://navisport.com/api/events/${eventId}`);
@@ -388,9 +436,16 @@ async function fetchEvent(eventId){
     const classMap = {};
     classes.forEach(c=>classMap[c.id]=c.name);
 
-    const filteredParticipants = participants.map(p=>{
+    // 1) Mapataan sarjat ja eventUrl (ei vielä suodatusta)
+    const participantsWithSeries = participants.map(p=>{
       return {...p, series: classMap[p.classId] || '---', eventUrl:`https://navisport.com/events/${eventId}`};
-    }).filter(p=>isSeriesAllowed(p.series) && isClubAllowed(p.club));
+    });
+
+    // 2) Normitetaan seurat käyttämällä clubs.json (mapResultsWithClubs) ennen isClubAllowed-suodatusta
+    const normalizedParticipants = await mapResultsWithClubs(participantsWithSeries);
+
+    // 3) Suodatetaan series + club nyt kun club on canonical-muodossa
+    const filteredParticipants = normalizedParticipants.filter(p=>isSeriesAllowed(p.series) && isClubAllowed(p.club));
 
     return {id:eventId, name:data.name,date:data.begin,participants:filteredParticipants};
   } catch(e){ console.error('Virhe haettaessa event',eventId,e); return null; }
