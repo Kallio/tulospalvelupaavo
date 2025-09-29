@@ -119,18 +119,31 @@ async function mapResultsWithClubs(results) {
   let clubs = [];
 
   try {
-    const response = await fetch('https://espoonsuunta.fi/online/clubs.json');
+    const response = await fetch('clubs.json');
     console.log(response);
 
     if (!response.ok) throw new Error('Clubs JSON not found');
     clubs = await response.json();
   } catch (error) {
     console.warn('Could not load clubs.json, proceeding without club mapping:', error);
+  
+    const warning = document.createElement('div');
+    warning.append('⚠️ Huom: clubs.json-tiedostoa ei löytynyt, Hae IRMAsta tiedosto esimerkiksi tällä ');  
+    warning.style.color = 'red';
+    warning.style.marginTop = '2rem';   
+    const link = document.createElement('a');
+    link.href = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs.bash';
+    link.textContent = 'työkalulla.';
+    link.style.color = 'red'; // halutessasi
+    warning.append(link);
+    document.body.appendChild(warning);
+  
   }
   return results.map((result) => {
     if (!clubs.length || !result.club) {
       return result; // Ei muuteta, jos clubs.json ei saatavilla
     }
+
 
     const resultClub = result.club.trim().toLowerCase();
 
@@ -162,7 +175,7 @@ async function loadData() {
       const link = document.createElement('a');
       link.href = `https://navisport.com/events/${eventId}`;
       link.target = "_blank";
-      link.textContent = 'Viralliset tiedot';
+      link.textContent = 'Virallinen tulospalvelusivu';
       link.style.display = 'block';
       link.style.marginTop = '16px';
       document.body.appendChild(link);
