@@ -34,15 +34,14 @@ const ALLOWED_SERIES = [
 const ALLOWED_CLUBS = ['EsSu','Espoon Suunta'];
 
 // --- Helperit ---
-function normalizeSeriesName(name){
-  return (name||'').toString().replace(/\s+/g,'').toLowerCase().trim();
+function normalizeText(name, isSeries = false){
+let text = (name||'').toString();
+if(isSeries){
+text = text.replace(/\s+/g,'');
+} else {
+text = text.replace(/\s*\(.*?\)\s*/g,' ').replace(/\s+/g,' ');
 }
-function normalizeName(name){
-  return (name||'').toString()
-    .replace(/\s*\(.*?\)\s*/g,' ')
-    .replace(/\s+/g,' ')
-    .trim()
-    .toLowerCase();
+return text.trim().toLowerCase();
 }
 
 function isOpenSeries(seriesName){
@@ -90,8 +89,8 @@ else seriesToShow = ALLOWED_SERIES;
 function isSeriesAllowed(series){
   if(noSeriesLimit) return true;
   if(!seriesToShow) return true;
-  const norm = normalizeSeriesName(series);
-  return seriesToShow.some(s => normalizeSeriesName(s) === norm);
+  const norm = normalizeText(item.series, true);
+  return seriesToShow.some(s => normalizeText(s,true) === norm);
 }
 
 function isClubAllowed(club){
@@ -121,6 +120,18 @@ function scoreEvent(event){
 
     bySeries[series].push(p);
   });
+// DEBUG: etsi rivit, joissa sarja on tyhjä/null/undefined
+participants.forEach((item, idx) => {
+  if (!item.series || item.series.trim() === "") {
+    console.log("Tyhjä sarja:", {
+      index: idx,
+      event: item.event,
+      name: item.name,
+      club: item.club,
+      series_raw: item.series
+    });
+  }
+});
 
   const results = [];
   for(const series in bySeries){
@@ -154,7 +165,7 @@ function calculateTotals(events){
     const perSeries = scoreEvent(ev);
     perSeries.forEach(sobj=>{
       sobj.list.forEach(p=>{
-        const key = normalizeName(p.name);
+        const key = normalizeText(p.name, false);
         if(!athletes[key]) athletes[key] = { id:p.id, name:p.name, clubs:new Set(), results:[] };
         const clubName = p.club && p.club.trim() ? p.club.trim() : 'EsSu';
         athletes[key].clubs.add(clubName);
