@@ -6,6 +6,7 @@
 <title>Startlist Viewer — seurakohtainen</title>
 <style>:root{--bg-body:#f7f9fb;--txt-body:#111;--bg-table:#fff;--border-table:#eef2f7;--bg-select:#fff;--border-select:#cbd5e1;--bg-link:#e2e8f0;--txt-link:#111;--bg-link-hover:#cbd5e1;--row-hover:#c1d6ea;--hint:#6b7280;--sorted:#ff0000;--rank1-txt:#111;
 }@media (prefers-color-scheme:dark){:root{--bg-body:#121212;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
+}@media (prefers-color-scheme:dark){:root{--bg-body:#000000;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
 }
 </style>
 
@@ -87,6 +88,15 @@ function parseName(name){
   const parts = name.trim().split(/\s+/);
   if(parts.length===1) return {surname:parts[0], givenName:''};
   return {surname:parts[0], givenName:parts.slice(1).join(' ')};
+}
+function parseStartTime(text) {
+  // hyväksyy muodon "HH.MM" tai "HH:MM"
+  const match = text.match(/^(\d{1,2})[.:](\d{2})$/);
+  if (!match) return null;
+  const [_, hh, mm] = match.map(Number);
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+  return date;
 }
 
 function formatTime(date){
@@ -510,13 +520,12 @@ function render(){
   const selClub = document.getElementById('clubSelect').value;
   const q = document.getElementById('search').value.trim().toLowerCase();
   let filtered = rows.filter(r=>{
-  if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
-  if(selectedClass && r.className !== selectedClass) return false; // tarkka match
-  if(!q) return true;
-  return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club,r.totalTime,r.resultRank,r.status]
-    .some(v=>String(v||'').toLowerCase().includes(q));
-});
-
+    if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
+    if(selectedClass && r.className !== selectedClass) return false;
+    if(!q) return true;
+    return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club,r.totalTime,r.resultRank,r.status]
+      .some(v=>String(v||'').toLowerCase().includes(q));
+  });
 
   if(sortState.key){
     const k = sortState.key;
@@ -537,27 +546,32 @@ function render(){
     });
   }
 
-  const tbody = document.querySelector('#results tbody'); tbody.innerHTML = '';
+  const tbody = document.querySelector('#results tbody');
+  tbody.innerHTML = '';
+
   for(const r of filtered){
     const tr=document.createElement('tr');
     const rankClass = r.resultRankClass ? ` class="${r.resultRankClass}"` : '';
     let html = `<td>${r.className||''}</td>`;
     for(let i=0;i<stageCount;i++){
-  const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
-  if(eventState != "Complete"){
-  html += `<td>${showValue(r.startTimes[i])}</td>`;
-  }
-  html += `<td>${showValue(r.stageTimes[i])}</td>`;
-  html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
-  html += `<td>${showValue(r.stageStatuses[i])}</td>`;
-}
-
-    html += `<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname||''}</td><td>${r.givenName||''}</td><td>${r.club||''}</td>`;
-    //html += `<td>${r.totalTime || ''}</td><td>${r.resultRank || ''}</td><td>${r.status || ''}</td>`;
-    if(stageCount > 1){
-    html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td>`;
+      const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
+      if(eventState != "Complete"){
+        // --- LISÄYS: merkitään lähtö, kello ja status kellopäivitystä varten ---
+        html += `<td class="start-time">${showValue(r.startTimes[i])}</td>`;
+        html += `<td class="clock">${showValue(r.stageTimes[i])}</td>`;
+        html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
+        html += `<td class="status">${showValue(r.stageStatuses[i])}</td>`;
+      } else {
+        html += `<td>${showValue(r.stageTimes[i])}</td>`;
+        html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
+        html += `<td>${showValue(r.stageStatuses[i])}</td>`;
+      }
     }
 
+    html += `<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname||''}</td><td>${r.givenName||''}</td><td>${r.club||''}</td>`;
+    if(stageCount > 1){
+      html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td>`;
+    }
     tr.innerHTML = html;
     tbody.appendChild(tr);
   }
@@ -568,6 +582,50 @@ function render(){
     if(header){ header.classList.add('sorted'); header.setAttribute('data-order', sortState.asc ? '▲' : '▼'); }
   }
 }
+
+// --- KELLOPÄIVITYS: päivittää näkyvät kellot reaaliajassa ---
+function formatElapsed(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const hh = Math.floor(totalSec / 3600);
+  const mm = Math.floor((totalSec % 3600) / 60);
+  const ss = totalSec % 60;
+  return (hh > 0 ? `${String(hh).padStart(2,'0')}:` : '') +
+         `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+
+function updateVisibleClocks() {
+  const tbody = document.querySelector('#results tbody');
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  const tbodyRect = tbody.getBoundingClientRect();
+
+  rows.forEach(row => {
+    const rowRect = row.getBoundingClientRect();
+    if (rowRect.bottom >= tbodyRect.top && rowRect.top <= tbodyRect.bottom) {
+      const startCell = row.querySelector('.start-time');
+      const clockCell = row.querySelector('.clock');
+      const statusCell = row.querySelector('.status');
+      if (!startCell || !clockCell || !statusCell) return;
+
+      const status = statusCell.textContent.trim().toUpperCase();
+      const startText = startCell.textContent.trim();
+      if (!startText) return;
+
+      const startTime = parseStartTime(startText) || new Date(startText);
+      if (isNaN(startTime)) return;
+
+      const now = new Date();
+      if (status === 'OK') return; // ei päivitetä jos maaliin tullut
+      if (status === 'COMPETING' && now > startTime) {
+        const diff = now - startTime;
+        clockCell.textContent = formatElapsed(diff);
+      }
+    }
+  });
+}
+
+// --- päivitetään kellot sekunnin välein ---
+setInterval(updateVisibleClocks, 1000);
 
 function rowsToCsv(data){
   const header = ["Sarja luokka"];
