@@ -8,6 +8,13 @@
 }@media (prefers-color-scheme:dark){:root{--bg-body:#121212;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
 }@media (prefers-color-scheme:dark){:root{--bg-body:#000000;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
 }
+.clock.hint::before {
+  content: "(";
+}
+
+.clock.hint::after {
+  content: ")";
+}
 </style>
 
 </head>
@@ -609,16 +616,41 @@ function updateVisibleClocks() {
 
       const status = statusCell.textContent.trim().toUpperCase();
       const startText = startCell.textContent.trim();
-      if (!startText) return;
+      if (!startText) {
+        clockCell.textContent = '-';
+        return;
+      }
 
       const startTime = parseStartTime(startText) || new Date(startText);
-      if (isNaN(startTime)) return;
+      if (!(startTime instanceof Date) || isNaN(startTime)) {
+        clockCell.textContent = '-';
+        return;
+      }
 
       const now = new Date();
-      if (status === 'OK') return; // ei päivitetä jos maaliin tullut
-      if (status === 'COMPETING' && now > startTime) {
+      // Jos maaliin tullut, ei kelloa
+      if (status === 'OK') {
+        clockCell.textContent = finishTime;
+        return;
+      }
+
+      // Jos lähtöaika on tulevaisuudessa, näytetään vain '-'
+      if (now < startTime) {
+        clockCell.textContent = '-';
+        return;
+      }
+
+      // Jos kilpailija Competing tai Registered ja aika on mennyt
+      if (status === 'COMPETING' || status === 'REGISTERED') {
         const diff = now - startTime;
         clockCell.textContent = formatElapsed(diff);
+
+        // Jos tila ei ole Competing, lisätään hint-luokka
+        if (status !== 'COMPETING') {
+          clockCell.classList.add('hint');
+        } else {
+          clockCell.classList.remove('hint');
+        }
       }
     }
   });
