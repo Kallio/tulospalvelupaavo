@@ -185,8 +185,49 @@ async function loadData() {
     eventState = mainJson.state || null;  
     const events = mainJson.events || [];
     stageCount = events.length || 1;
-    const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
-    document.querySelector('h2').textContent = eventName;
+  //  const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
+   // document.querySelector('h2').textContent = eventName;
+const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
+const h2 = document.querySelector('h2');
+h2.textContent = eventName;
+
+// Näytetään tapahtuman alku- ja loppuaika, jos saatavilla
+if (mainJson.begin) {
+  const beginDate = new Date(mainJson.begin);
+  const endDate = mainJson.ending ? new Date(mainJson.ending) : null;
+
+  const formattedBegin = beginDate.toLocaleString('fi-FI', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  let formattedRange = formattedBegin;
+  if (endDate) {
+    const sameDay = beginDate.toDateString() === endDate.toDateString();
+    if (sameDay) {
+      // Sama päivä: näytetään vain loppuaika
+      formattedRange += ` – ${endDate.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      // Eri päivä: näytetään myös loppupäivämäärä
+      formattedRange += ` – ${endDate.toLocaleString('fi-FI', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`;
+    }
+  }
+
+  const p = document.createElement('p');
+  p.textContent = formattedRange;
+  p.style.marginTop = '4px'; // pieni väli otsikon ja ajan väliin
+  h2.insertAdjacentElement('afterend', p);
+}
+
 
     if (eventId) {
       const link = document.createElement('a');
