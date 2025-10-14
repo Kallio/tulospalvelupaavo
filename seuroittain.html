@@ -221,6 +221,11 @@ if (mainJson.begin) {
       })}`;
     }
   }
+  if (formattedRange) {
+  document.title = `${eventName} | ${formattedRange}`;
+} else {
+  document.title = eventName;
+}
 
   const p = document.createElement('p');
   p.textContent = formattedRange;
