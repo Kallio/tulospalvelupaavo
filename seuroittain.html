@@ -618,20 +618,30 @@ function populateClubSelect() {
 function populateClassLinks(){
   const container = document.getElementById('classLinks');
   container.innerHTML = '';
-  const classes = Array.from(new Set(rows.map(r=>r.className).filter(Boolean)))
-    .sort((a,b)=>a.localeCompare(b));
-  classes.forEach(cn=>{
+
+  // 1. Kerätään kaikki luokat riveiltä ja pilkotaan osiin
+  const allClasses = rows
+    .flatMap(r => (r.className || '').split('/'))
+    .map(c => c.trim())
+    .filter(Boolean);
+
+  // 2. Poistetaan duplikaatit ja järjestetään
+  const uniqueClasses = [...new Set(allClasses)].sort((a, b) => a.localeCompare(b));
+
+  // 3. Luodaan linkit
+  uniqueClasses.forEach(cn => {
     const a = document.createElement('a');
-    a.href='#';
+    a.href = '#';
     a.textContent = cn;
-    a.addEventListener('click', e=>{
+    a.addEventListener('click', e => {
       e.preventDefault();
-      selectedClass = cn;   // valitaan tarkka sarja
+      selectedClass = cn;  // valitaan tarkka sarja
       render();
     });
     container.appendChild(a);
   });
 }
+
 
 
 function render(){
