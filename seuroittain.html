@@ -132,18 +132,16 @@ function formatSeconds(sec){
 }
 
 
-async function mapResultsWithClubs(results) {
-  let clubs = [];
+let clubsCache = null;
 
+async function loadClubs() {
+  if (clubsCache) return clubsCache; // palautetaan jo ladattu lista
   try {
-    const response = await fetch('clubs.json');
-    console.log(response);
-
+    const response = await fetch('https://espoonsuunta.fi/online/clubs.json');
     if (!response.ok) throw new Error('Clubs JSON not found');
-    clubs = await response.json();
+    clubsCache = await response.json();
   } catch (error) {
     console.warn('Could not load clubs.json, proceeding without club mapping:', error);
-  
     const warning = document.createElement('div');
     warning.append('⚠️ Huom: clubs.json-tiedostoa ei löytynyt, Hae IRMAsta tiedosto esimerkiksi tällä ');  
     warning.style.color = 'red';
@@ -154,8 +152,13 @@ async function mapResultsWithClubs(results) {
     link.style.color = 'red'; // halutessasi
     warning.append(link);
     document.body.appendChild(warning);
-  
+    clubsCache = [];
   }
+  return clubsCache;
+}
+async function mapResultsWithClubs(results) {
+  let clubs = await loadClubs(); 
+   console.warn('calling mapResultsWithClubs');
   return results.map((result) => {
     if (!clubs.length || !result.club) {
       return result; // Ei muuteta, jos clubs.json ei saatavilla
@@ -170,6 +173,7 @@ async function mapResultsWithClubs(results) {
           abbreviation.toLowerCase() === resultClub || name.toLowerCase() === resultClub
       )?.name;
 
+
     return {
       ...result,
       club: mappedClub || result.club,// Säilytetään alkuperäinen, jos ei löytynyt
@@ -177,6 +181,28 @@ async function mapResultsWithClubs(results) {
     };
   });
 }
+const levenshteinDistance = (a = '', b = '') => {
+    if (!a) return b.length;
+    if (!b) return a.length;
+
+    const matrix = Array(2).fill(null).map(() => Array(b.length+1).fill(null));
+    for (let i = 0; i <= b.length; i++) matrix[0][i] = i;
+
+    for (let i = 1; i <= a.length; i++) {
+      matrix[1][0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const sub = a[i-1] === b[j-1] ? 0 : 1;
+        matrix[1][j] = Math.min(
+          matrix[0][j] + 1,
+          matrix[1][j-1] + 1,
+          matrix[0][j-1] + sub
+        );
+      }
+      matrix[0] = matrix[1].slice();
+    }
+
+    return matrix[1][b.length];
+  };
 
 async function loadData() {
   try {
@@ -540,15 +566,54 @@ for(const [cls, list] of byClass2.entries()){
 }
 
 }
+function normalize(s){
+  return s.toLowerCase().replace(/[^a-zåäö0-9]/gi, '');
+}
 
 function stageResultsCount(allResults){ return allResults.length || 1; }
 
-function populateClubSelect(){
-  const sel = document.getElementById('clubSelect'); sel.innerHTML = '<option>Kaikki seurat</option>';
-  const clubs = Array.from(new Set(rows.map(r=>r.club).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
-  clubs.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
-  sel.addEventListener('change', ()=>render());
+// -----------------------------------------------------------------
+
+function populateClubSelect() {
+  const sel = document.getElementById('clubSelect');
+  sel.innerHTML = '<option>Kaikki seurat</option>';
+
+  const threshold = 2; // montako merkkiä ero saa olla (voit säätää)
+  const clubs = [];
+
+  rows.forEach(r => {
+    if (!r.club) return;
+    const name = r.club.trim();
+    const norm = normalize(name);
+
+    // Etsi jo olemassa oleva seura, joka on riittävän lähellä
+    const match = clubs.find(c => levenshteinDistance(normalize(r.club), normalize(c.name)) <= threshold);
+
+
+    if (match) {
+      // Lisää vaihtoehtoiset nimet samaan ryhmään (jos haluat seurata niitä)
+      match.aliases.push(name);
+    } else {
+      // Uusi seura
+      clubs.push({ name, aliases: [name] });
+    }
+  });
+
+  // Järjestetään pääseuran nimen mukaan
+  clubs.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Lisätään selectiin
+  clubs.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', () => render());
 }
+
+//----------------
 
 function populateClassLinks(){
   const container = document.getElementById('classLinks');
