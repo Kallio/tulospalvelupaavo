@@ -13,13 +13,14 @@ define('POKAALIS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Enqueue assets
 function pokaalijahti_enqueue_assets() {
-    wp_enqueue_style('pokaalijahti-style', POKAALIS_PLUGIN_URL . 'css/pokaalijahti.css', array(), '1.1');
-    wp_enqueue_script('pokaalijahti-app', POKAALIS_PLUGIN_URL . 'js/app.js', array(), '1.1', true);
+    wp_enqueue_style('pokaalijahti-style', POKAALIS_PLUGIN_URL . 'css/pokaalijahti.css', array(), '1.2');
+    wp_enqueue_script('pokaalijahti-app', POKAALIS_PLUGIN_URL . 'js/app.js', array(), '1.7', true);
 
     wp_localize_script('pokaalijahti-app', 'PokaaliAjax',
         array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('pokaalijahti_nonce'),
+	    'clubsUrl' => POKAALIS_PLUGIN_URL . 'assets/data/clubs.json',
         )
     );
 }
@@ -32,15 +33,11 @@ function pokaalijahti_shortcode($atts){
         'noclublimit' => '0',
         'noserieslimit' => '0',
         'series' => '',
+        'notrophy' =>'',
     ), $atts, 'pokaalijahti');
      $series_safe = sanitize_text_field($a['series']);
      $valid_event_ids = array();
 
-    foreach ($event_ids as $id) {
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) {
-            $valid_event_ids[] = $id;
-        }
-    }
 
 // Pilkotaan mahdolliset eventid:t pilkuilla
     $event_ids = array_map('trim', explode(',', $a['eventid']));
@@ -55,8 +52,10 @@ function pokaalijahti_shortcode($atts){
         'eventids' => $valid_event_ids,
         'noclublimit' => $a['noclublimit'],
         'noserieslimit' => $a['noserieslimit'],
+        'notrophy' =>$a['notrophy'],
         'series' => $series_safe,
     );
+
     $data_attr = esc_attr(json_encode($data));
 
     return '<div id="pokaali-app" data-config="'. $data_attr .'">
@@ -159,13 +158,13 @@ function pokaalijahti_settings_page(){
     ?>
     <div class="wrap">
       <h1>Pokaalijahti - pistelasku plugin</h1>
-käytössä oletuksena seuraavat säännöt: 
+käytössä oletuksena seuraavat säännöt:
 Osakilpailun voittaja saa 100 pistettä. Seuraaviksi tulleet saavat 100 pistettä miinus aikaeroa vastaava vähennys, 1 min. = 1 piste. Keskeyttäneet ja hylätyt tulokset = 10 p. Yhteistuloksiin lasketaan 3 suurinta pistemäärää.
     Koodi otetaan käyttöön halutulla sivulla sijoittamalla shortcode sivulle.
         <h2>Shortcode-esimerkit</h2>
       <pre>
 [pokaalijahti eventid="579dc02d-ef31-47aa-955d-6e55bcd6256b"]
-[pokaalijahti eventid="id1,id2" noclublimit="1"]
+[pokaalijahti eventid="id1,id2" noclublimit="1" notrophy="1"]
 [pokaalijahti eventid="id1" series="Beginner,Novice"]
       </pre>
     </div>

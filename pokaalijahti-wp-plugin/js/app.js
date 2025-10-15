@@ -18,7 +18,6 @@ const ALLOWED_CLUBS = ['EsSu','Espoon Suunta'];
 function normalizeSeriesName(name){
   if(!name) return '';
   return name.replace(/\s+/g,'')
-             .replace(/$.*?$/g,'')
              .toLowerCase()
              .trim();
 }
@@ -57,7 +56,7 @@ function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 // --- Lue konfiguraatio ---
 const rootEl = document.getElementById('pokaali-app');
-let cfg = { eventids: '', noclublimit: '0', noserieslimit: '0', series: '', notrophy:'' };
+let cfg = { eventids: '', noclublimit: '0', noserieslimit: '0', series: '', notrophy: '1' };
 if (rootEl && rootEl.dataset && rootEl.dataset.config) {
   try { cfg = JSON.parse(rootEl.dataset.config); } catch(e){ /* ignore invalid JSON */ }
 }
@@ -72,6 +71,8 @@ const noTrophy = urlParams.has('notrophy')? true : (cfg.notrophy === '1');
 
 const rawSeries = urlParams.get('series') || cfg.series || '';
 const SERIES_FILTER_LIST = rawSeries ? rawSeries.split(',').map(s=>s.trim()).filter(Boolean) : null;
+const useShortClub = cfg.clubFormat === 'short';
+//const useShortClub = cfg.clubFormat === 'long';
 
 
 // --- Time parsing ---
@@ -108,7 +109,10 @@ function scoreEvent(event){
   const bySeries = {};
 
   participants.forEach(p=>{
-    const series = p.series || '---';
+//    const series = p.series || '---';
+const series = p.series && p.series.trim() ? p.series.trim() : null;
+if(!series || !isSeriesAllowed(series)) return;
+    if(series === '---') return;
     if(!isSeriesAllowed(series)) return;
     if(!isClubAllowed(p.club)) return;
     if(!bySeries[series]) bySeries[series]=[];
@@ -156,13 +160,17 @@ function calculateTotals(events){
     const perSeries = scoreEvent(ev);
     perSeries.forEach(sobj=>{
       sobj.list.forEach(p=>{
-        const key = normalizeName(p.name);
+        // Käytetään p.club suoraan (jos ei ole, käytetään tyhjää)
+        const clubName = p.club && p.club.trim() ? p.club.trim() : '';
+
+        // Geneerinen key: nimi + seura
+        const key = `${normalizeName(p.name)}||${clubName}`;
+
         if(!athletes[key]){
           athletes[key] = {id:p.id,name:p.name,clubs:new Set(),results:[]};
         }
 
-        const clubName = p.club && p.club.trim() ? p.club.trim() : 'EsSu';
-        athletes[key].clubs.add(clubName);
+        if(clubName) athletes[key].clubs.add(clubName);
 
         athletes[key].results.push({
           eventName: ev.name,
@@ -201,6 +209,84 @@ function renderSeriesLinks(seriesList){
     a.href = `#series-${series.replace(/\s+/g,'_')}`;
     a.textContent = series;
     container.appendChild(a);
+  });
+}
+
+let clubsCache = null;
+
+async function loadClubs() {
+  if (clubsCache) return clubsCache; // palautetaan jo ladattu lista
+  try {
+    const response = await fetch(PokaaliAjax.clubsUrl);
+    if (!response.ok) throw new Error('Clubs JSON not found');
+    clubsCache = await response.json();
+  } catch (error) {
+    console.warn('Could not load clubs.json, proceeding without club mapping:', error);
+    clubsCache = [];
+  }
+  return clubsCache;
+}
+
+function mapResultsWithLoadedClubs(results, clubs,useShortClub = true) {
+
+const normalize = str => (str||'').trim().toLowerCase();
+
+  const lookup = {};
+  clubs.forEach(c => {
+    if (c.abbreviation) lookup[normalize(c.abbreviation)] = c;
+    if (c.name) lookup[normalize(c.name)] = c;
+  });
+
+  const levenshteinDistance = (a = '', b = '') => {
+    if (!a) return b.length;
+    if (!b) return a.length;
+
+    const matrix = Array(2).fill(null).map(() => Array(b.length+1).fill(null));
+    for (let i = 0; i <= b.length; i++) matrix[0][i] = i;
+
+    for (let i = 1; i <= a.length; i++) {
+      matrix[1][0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const sub = a[i-1] === b[j-1] ? 0 : 1;
+        matrix[1][j] = Math.min(
+          matrix[0][j] + 1,
+          matrix[1][j-1] + 1,
+          matrix[0][j-1] + sub
+        );
+      }
+      matrix[0] = matrix[1].slice();
+    }
+
+    return matrix[1][b.length];
+  };
+
+  return results.map(result => {
+    if (!result.club) return result;
+    const key = normalize(result.club);
+    let mappedClub = lookup[key];
+
+    // Levenshtein, jos tarkkaa osumaa ei löytynyt
+    if (!mappedClub) {
+      let closest = { distance: Infinity, club: null };
+      for (const c of clubs) {
+        const dist = Math.min(
+          levenshteinDistance(key, normalize(c.name)),
+          levenshteinDistance(key, normalize(c.abbreviation || ''))
+        );
+        if (dist < closest.distance && dist <= 2) closest = { distance: dist, club: c };
+      }
+      mappedClub = closest.club;
+    }
+
+    if (!mappedClub) return result;
+
+    return {
+      ...result,
+      club: useShortClub
+        ? mappedClub.abbreviation || mappedClub.name
+        : mappedClub.name,
+      abbreviation: mappedClub.abbreviation || mappedClub.name
+    };
   });
 }
 
@@ -250,8 +336,15 @@ function renderTableBySeries(totals){
     });
   });
 
-  const seriesKeys = Object.keys(seriesMap).sort();
-  renderSeriesLinks(seriesKeys);
+//  const seriesKeys = Object.keys(seriesMap).sort();
+const seriesKeys = Object.keys(seriesMap)
+  .sort((a,b) => {
+    const countA = seriesMap[a].length;
+    const countB = seriesMap[b].length;
+    return countB - countA; // suurin ensin
+  });
+
+renderSeriesLinks(seriesKeys);
 
   seriesKeys.forEach(series=>{
     const h = document.createElement('h2');
@@ -273,8 +366,15 @@ function renderTableBySeries(totals){
         <td>${escapeHtml(t.name)}</td>
         <td>${escapeHtml(t.club)}</td>
         <td>${t.participationCount}</td>
-        <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
-        <td>${t.topSum}</td>
+     //   <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
+<td>
+  ${t.pointsList.map((pts,j) => {
+      const r = t.results[j];
+      const link = r._seriesUrl || r.eventUrl || '#';
+      return `<a href="${link}">${pts}</a>`;
+  }).join(', ')}
+</td>
+      <td>${t.topSum}</td>
       </tr>`;
     });
 
@@ -331,8 +431,14 @@ async function fetchEventsByIds(ids){
   }
 
   const events = await fetchEventsByIds(eventIds);
-  const totals = calculateTotals(events);
+ const clubs = await loadClubs(); // ladataan vain kerran
+// Normalisoidaan klubit ennen pisteiden laskemista
+  const normalizedEvents = events.map(ev => ({
+    ...ev,
+    participants: mapResultsWithLoadedClubs(ev.participants, clubs)
+  }));
 
+  const totals = calculateTotals(normalizedEvents);
   renderTableBySeries(totals);
 
   const exportBtn = document.getElementById('exportCsvBtn');
@@ -340,4 +446,3 @@ async function fetchEventsByIds(ids){
     exportBtn.addEventListener('click',()=>exportCsv(totals));
   }
 })();
-
