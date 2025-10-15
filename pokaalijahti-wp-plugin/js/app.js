@@ -366,8 +366,7 @@ renderSeriesLinks(seriesKeys);
         <td>${escapeHtml(t.name)}</td>
         <td>${escapeHtml(t.club)}</td>
         <td>${t.participationCount}</td>
-     //   <td>${t.pointsList.map((pts,j)=>`<a href="${t.results[j].eventUrl || '#'}">${pts}</a>`).join(', ')}</td>
-<td>
+ <td>
   ${t.pointsList.map((pts,j) => {
       const r = t.results[j];
       const link = r._seriesUrl || r.eventUrl || '#';
