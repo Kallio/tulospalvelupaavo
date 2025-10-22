@@ -32,6 +32,8 @@
 
     </div>
   </div>
+  <div id="countInfo" >_</div>
+
 </header>
 
 <div id="classLinks"></div>
@@ -709,6 +711,24 @@ function render(){
     const header = document.querySelector(`th[data-key="${sortState.key}"]`);
     if(header){ header.classList.add('sorted'); header.setAttribute('data-order', sortState.asc ? '▲' : '▼'); }
   }
+    // --- Näytä osallistujamäärä ja päivitä otsikko ---
+    const countDiv = document.getElementById('countInfo');
+  if (countDiv) {
+    const clubSel = document.getElementById('clubSelect');
+    const club = clubSel ? clubSel.value : '';
+    let label = '';
+    if (selectedClass) label += selectedClass;
+    if (club && club !== 'Kaikki seurat') {
+      label += (label ? ', ' : '') + club;
+    }
+
+    countDiv.textContent = `(valinta ${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
+
+    // Päivitä myös selaimen <title>
+    const eventName = document.querySelector('h2')?.textContent || 'Startlist Viewer';
+    document.title = `${eventName} (${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
+  }
+
 }
 
 // --- KELLOPÄIVITYS: päivittää näkyvät kellot reaaliajassa ---
