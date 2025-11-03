@@ -761,6 +761,11 @@ function updateVisibleClocks() {
         clockCell.textContent = '-';
         return;
       }
+// Jos maaliin tullut, ei kelloa
+      if (status === 'OK') {
+        clockCell.textContent = finishTime;
+        return;
+      }
 
       const startTime = parseStartTime(startText) || new Date(startText);
       if (!(startTime instanceof Date) || isNaN(startTime)) {
@@ -769,12 +774,7 @@ function updateVisibleClocks() {
       }
 
       const now = new Date();
-      // Jos maaliin tullut, ei kelloa
-      if (status === 'OK') {
-        clockCell.textContent = finishTime;
-        return;
-      }
-
+      
       // Jos lähtöaika on tulevaisuudessa, näytetään vain '-'
       if (now < startTime) {
         clockCell.textContent = '-';
