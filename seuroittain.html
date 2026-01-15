@@ -98,15 +98,31 @@ function parseName(name){
   if(parts.length===1) return {surname:parts[0], givenName:''};
   return {surname:parts[0], givenName:parts.slice(1).join(' ')};
 }
-function parseStartTime(text) {
+//function parseStartTime(text) {
   // hyväksyy muodon "HH.MM" tai "HH:MM"
+//  const match = text.match(/^(\d{1,2})[.:](\d{2})$/);
+//  if (!match) return null;
+//  const [_, hh, mm] = match.map(Number);
+//  const now = new Date();
+//  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+//  return date;
+//}
+function parseStartTime(text, eventBegin) {
   const match = text.match(/^(\d{1,2})[.:](\d{2})$/);
-  if (!match) return null;
+  if (!match || !eventBegin) return null;
+
   const [_, hh, mm] = match.map(Number);
-  const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
-  return date;
+  const base = new Date(eventBegin);
+
+  return new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    hh,
+    mm
+  );
 }
+
 
 function formatTime(date){
   return date ? new Date(date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
@@ -145,9 +161,9 @@ async function loadClubs() {
   } catch (error) {
     console.warn('Could not load clubs.json, proceeding without club mapping:', error);
     const warning = document.createElement('div');
-    warning.append('⚠️ Huom: clubs.json-tiedostoa ei löytynyt, Hae IRMAsta tiedosto esimerkiksi tällä ');  
+    warning.append('⚠️ Huom: clubs.json-tiedostoa ei löytynyt, Hae IRMAsta tiedosto esimerkiksi tällä ');
     warning.style.color = 'red';
-    warning.style.marginTop = '2rem';   
+    warning.style.marginTop = '2rem';
     const link = document.createElement('a');
     link.href = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs.bash';
     link.textContent = 'työkalulla.';
@@ -159,7 +175,7 @@ async function loadClubs() {
   return clubsCache;
 }
 async function mapResultsWithClubs(results) {
-  let clubs = await loadClubs(); 
+  let clubs = await loadClubs();
    console.warn('calling mapResultsWithClubs');
   return results.map((result) => {
     if (!clubs.length || !result.club) {
@@ -210,7 +226,7 @@ async function loadData() {
   try {
     const mainJson = await (await fetch(DATA_URL)).json();
     rawData = mainJson;
-    eventState = mainJson.state || null;  
+    eventState = mainJson.state || null;
     const events = mainJson.events || [];
     stageCount = events.length || 1;
   //  const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
@@ -356,12 +372,12 @@ function prepareRows(json, mainCourseClasses){
     const className = r.className || mainCourseClasses[r.classId] || '';
     const rawTime = r.resultTime || r.time || (r.result && r.result.time) || r.totalTime || '';
     const totalSec = parseDurationToSeconds(rawTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-    const rank = (r.status === "Ok") 
-      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
+    const rank = (r.status === "Ok")
+      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position)))
       : '';
 
     const status = r.status || r.resultStatus || '';
-    
+
     return {
       id: r.id || null,
       bibNumber: r.bibNumber || '',
@@ -393,7 +409,7 @@ function prepareRows(json, mainCourseClasses){
 
   for(const [cls, list] of byClass.entries()){
   const withTotal = list.filter(r => r.totalSeconds != null && r.status === 'Ok');
-  
+
   if(withTotal.length){
     withTotal.sort((a,b) => a.totalSeconds - b.totalSeconds);
     for(let i=0; i<withTotal.length; i++){
@@ -502,7 +518,7 @@ item.resultRank = '';
       const key = r.id ? `ID_${r.id}` : `${r.bibNumber||''}||${r.chip||''}||${r.name||''}`;
       const totalSec = parseDurationToSeconds(r.resultTime) ?? parseDurationToSeconds(r.totalTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
       mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null,  status: r.status || r.resultStatus || null });
-   
+
     }
     rows.forEach(row=>{
       const key = row.id ? `ID_${row.id}` : `${row.bibNumber||''}||${row.chip||''}||${row.surname + ' ' + row.givenName}`;
@@ -761,22 +777,23 @@ function updateVisibleClocks() {
         clockCell.textContent = '-';
         return;
       }
-// Jos maaliin tullut, ei kelloa
-      if (status === 'OK') {
+
+
+      const now = new Date();
+      // Jos maaliin tullut, ei kelloa
+      if (status === 'OK' || status === 'Ok') {
         clockCell.textContent = finishTime;
         return;
       }
 
-      const startTime = parseStartTime(startText) || new Date(startText);
+//      const startTime = parseStartTime(startText) || new Date(startText);
+	const startTime = parseStartTime(startText, rawData?.begin);
       if (!(startTime instanceof Date) || isNaN(startTime)) {
-        clockCell.textContent = '-';
+        clockCell.textContent = '_-';
         return;
       }
-
-      const now = new Date();
-      
       // Jos lähtöaika on tulevaisuudessa, näytetään vain '-'
-      if (now < startTime) {
+      if ( now < startTime) {
         clockCell.textContent = '-';
         return;
       }
