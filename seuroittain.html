@@ -46,6 +46,11 @@
 </main>
 
 <script>
+  // --- URL-lajittelun ja Top-N -logiikan tilamuuttujat ---
+  let multiSortKeys = [];      // esim. ['className','stageRank1']
+  let multiSortOrder = [];     // esim. ['asc','desc']
+  let filterTop = null;        // esim. { n: 3, by: 'stageRank1' }
+
   function makeKey(r) {
   const name = (r.name || (r.surname + ' ' + r.givenName) || '').trim().toLowerCase();
   return `${r.bibNumber||''}||${r.chip||''}||${name}`;
@@ -80,15 +85,80 @@ let rows = [];
 let sortState = { key: null, asc: true };
 let stageCount = 1;
 let selectedClass = null;
+let eventState = null;
+
+function updateUrlFromSort() {
+  const p = new URLSearchParams(location.search);
+  if (sortState.key) {
+    p.set('sort', sortState.key);
+    p.set('order', sortState.asc ? 'asc' : 'desc');
+  } else {
+    p.delete('sort');
+    p.delete('order');
+  }
+  history.replaceState(null, '', location.pathname + '?' + p.toString());
+}
+
+function applyUrlParamsAfterData() {
+  const p = new URLSearchParams(location.search);
+
+  // Monikenttälajittelu: ?sort=className,stageRank1&order=asc,desc
+  const sort = p.get('sort');
+  const order = p.get('order');
+  if (sort) {
+    multiSortKeys = sort.split(',').map(s => s.trim()).filter(Boolean);
+    multiSortOrder = (order ? order.split(',') : []).map(s => (s || '').trim().toLowerCase());
+
+    sortState.key = multiSortKeys[0] || null;
+    sortState.asc = (multiSortOrder[0] !== 'desc');
+  }
+
+  // Top-N: ?top=3&by=stageRank1 tai ?top=3&by=resultRank
+  const top = parseInt(p.get('top'), 10);
+  const by = p.get('by');
+  if (by && Number.isFinite(top)) {
+    filterTop = { n: top, by: by.trim().toLowerCase() };
+  }
+
+  // Esivalinnat: ?class=..., ?club=..., ?q=...
+  const classParam = p.get('class');
+  if (classParam) selectedClass = classParam;
+
+  const clubParam = p.get('club');
+  if (clubParam) {
+    const sel = document.getElementById('clubSelect');
+    if (sel) sel.value = clubParam;
+  }
+
+  const q = p.get('q');
+  if (q) {
+    const inp = document.getElementById('search');
+    if (inp) inp.value = q;
+  }
+}
 
 function initApp(){
   document.addEventListener('click', e => {
     const th = e.target.closest('th'); if(!th) return; const key = th.dataset.key; if(!key) return;
     if(sortState.key===key){ sortState.asc=!sortState.asc; } else { sortState.key=key; sortState.asc=true; }
+
+    // Klikissä käytetään yksittäistä lajittelua ja päivitetään URL
+    multiSortKeys = [sortState.key];
+    multiSortOrder = [sortState.asc ? 'asc' : 'desc'];
+
+    updateUrlFromSort();
     render();
   });
   document.getElementById('search').addEventListener('input', ()=>render());
   document.getElementById('exportCsv').addEventListener('click', exportCsvHandler);
+  // Päivitä URL myös seura-/luokkavalinnoista (valinnainen, mutta kätevä)
+  document.getElementById('clubSelect').addEventListener('change', () => {
+    const p = new URLSearchParams(location.search);
+    const val = document.getElementById('clubSelect').value;
+    if (val && val !== 'Kaikki seurat') p.set('club', val); else p.delete('club');
+    history.replaceState(null, '', location.pathname + '?' + p.toString());
+    render();
+  });
   loadData();
 }
 
@@ -98,17 +168,8 @@ function parseName(name){
   if(parts.length===1) return {surname:parts[0], givenName:''};
   return {surname:parts[0], givenName:parts.slice(1).join(' ')};
 }
-//function parseStartTime(text) {
-  // hyväksyy muodon "HH.MM" tai "HH:MM"
-//  const match = text.match(/^(\d{1,2})[.:](\d{2})$/);
-//  if (!match) return null;
-//  const [_, hh, mm] = match.map(Number);
-//  const now = new Date();
-//  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
-//  return date;
-//}
 function parseStartTime(text, eventBegin) {
-  const match = text.match(/^(\d{1,2})[.:](\d{2})$/);
+  const match = text.match(/^(\d{1,2}).:$/);
   if (!match || !eventBegin) return null;
 
   const [_, hh, mm] = match.map(Number);
@@ -372,12 +433,12 @@ function prepareRows(json, mainCourseClasses){
     const className = r.className || mainCourseClasses[r.classId] || '';
     const rawTime = r.resultTime || r.time || (r.result && r.result.time) || r.totalTime || '';
     const totalSec = parseDurationToSeconds(rawTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-    const rank = (r.status === "Ok")
-      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position)))
+    const rank = (r.status === "Ok") 
+      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
       : '';
 
     const status = r.status || r.resultStatus || '';
-
+    
     return {
       id: r.id || null,
       bibNumber: r.bibNumber || '',
@@ -409,7 +470,7 @@ function prepareRows(json, mainCourseClasses){
 
   for(const [cls, list] of byClass.entries()){
   const withTotal = list.filter(r => r.totalSeconds != null && r.status === 'Ok');
-
+  
   if(withTotal.length){
     withTotal.sort((a,b) => a.totalSeconds - b.totalSeconds);
     for(let i=0; i<withTotal.length; i++){
@@ -518,7 +579,7 @@ item.resultRank = '';
       const key = r.id ? `ID_${r.id}` : `${r.bibNumber||''}||${r.chip||''}||${r.name||''}`;
       const totalSec = parseDurationToSeconds(r.resultTime) ?? parseDurationToSeconds(r.totalTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
       mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null,  status: r.status || r.resultStatus || null });
-
+   
     }
     rows.forEach(row=>{
       const key = row.id ? `ID_${row.id}` : `${row.bibNumber||''}||${row.chip||''}||${row.surname + ' ' + row.givenName}`;
@@ -531,8 +592,7 @@ item.resultRank = '';
     });
   }
 
-  // Laske per-stage sijoitukset sarjakohtaisesti (jos stageSeconds löytyy)
-// --- Laske stage-kohtaiset sijoitukset ja värit ---
+  // Hyödynnetään stage-kohtaiset sijoitukset sarjakohtaisesti (jos stageSeconds löytyy)
 for(let stageIdx=0; stageIdx<stageCount; stageIdx++){
   const byClass = new Map();
   rows.forEach(r=>{
@@ -565,7 +625,6 @@ for(let stageIdx=0; stageIdx<stageCount; stageIdx++){
     if(!byClass2.has(cls)) byClass2.set(cls, []);
     byClass2.get(cls).push(r);
   });
-// --- resultRank ja soluväritys ---
 for(const [cls, list] of byClass2.entries()){
   const withTotal = list.filter(r=>r.totalSeconds!=null); // vain valmiit rivit
   if(withTotal.length){
@@ -654,6 +713,12 @@ function populateClassLinks(){
     a.addEventListener('click', e => {
       e.preventDefault();
       selectedClass = cn;  // valitaan tarkka sarja
+
+      // Päivitä URL myös valitulle sarjalle
+      const p = new URLSearchParams(location.search);
+      p.set('class', cn);
+      history.replaceState(null, '', location.pathname + '?' + p.toString());
+
       render();
     });
     container.appendChild(a);
@@ -665,6 +730,8 @@ function populateClassLinks(){
 function render(){
   const selClub = document.getElementById('clubSelect').value;
   const q = document.getElementById('search').value.trim().toLowerCase();
+
+  // 1) Perussuodatus (seura, luokka, haku)
   let filtered = rows.filter(r=>{
     if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
     if(selectedClass && r.className !== selectedClass) return false;
@@ -673,21 +740,74 @@ function render(){
       .some(v=>String(v||'').toLowerCase().includes(q));
   });
 
-  if(sortState.key){
-    const k = sortState.key;
+  // 2) Top-N suodatus (esim. ?top=3&by=stageRank1 tai ?top=3&by=resultRank)
+  if (filterTop && filterTop.by) {
+    const by = filterTop.by.toLowerCase();
+    const n = filterTop.n || 3;
+
+    if (by.startsWith('stagerank')) {
+      const idx = parseInt(by.replace('stagerank', ''), 10) - 1;
+      if (!isNaN(idx) && idx >= 0) {
+        filtered = filtered.filter(r => {
+          const val = Number(r.stageRanks[idx]);
+          return Number.isFinite(val) && val >= 1 && val <= n;
+        });
+      }
+    } else if (by === 'resultrank' || by === 'totalrank') {
+      filtered = filtered.filter(r => {
+        const val = Number(r.resultRank);
+        return Number.isFinite(val) && val >= 1 && val <= n;
+      });
+    }
+  }
+
+  // 3) Monikenttälajittelu tai yksittäinen lajittelu
+  const sortKeys = (multiSortKeys && multiSortKeys.length)
+    ? multiSortKeys
+    : (sortState.key ? [sortState.key] : []);
+
+  const sortOrders = (multiSortOrder && multiSortOrder.length)
+    ? multiSortOrder
+    : [sortState.asc ? 'asc' : 'desc'];
+
+  if (sortKeys.length) {
     filtered.sort((a,b)=>{
-      let va,vb;
-      if(k.startsWith('startTime')){ const idx=parseInt(k.replace('startTime',''),10)-1; va=a.startTimes[idx]||''; vb=b.startTimes[idx]||''; }
-      else if(k.startsWith('stageTime')){ const idx=parseInt(k.replace('stageTime',''),10)-1; va=a.stageSeconds[idx]!=null?a.stageSeconds[idx]:(a.stageTimes[idx]||''); vb=b.stageSeconds[idx]!=null?b.stageSeconds[idx]:(b.stageTimes[idx]||''); }
-      else if(k.startsWith('stageRank')){ const idx=parseInt(k.replace('stageRank',''),10)-1; va=a.stageRanks[idx]||''; vb=b.stageRanks[idx]||''; }
-      else if(k === 'totalTime'){ va = a.totalSeconds!=null ? a.totalSeconds : (a.totalTime || ''); vb = b.totalSeconds!=null ? b.totalSeconds : (b.totalTime || ''); }
-      else{ va = a[k]; vb = b[k]; }
-      if(typeof va === 'string') va = va.toLowerCase();
-      if(typeof vb === 'string') vb = vb.toLowerCase();
-      if (va === '-' || va === '') return 1;
-      if (vb === '-' || vb === '') return -1;
-      if(va < vb) return sortState.asc ? -1 : 1;
-      if(va > vb) return sortState.asc ? 1 : -1;
+      const getValue = (obj, k) => {
+        let va;
+        if (k.startsWith('startTime')) {
+          const idx = parseInt(k.replace('startTime',''),10)-1;
+          va = obj.startTimes[idx] || '';
+        } else if (k.startsWith('stageTime')) {
+          const idx = parseInt(k.replace('stageTime',''),10)-1;
+          va = obj.stageSeconds[idx]!=null ? obj.stageSeconds[idx] : (obj.stageTimes[idx]||'');
+        } else if (k.startsWith('stageRank')) {
+          const idx = parseInt(k.replace('stageRank',''),10)-1;
+          va = obj.stageRanks[idx] || '';
+        } else if (k === 'totalTime') {
+          va = obj.totalSeconds!=null ? obj.totalSeconds : (obj.totalTime || '');
+        } else {
+          va = obj[k];
+        }
+        if (typeof va === 'string') va = va.toLowerCase();
+        return va;
+      };
+
+      for (let i=0; i<sortKeys.length; i++) {
+        const k = sortKeys[i];
+        const asc = (sortOrders[i] !== 'desc');
+
+        let va = getValue(a, k);
+        let vb = getValue(b, k);
+
+        // tyhjät viimeiseksi
+        const isEmptyA = (va === '-' || va === '' || va == null);
+        const isEmptyB = (vb === '-' || vb === '' || vb == null);
+        if (isEmptyA && !isEmptyB) return 1;
+        if (!isEmptyA && isEmptyB) return -1;
+
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+      }
       return 0;
     });
   }
@@ -702,7 +822,6 @@ function render(){
     for(let i=0;i<stageCount;i++){
       const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
       if(eventState != "Complete"){
-        // --- LISÄYS: merkitään lähtö, kello ja status kellopäivitystä varten ---
         html += `<td class="start-time">${showValue(r.startTimes[i])}</td>`;
         html += `<td class="clock">${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
@@ -722,13 +841,14 @@ function render(){
     tbody.appendChild(tr);
   }
 
+  // Päivitä lajittelunuoli vain ensimmäiseen avaimen otsikkoon
   document.querySelectorAll('th').forEach(th=>{ th.classList.remove('sorted'); th.removeAttribute('data-order'); });
-  if(sortState.key){
-    const header = document.querySelector(`th[data-key="${sortState.key}"]`);
-    if(header){ header.classList.add('sorted'); header.setAttribute('data-order', sortState.asc ? '▲' : '▼'); }
+  if (sortKeys.length) {
+    const header = document.querySelector(`th[data-key="${sortKeys[0]}"]`);
+    if(header){ header.classList.add('sorted'); header.setAttribute('data-order', (sortOrders[0] !== 'desc') ? '▲' : '▼'); }
   }
-    // --- Näytä osallistujamäärä ja päivitä otsikko ---
-    const countDiv = document.getElementById('countInfo');
+  // --- Näytä osallistujamäärä ja päivitä otsikko ---
+  const countDiv = document.getElementById('countInfo');
   if (countDiv) {
     const clubSel = document.getElementById('clubSelect');
     const club = clubSel ? clubSel.value : '';
@@ -740,7 +860,6 @@ function render(){
 
     countDiv.textContent = `(valinta ${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
 
-    // Päivitä myös selaimen <title>
     const eventName = document.querySelector('h2')?.textContent || 'Startlist Viewer';
     document.title = `${eventName} (${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
   }
@@ -760,10 +879,10 @@ function formatElapsed(ms) {
 function updateVisibleClocks() {
   const tbody = document.querySelector('#results tbody');
   if (!tbody) return;
-  const rows = tbody.querySelectorAll('tr');
+  const rowsEl = tbody.querySelectorAll('tr');
   const tbodyRect = tbody.getBoundingClientRect();
 
-  rows.forEach(row => {
+  rowsEl.forEach(row => {
     const rowRect = row.getBoundingClientRect();
     if (rowRect.bottom >= tbodyRect.top && rowRect.top <= tbodyRect.bottom) {
       const startCell = row.querySelector('.start-time');
@@ -778,20 +897,17 @@ function updateVisibleClocks() {
         return;
       }
 
-
-      const now = new Date();
-      // Jos maaliin tullut, ei kelloa
+      // Jos maaliin tullut, ei päivitetä kelloa (pidä solun nykyinen sisältö)
       if (status === 'OK' || status === 'Ok') {
-        clockCell.textContent = finishTime;
         return;
       }
 
-//      const startTime = parseStartTime(startText) || new Date(startText);
-	const startTime = parseStartTime(startText, rawData?.begin);
+      const startTime = parseStartTime(startText, rawData?.begin);
       if (!(startTime instanceof Date) || isNaN(startTime)) {
         clockCell.textContent = '_-';
         return;
       }
+      const now = new Date();
       // Jos lähtöaika on tulevaisuudessa, näytetään vain '-'
       if ( now < startTime) {
         clockCell.textContent = '-';
@@ -847,26 +963,81 @@ function downloadCsv(filename, csvContent){
 function exportCsvHandler(){
   const selClub = document.getElementById('clubSelect').value;
   const q = document.getElementById('search').value.trim().toLowerCase();
-  const filtered = rows.filter(r=>{
+
+  // Sama suodatuslogiikka kuin render(): seura, luokka, haku
+  let filtered = rows.filter(r=>{
     if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
+    if(selectedClass && r.className !== selectedClass) return false;
     if(!q) return true;
     return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club,r.totalTime,r.resultRank,r.status]
       .some(v=>String(v||'').toLowerCase().includes(q));
   });
 
-  if(sortState.key){
-    const k = sortState.key;
+  // Top-N suodatus (jos asetettu URL:issa)
+  if (filterTop && filterTop.by) {
+    const by = filterTop.by.toLowerCase();
+    const n = filterTop.n || 3;
+
+    if (by.startsWith('stagerank')) {
+      const idx = parseInt(by.replace('stagerank', ''), 10) - 1;
+      if (!isNaN(idx) && idx >= 0) {
+        filtered = filtered.filter(r => {
+          const val = Number(r.stageRanks[idx]);
+          return Number.isFinite(val) && val >= 1 && val <= n;
+        });
+      }
+    } else if (by === 'resultrank' || by === 'totalrank') {
+      filtered = filtered.filter(r => {
+        const val = Number(r.resultRank);
+        return Number.isFinite(val) && val >= 1 && val <= n;
+      });
+    }
+  }
+
+  // Monikenttälajittelu (tai yksittäinen)
+  const sortKeys = (multiSortKeys && multiSortKeys.length)
+    ? multiSortKeys
+    : (sortState.key ? [sortState.key] : []);
+  const sortOrders = (multiSortOrder && multiSortOrder.length)
+    ? multiSortOrder
+    : [sortState.asc ? 'asc' : 'desc'];
+
+  if (sortKeys.length) {
     filtered.sort((a,b)=>{
-      let va,vb;
-      if(k.startsWith('startTime')){ const idx=parseInt(k.replace('startTime',''),10)-1; va=a.startTimes[idx]||''; vb=b.startTimes[idx]||''; }
-      else if(k.startsWith('stageTime')){ const idx=parseInt(k.replace('stageTime',''),10)-1; va=a.stageSeconds[idx]!=null?a.stageSeconds[idx]:(a.stageTimes[idx]||''); vb=b.stageSeconds[idx]!=null?b.stageSeconds[idx]:(b.stageTimes[idx]||''); }
-      else if(k.startsWith('stageRank')){ const idx=parseInt(k.replace('stageRank',''),10)-1; va=a.stageRanks[idx]||''; vb=b.stageRanks[idx]||''; }
-      else if(k === 'totalTime'){ va = a.totalSeconds!=null ? a.totalSeconds : (a.totalTime || ''); vb = b.totalSeconds!=null ? b.totalSeconds : (b.totalTime || ''); }
-      else{ va = a[k]; vb = b[k]; }
-      if(typeof va === 'string') va = va.toLowerCase();
-      if(typeof vb === 'string') vb = vb.toLowerCase();
-      if(va < vb) return sortState.asc ? -1 : 1;
-      if(va > vb) return sortState.asc ? 1 : -1;
+      const getValue = (obj, k) => {
+        let va;
+        if (k.startsWith('startTime')) {
+          const idx = parseInt(k.replace('startTime',''),10)-1;
+          va = obj.startTimes[idx] || '';
+        } else if (k.startsWith('stageTime')) {
+          const idx = parseInt(k.replace('stageTime',''),10)-1;
+          va = obj.stageSeconds[idx]!=null ? obj.stageSeconds[idx] : (obj.stageTimes[idx]||'');
+        } else if (k.startsWith('stageRank')) {
+          const idx = parseInt(k.replace('stageRank',''),10)-1;
+          va = obj.stageRanks[idx] || '';
+        } else if (k === 'totalTime') {
+          va = obj.totalSeconds!=null ? obj.totalSeconds : (obj.totalTime || '');
+        } else {
+          va = obj[k];
+        }
+        if (typeof va === 'string') va = va.toLowerCase();
+        return va;
+      };
+
+      for (let i=0; i<sortKeys.length; i++) {
+        const k = sortKeys[i];
+        const asc = (sortOrders[i] !== 'desc');
+        let va = getValue(a, k);
+        let vb = getValue(b, k);
+
+        const isEmptyA = (va === '-' || va === '' || va == null);
+        const isEmptyB = (vb === '-' || vb === '' || vb == null);
+        if (isEmptyA && !isEmptyB) return 1;
+        if (!isEmptyA && isEmptyB) return -1;
+
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+      }
       return 0;
     });
   }
