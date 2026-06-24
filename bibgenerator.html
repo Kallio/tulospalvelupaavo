@@ -72,13 +72,19 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
   position: absolute;
   transform: translateX(-50%);
   text-align: center;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .bib-num { font-weight: 900; line-height: 1; white-space: nowrap; }
 .bib-num .n { font-weight: 900; line-height: 1; }
 .bib-num .o { font-weight: 700; vertical-align: middle; }
 
-.bib-runner-info { transform: translateX(-50%) rotate(180deg); line-height: 1.4; }
+.bib-runner-info { line-height: 1.4; }
+
+/* Hidden elements */
+[data-lk][data-hidden="true"]             { display: none !important; }
+.edit-mode [data-lk][data-hidden="true"]  { display: block !important; opacity: 0.22; outline: 2px dotted #888 !important; pointer-events: all; }
 
 /* Edit mode */
 .edit-mode [data-lk] {
@@ -125,34 +131,47 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 <!-- ══════════════════ SETUP PANEL ══════════════════ -->
 <div id="setup-panel">
 
-  <!-- CSV -->
-  <div class="ps">
-    <h3>CSV File</h3>
-    <label>Load CSV</label>
-    <input type="file" id="csvFile" accept=".csv">
-    <label>Filter team numbers (e.g. 1-5, 10, 100-200)</label>
+  <!-- 1. Navisport + CSV — data sources -->
+  <div class="ps" style="min-width:230px;flex:2;">
+    <h3>Navisport</h3>
+    <label>Event URL or slug</label>
+    <input type="text" id="navisportUrl" placeholder="https://navisport.com/events/…">
+    <div class="row" style="margin-top:6px;">
+      <button class="bp" onclick="loadFromNavisport()">Load from Navisport</button>
+    </div>
+    <div id="navisportStatus" style="font-size:11px;margin-top:5px;min-height:14px;"></div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <label style="margin-top:0;">or load CSV file</label>
+      <input type="file" id="csvFile" accept=".csv">
+      <div id="bibCount" style="font-size:11px;color:#7ec8e3;margin-top:6px;min-height:14px;"></div>
+    </div>
+  </div>
+
+  <!-- 2. Event info + filters + generate — combined -->
+  <div class="ps" style="min-width:220px;flex:2;">
+    <h3>Event &amp; Generate</h3>
+    <label>Title</label>
+    <input type="text" id="eventTitle" placeholder="e.g. Jukola 2025">
+    <label>Subtitle</label>
+    <input type="text" id="eventSubtitle" placeholder="e.g. Venlojen Viesti (optional)">
+    <label style="margin-top:6px;">Filter team numbers (e.g. 1-5, 10)</label>
     <input type="text" id="filterNumbers" placeholder="empty = all">
-    <label>Filter parts / Osuus (e.g. 1,2,3)</label>
+    <label>Filter parts / Osuus (e.g. 1,2)</label>
     <input type="text" id="filterParts" placeholder="empty = all">
+    <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="showBarcode" checked onchange="showBarcode=this.checked">
+      <label for="showBarcode" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Show barcode</label>
+    </div>
     <div class="row" style="margin-top:8px;">
       <button class="bp" onclick="generateBibs()">Generate Bibs</button>
     </div>
   </div>
 
-  <!-- Event Title & Subtitle -->
-  <div class="ps" style="max-width:220px;">
-    <h3>Event Title</h3>
-    <label>Title (shown on every bib)</label>
-    <input type="text" id="eventTitle" placeholder="e.g. eGames 2026">
-    <label>Subtitle (optional)</label>
-    <input type="text" id="eventSubtitle" placeholder="e.g. 29.8.2026">
-    <div style="font-size:10px;color:#556;margin-top:3px;">Leave empty to hide</div>
-  </div>
 
-  <!-- Logos -->
-  <div class="ps">
+
+  <!-- 4. Logos -->
+  <div class="ps" style="min-width:200px;flex:1.5;">
     <h3>Event Logo</h3>
-    <label>Upload event logo (top of every bib)</label>
     <input type="file" id="eventLogoFile" accept="image/*" onchange="loadEventLogo(this)">
     <div id="eventLogoPreview" style="margin-top:6px;min-height:28px;"></div>
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
@@ -163,43 +182,35 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
         <input type="text" id="sponsorParts" placeholder="Parts e.g. 1,2" style="flex:1;width:auto;">
         <button class="bg btn-sm" onclick="addSponsorLogo()">+ Add</button>
       </div>
-      <div style="font-size:10px;color:#556;margin-top:3px;">Leave parts empty = default for all</div>
+      <div style="font-size:10px;color:#556;margin-top:3px;">Empty = default for all parts</div>
     </div>
   </div>
 
-  <!-- Layout -->
-  <div class="ps">
-    <h3>Layout Editor</h3>
+  <!-- 5. Layout + Page Size + Print -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Layout</h3>
     <div class="row">
       <button class="bw" id="editBtn" onclick="toggleEditMode()">Edit Layout</button>
-      <button class="bg btn-sm" onclick="saveLayout()">Save</button>
       <button class="bg btn-sm" onclick="resetLayout()">Reset</button>
     </div>
     <div class="row" style="margin-top:4px;">
       <button class="bg btn-sm" onclick="exportLayout()">Export JSON</button>
       <button class="bg btn-sm" onclick="importLayout()">Import JSON</button>
     </div>
-    <div id="layoutStatus">Layout: default</div>
-  </div>
-
-  <!-- Page Size -->
-  <div class="ps" style="max-width:180px;">
-    <h3>Page Size</h3>
-    <label>Size</label>
-    <select id="pageSize" onchange="applyPageSize()">
-      <option value="A5 landscape" selected>A5 Landscape (default)</option>
-      <option value="A5 portrait">A5 Portrait</option>
-      <option value="A4 landscape">A4 Landscape</option>
-      <option value="A4 portrait">A4 Portrait</option>
-    </select>
-    <div id="pageSizeInfo" style="font-size:10px;color:#7ec8e3;margin-top:4px;">210 × 148 mm</div>
-  </div>
-
-  <!-- Print -->
-  <div class="ps" style="max-width:160px;">
-    <h3>Print</h3>
-    <div id="bibCount"></div>
-    <button class="bs" onclick="window.print()">🖨 Print All</button>
+    <div id="layoutStatus" style="margin-top:4px;"></div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <h3>Page Size</h3>
+      <select id="pageSize" onchange="applyPageSize()" style="margin-top:4px;">
+        <option value="A5 landscape" selected>A5 Landscape</option>
+        <option value="A5 portrait">A5 Portrait</option>
+        <option value="A4 landscape">A4 Landscape</option>
+        <option value="A4 portrait">A4 Portrait</option>
+      </select>
+      <div id="pageSizeInfo" style="font-size:10px;color:#7ec8e3;margin-top:4px;">210 × 148 mm</div>
+    </div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <button class="bs" style="width:100%;" onclick="window.print()">🖨 Print All</button>
+    </div>
   </div>
 
 </div>
@@ -232,6 +243,14 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
     <button class="bg btn-sm" onclick="adj('h',+2)">+</button>
   </div>
   <div class="tb-row" style="margin-top:4px;border-top:1px solid #334;padding-top:6px;">
+    <span>Visible</span>
+    <button class="bg btn-sm" id="tb-visible" onclick="toggleHidden()" style="min-width:52px;">—</button>
+  </div>
+  <div class="tb-row">
+    <span>Flipped</span>
+    <button class="bg btn-sm" id="tb-flip" onclick="toggleFlip()" style="min-width:60px;">—</button>
+  </div>
+  <div class="tb-row">
     <span style="font-size:10px;color:#555;">Drag elements to move</span>
   </div>
 </div>
@@ -245,19 +264,29 @@ let eventLogoSrc = null;
 let sponsorLogos = []; // [{src, parts: Set|null}]
 let editMode    = false;
 let selectedKey = null;
+let showBarcode = true;
 
 // Layout: positions as % of card (210mm × 148mm)
 // cx = center-x%, y = top-y%, w = width%, h = height%, fontSize = mm
+// Default top-to-bottom order (no overlaps at A5 landscape):
+//   eventLogo  1–13 %  (≈0–19 mm)
+//   eventTitle 14–19%  (≈21–28 mm)
+//   eventSubtitle 20–23% (≈30–34 mm)
+//   numberArea 25–53%  (≈37–79 mm, 42mm font)
+//   sponsorLogo 55–72% (≈81–107 mm)
+//   barcode    73–85%  (≈108–126 mm)
+//   barcodeText 86–89% (≈127–132 mm)
+//   sarja      90–93%  (≈133–138 mm)
 const DEF_LAYOUT = {
-  eventTitle:    { cx:50, y:1,   fontSize:7 },
-  eventSubtitle: { cx:50, y:6,   fontSize:4.5 },
-  eventLogo:     { cx:50, y:1.5, w:32, h:16 },
-  numberArea:  { cx:50, y:19,  fontSize:50 },
-  sponsorLogo: { cx:50, y:56,  w:42, h:20 },
-  barcode:     { cx:50, y:72,  w:70, h:13 },
-  barcodeText: { cx:50, y:87,  fontSize:4.5 },
-  sarja:       { cx:50, y:93,  fontSize:4.5 },
-  runnerInfo:  { cx:50, y:2,   fontSize:5 },
+  eventLogo:     { cx:50, y:1,   w:32, h:12 },
+  eventTitle:    { cx:50, y:14,  fontSize:7,   w:80 },
+  eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70 },
+  numberArea:    { cx:50, y:25,  fontSize:42,  w:90 },
+  sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
+  barcode:       { cx:50, y:73,  w:70, h:12 },
+  barcodeText:   { cx:50, y:86,  fontSize:4.5, w:85 },
+  sarja:         { cx:50, y:92,  fontSize:4.5, w:60 },
+  runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, flipped:true },
 };
 
 let layout = deepClone(DEF_LAYOUT);
@@ -460,12 +489,13 @@ function createBib(team, runner) {
     const l = layout[key];
     const d = document.createElement('div');
     d.dataset.lk = key;
+    if (l.hidden) d.dataset.hidden = 'true';
     d.style.left = l.cx + '%';
     d.style.top  = l.y  + '%';
     if (l.w) d.style.width  = l.w + '%';
     if (l.h) d.style.height = l.h + '%';
     if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
-    if (key === 'runnerInfo') d.className = 'bib-runner-info';
+    d.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
     if (extra) Object.assign(d.style, extra);
     return d;
   }
@@ -512,35 +542,41 @@ function createBib(team, runner) {
     card.appendChild(d);
   }
 
-  // Barcode
-  {
+  // Barcode (optional via checkbox)
+  if (showBarcode) {
     const d = posDiv('barcode');
     const bcId = 'bc' + Math.random().toString(36).slice(2);
     d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;display:block;"></svg>`;
     card.appendChild(d);
   }
 
-  // Barcode text (team name + barcode value)
-  {
-    const d = posDiv('barcodeText');
-    d.innerHTML = `<strong>${esc(team.joukkue)}</strong><br><span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
-    card.appendChild(d);
-  }
-
-  // Sarja (class/category)
-  if (team.sarja) {
-    const d = posDiv('sarja');
-    d.innerHTML = esc(team.sarja);
-    card.appendChild(d);
-  }
-
-  // Single-run: upside-down runner info
   if (isSingle) {
+    // Individual race: sarja / start time / name on one line below barcode
     const d = posDiv('runnerInfo');
-    d.innerHTML = `<div style="font-weight:bold;">${esc(runner.nimi)}</div>`
-      + `<div>${esc(team.sarja)}</div>`
-      + (runner.lahtöaika ? `<div>${esc(runner.lahtöaika)}</div>` : '');
+    const infoParts = [team.sarja, runner.lahtöaika].filter(Boolean).map(esc);
+    d.innerHTML = (infoParts.length ? infoParts.join('  ') + '  ' : '')
+      + `<strong>${esc(runner.nimi)}</strong>`;
     card.appendChild(d);
+
+    if (showBarcode) {
+      const bt = posDiv('barcodeText');
+      bt.innerHTML = `<span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
+      card.appendChild(bt);
+    }
+  } else {
+    // Relay: team name + barcode value, then sarja
+    if (showBarcode) {
+      const d = posDiv('barcodeText');
+      d.innerHTML = `<strong>${esc(team.joukkue)}</strong><br>`
+        + `<span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
+      card.appendChild(d);
+    }
+
+    if (team.sarja) {
+      const d = posDiv('sarja');
+      d.innerHTML = esc(team.sarja);
+      card.appendChild(d);
+    }
   }
 
   if (editMode) attachDrag(card);
@@ -564,6 +600,9 @@ function applyPos(el, key) {
   if (l.w !== undefined) el.style.width    = l.w  + '%';
   if (l.h !== undefined) el.style.height   = l.h  + '%';
   if (l.fontSize !== undefined) el.style.fontSize = l.fontSize + 'mm';
+  el.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
+  if (l.hidden) el.dataset.hidden = 'true';
+  else          delete el.dataset.hidden;
 }
 
 // ═══════════════════════════════════════════
@@ -652,13 +691,33 @@ function adj(prop, delta) {
   syncLayout();
 }
 
+function toggleHidden() {
+  if (!selectedKey) return;
+  layout[selectedKey].hidden = !layout[selectedKey].hidden;
+  syncLayout();
+  updateToolbar();
+}
+
+function toggleFlip() {
+  if (!selectedKey) return;
+  layout[selectedKey].flipped = !layout[selectedKey].flipped;
+  syncLayout();
+  updateToolbar();
+}
+
 function updateToolbar() {
   if (!selectedKey) return;
   const l = layout[selectedKey];
   document.getElementById('tb-name').textContent = selectedKey;
-  document.getElementById('tb-fs').textContent  = l.fontSize !== undefined ? l.fontSize.toFixed(1)+'mm' : '—';
-  document.getElementById('tb-w').textContent   = l.w        !== undefined ? l.w.toFixed(0)+'%'         : '—';
-  document.getElementById('tb-h').textContent   = l.h        !== undefined ? l.h.toFixed(0)+'%'         : '—';
+  document.getElementById('tb-fs').textContent   = l.fontSize !== undefined ? l.fontSize.toFixed(1)+'mm' : '—';
+  document.getElementById('tb-w').textContent    = l.w        !== undefined ? l.w.toFixed(0)+'%'         : '—';
+  document.getElementById('tb-h').textContent    = l.h        !== undefined ? l.h.toFixed(0)+'%'         : '—';
+  const vBtn = document.getElementById('tb-visible');
+  vBtn.textContent    = l.hidden ? 'Show' : 'Hide';
+  vBtn.style.color    = l.hidden ? '#27ae60' : '#e94560';
+  const fBtn = document.getElementById('tb-flip');
+  fBtn.textContent    = l.flipped ? 'Flip off' : 'Flip';
+  fBtn.style.color    = l.flipped ? '#e67e22' : '#7ec8e3';
 }
 
 // ═══════════════════════════════════════════
@@ -721,6 +780,152 @@ function applyPageSize() {
     `.bib-card { width: ${dims.w}mm; height: ${dims.h}mm; }`;
   document.getElementById('pageSizeInfo').textContent =
     `${dims.w} × ${dims.h} mm`;
+}
+
+// ═══════════════════════════════════════════
+// NAVISPORT  (tRPC API — slug-based)
+// ═══════════════════════════════════════════
+async function loadFromNavisport() {
+  const raw = document.getElementById('navisportUrl').value.trim();
+  if (!raw) { navStatus('Paste a Navisport event URL or slug', 'err'); return; }
+  navStatus('Loading…', 'ok');
+
+  // Extract slug from URL path: navisport.com/events/{slug}[/…]
+  const slugM = raw.match(/navisport\.com\/events\/([^/?#\s]+)/i);
+  const slug  = slugM ? slugM[1] : raw.trim();
+
+  try {
+    const json = await navFetch(slug);
+    const name = (json.name || '').trim();
+    if (name) document.getElementById('eventTitle').value = name;
+
+    if (json.begin) {
+      const d = new Date(json.begin);
+      document.getElementById('eventSubtitle').value =
+        d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' });
+    }
+
+    // Logo is directly available on the event object
+    if (json.logoUrl) await tryLoadNavisportLogo(json.logoUrl);
+
+    // raceType === 'Relay' → flat results array with a `leg` field per entry
+    if (json.raceType === 'Relay') {
+      navLoadRelay(json);
+    } else {
+      navLoadIndividual(json);
+    }
+
+    const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
+    navStatus(`✓ ${name || slug} — ${csvTeams.length} entries, ${total} runners`, 'ok');
+    document.getElementById('bibCount').textContent = `${csvTeams.length} entries, ${total} runners`;
+  } catch(e) {
+    navStatus('Error: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// tRPC batch endpoint: response is [{result:{data:{...}}}]
+async function navFetch(slug) {
+  const input = encodeURIComponent(JSON.stringify({ '0': slug }));
+  const url   = `https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
+  const res   = await fetch(url);
+  if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status} for "${slug}"`);
+  const batch = await res.json();
+  // Unwrap tRPC batch wrapper: [{ result: { data: { ... } } }]
+  const data  = batch?.[0]?.result?.data;
+  if (!data)  throw new Error('Unexpected Navisport response shape');
+  return data;
+}
+
+function navStatus(msg, type) {
+  const el = document.getElementById('navisportStatus');
+  el.textContent = msg;
+  el.style.color = type === 'err' ? '#e94560' : '#7ec8e3';
+}
+
+function navName(r) {
+  if (r.name?.trim()) return r.name.trim();
+  return `${r.surname||''} ${r.givenName||''}`.trim();
+}
+
+function navTime(r) {
+  if (!r.startTime) return '';
+  try { return new Date(r.startTime).toLocaleTimeString('fi-FI', {hour:'2-digit', minute:'2-digit'}); }
+  catch { return ''; }
+}
+
+// Individual race: one runner per bib, no osuus → single-run bib mode
+function navLoadIndividual(json) {
+  const cc = {};
+  (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
+
+  csvTeams = (json.results||[])
+    .filter(r => r.bibNumber != null && r.resultType !== 'Team')
+    .map(r => ({
+      kilpailunumero: String(r.bibNumber),
+      sarja:          cc[r.classId] || '',
+      joukkue:        r.club || navName(r),
+      runners: [{
+        nimi:           navName(r),
+        kilpailukortti: String(r.chip||''),
+        osuus:          '',
+        alaosuus:       '',
+        rata:           '',
+        lahtöaika:      navTime(r),
+      }]
+    }));
+}
+
+// Relay: all legs in one flat results array; `leg` field = osuus; `resultType='Team'` rows skipped
+function navLoadRelay(json) {
+  const cc      = {};
+  (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
+  const teamMap = {};
+
+  for (const r of (json.results||[])) {
+    if (r.resultType === 'Team' || r.bibNumber == null) continue;
+    const bib = String(r.bibNumber);
+    if (!teamMap[bib]) {
+      teamMap[bib] = {
+        kilpailunumero: bib,
+        sarja:          cc[r.classId] || '',
+        joukkue:        r.club || '',
+        runners:        [],
+      };
+    }
+    if (!teamMap[bib].sarja)   teamMap[bib].sarja   = cc[r.classId] || '';
+    if (!teamMap[bib].joukkue) teamMap[bib].joukkue  = r.club || '';
+
+    teamMap[bib].runners.push({
+      nimi:           navName(r),
+      kilpailukortti: String(r.chip||''),
+      osuus:          r.leg != null ? String(r.leg) : '',
+      alaosuus:       '',
+      rata:           '',
+      lahtöaika:      navTime(r),
+    });
+  }
+
+  csvTeams = Object.values(teamMap);
+  csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
+}
+
+async function tryLoadNavisportLogo(url) {
+  try {
+    const res  = await fetch(url);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const reader = new FileReader();
+    await new Promise(resolve => {
+      reader.onload = e => {
+        eventLogoSrc = e.target.result;
+        document.getElementById('eventLogoPreview').innerHTML =
+          `<img src="${eventLogoSrc}" style="max-height:36px;max-width:130px;object-fit:contain;">`;
+        resolve();
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch { /* logo fetch is best-effort — may be blocked by CORS */ }
 }
 
 // ═══════════════════════════════════════════
