@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bib Number Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<style id="page-style">
+  @page { size: 210mm 148mm; margin: 0; }
+  .bib-card { width: 210mm; height: 148mm; }
+</style>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; }
+
+/* ─── Setup Panel ─── */
+#setup-panel {
+  background: #1a1a2e;
+  color: #eee;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: 1; min-width: 180px; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+input[type="file"], input[type="text"] {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334; border-radius: 4px;
+  color: #eee; font-size: 12px;
+}
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+.bp  { background: #e94560; color: #fff; }
+.bs  { background: #27ae60; color: #fff; }
+.bw  { background: #e67e22; color: #fff; }
+.bg  { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 4px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+.sponsor-entry {
+  background: #0a2a50; border-radius: 4px; padding: 6px 8px;
+  display: flex; gap: 6px; align-items: center; margin-bottom: 5px; font-size: 11px;
+}
+.sponsor-entry img { height: 28px; max-width: 70px; object-fit: contain; }
+
+#bibCount { font-size: 12px; color: #7ec8e3; margin-bottom: 6px; min-height: 16px; }
+#layoutStatus { font-size: 11px; color: #6a6; margin-top: 5px; min-height: 14px; }
+
+/* ─── Print Area ─── */
+#print-area { padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+/* ─── Bib Card ─── */
+/* width/height controlled exclusively by #page-style so applyPageSize() takes effect on screen */
+.bib-card {
+  background: white;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #bbb;
+  page-break-after: always;
+  page-break-inside: avoid;
+  flex-shrink: 0;
+}
+
+/* All positioned elements share these defaults */
+[data-lk] {
+  position: absolute;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.bib-num { font-weight: 900; line-height: 1; white-space: nowrap; }
+.bib-num .n { font-weight: 900; line-height: 1; }
+.bib-num .o { font-weight: 700; vertical-align: middle; }
+
+.bib-runner-info { transform: translateX(-50%) rotate(180deg); line-height: 1.4; }
+
+/* Edit mode */
+.edit-mode [data-lk] {
+  outline: 2px dashed rgba(233,69,96,0.6);
+  cursor: move;
+  user-select: none;
+  min-width: 20px;
+  min-height: 10px;
+}
+.edit-mode [data-lk]:hover { outline-color: #e94560; z-index: 20; }
+[data-lk].selected { outline: 2px solid #e94560 !important; z-index: 30; }
+
+/* ─── Floating Toolbar ─── */
+#toolbar {
+  position: fixed; bottom: 20px; right: 20px;
+  background: #1a1a2e; border-radius: 10px; padding: 12px 14px;
+  display: none; flex-direction: column; gap: 8px;
+  z-index: 1000; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  color: #eee; font-size: 12px; min-width: 220px;
+}
+#toolbar.visible { display: flex; }
+#toolbar h4 { color: #7ec8e3; font-size: 11px; text-transform: uppercase; }
+.tb-row { display: flex; align-items: center; gap: 8px; }
+.tb-row span { flex: 1; font-size: 11px; color: #9aa; }
+.tb-val { min-width: 44px; text-align: center; font-size: 12px; color: #eee; }
+
+/* ─── Print Styles ─── */
+@media print {
+  #setup-panel, #toolbar { display: none !important; }
+  body { background: white; }
+  #print-area { padding: 0; gap: 0; }
+  .bib-card { border: none; margin: 0; box-shadow: none; }
+}
+/* Page size is set dynamically via #page-style */
+
+@media screen {
+  .bib-card { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══════════════════ SETUP PANEL ══════════════════ -->
+<div id="setup-panel">
+
+  <!-- CSV -->
+  <div class="ps">
+    <h3>CSV File</h3>
+    <label>Load CSV</label>
+    <input type="file" id="csvFile" accept=".csv">
+    <label>Filter team numbers (e.g. 1-5, 10, 100-200)</label>
+    <input type="text" id="filterNumbers" placeholder="empty = all">
+    <label>Filter parts / Osuus (e.g. 1,2,3)</label>
+    <input type="text" id="filterParts" placeholder="empty = all">
+    <div class="row" style="margin-top:8px;">
+      <button class="bp" onclick="generateBibs()">Generate Bibs</button>
+    </div>
+  </div>
+
+  <!-- Event Title & Subtitle -->
+  <div class="ps" style="max-width:220px;">
+    <h3>Event Title</h3>
+    <label>Title (shown on every bib)</label>
+    <input type="text" id="eventTitle" placeholder="e.g. Jukola 2026">
+    <label>Subtitle (optional)</label>
+    <input type="text" id="eventSubtitle" placeholder="e.g. Venlojen Viesti">
+    <div style="font-size:10px;color:#556;margin-top:3px;">Leave empty to hide</div>
+  </div>
+
+  <!-- Logos -->
+  <div class="ps">
+    <h3>Event Logo</h3>
+    <label>Upload event logo (top of every bib)</label>
+    <input type="file" id="eventLogoFile" accept="image/*" onchange="loadEventLogo(this)">
+    <div id="eventLogoPreview" style="margin-top:6px;min-height:28px;"></div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <h3>Sponsor Logos</h3>
+      <div id="sponsorList"></div>
+      <div class="row">
+        <input type="file" id="sponsorFile" accept="image/*" style="flex:2;">
+        <input type="text" id="sponsorParts" placeholder="Parts e.g. 1,2" style="flex:1;width:auto;">
+        <button class="bg btn-sm" onclick="addSponsorLogo()">+ Add</button>
+      </div>
+      <div style="font-size:10px;color:#556;margin-top:3px;">Leave parts empty = default for all</div>
+    </div>
+  </div>
+
+  <!-- Layout -->
+  <div class="ps">
+    <h3>Layout Editor</h3>
+    <div class="row">
+      <button class="bw" id="editBtn" onclick="toggleEditMode()">Edit Layout</button>
+      <button class="bg btn-sm" onclick="saveLayout()">Save</button>
+      <button class="bg btn-sm" onclick="resetLayout()">Reset</button>
+    </div>
+    <div class="row" style="margin-top:4px;">
+      <button class="bg btn-sm" onclick="exportLayout()">Export JSON</button>
+      <button class="bg btn-sm" onclick="importLayout()">Import JSON</button>
+    </div>
+    <div id="layoutStatus">Layout: default</div>
+  </div>
+
+  <!-- Page Size -->
+  <div class="ps" style="max-width:180px;">
+    <h3>Page Size</h3>
+    <label>Size</label>
+    <select id="pageSize" onchange="applyPageSize()">
+      <option value="A5 landscape" selected>A5 Landscape (default)</option>
+      <option value="A5 portrait">A5 Portrait</option>
+      <option value="A4 landscape">A4 Landscape</option>
+      <option value="A4 portrait">A4 Portrait</option>
+    </select>
+    <div id="pageSizeInfo" style="font-size:10px;color:#7ec8e3;margin-top:4px;">210 × 148 mm</div>
+  </div>
+
+  <!-- Print -->
+  <div class="ps" style="max-width:160px;">
+    <h3>Print</h3>
+    <div id="bibCount"></div>
+    <button class="bs" onclick="window.print()">🖨 Print All</button>
+  </div>
+
+</div>
+<!-- end setup-panel -->
+
+<!-- ══════════════════ PRINT AREA ══════════════════ -->
+<div id="print-area"></div>
+
+</div><!-- end app -->
+
+<!-- ══════════════════ FLOATING TOOLBAR ══════════════════ -->
+<div id="toolbar">
+  <h4 id="tb-name">Select an element</h4>
+  <div class="tb-row">
+    <span>Font size</span>
+    <button class="bg btn-sm" onclick="adj('fontSize',-0.5)">−</button>
+    <span class="tb-val" id="tb-fs">—</span>
+    <button class="bg btn-sm" onclick="adj('fontSize',+0.5)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Width %</span>
+    <button class="bg btn-sm" onclick="adj('w',-2)">−</button>
+    <span class="tb-val" id="tb-w">—</span>
+    <button class="bg btn-sm" onclick="adj('w',+2)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Height %</span>
+    <button class="bg btn-sm" onclick="adj('h',-2)">−</button>
+    <span class="tb-val" id="tb-h">—</span>
+    <button class="bg btn-sm" onclick="adj('h',+2)">+</button>
+  </div>
+  <div class="tb-row" style="margin-top:4px;border-top:1px solid #334;padding-top:6px;">
+    <span style="font-size:10px;color:#555;">Drag elements to move</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let csvTeams    = [];
+let eventLogoSrc = null;
+let sponsorLogos = []; // [{src, parts: Set|null}]
+let editMode    = false;
+let selectedKey = null;
+
+// Layout: positions as % of card (210mm × 148mm)
+// cx = center-x%, y = top-y%, w = width%, h = height%, fontSize = mm
+const DEF_LAYOUT = {
+  eventTitle:    { cx:50, y:1,   fontSize:7 },
+  eventSubtitle: { cx:50, y:6,   fontSize:4.5 },
+  eventLogo:     { cx:50, y:1.5, w:32, h:16 },
+  numberArea:  { cx:50, y:19,  fontSize:50 },
+  sponsorLogo: { cx:50, y:56,  w:42, h:20 },
+  barcode:     { cx:50, y:72,  w:70, h:13 },
+  barcodeText: { cx:50, y:87,  fontSize:4.5 },
+  sarja:       { cx:50, y:93,  fontSize:4.5 },
+  runnerInfo:  { cx:50, y:2,   fontSize:5 },
+};
+
+let layout = deepClone(DEF_LAYOUT);
+
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+// ═══════════════════════════════════════════
+// CSV PARSING
+// ═══════════════════════════════════════════
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (c === '"') {
+      if (inQ && n === '"') { field += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      row.push(field); field = '';
+    } else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && n === '\n') i++;
+      if (field || row.length) { row.push(field); rows.push(row); }
+      row = []; field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function parseTeams(rows) {
+  if (rows.length < 2) return [];
+  const teams = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]?.trim()) continue;
+    const team = {
+      kilpailunumero: r[0]?.trim() || '',
+      sarja:          r[1]?.trim() || '',
+      joukkue:        r[2]?.trim() || '',
+      runners:        [],
+    };
+    // Runner blocks: start at col 6, each block = 8 cols (7 data + 1 separator)
+    for (let b = 0; b < 20; b++) {
+      const base = 6 + b * 8;
+      if (base >= r.length) break;
+      const nimi = r[base]?.trim();
+      if (!nimi || /^\s+$/.test(nimi)) continue;
+      team.runners.push({
+        nimi,
+        kilpailukortti: r[base+1]?.trim() || '',
+        osuus:          r[base+3]?.trim() || '',
+        alaosuus:       r[base+4]?.trim() || '',
+        rata:           r[base+5]?.trim() || '',
+        lahtöaika:      r[base+6]?.trim() || '',
+      });
+    }
+    if (team.runners.length) teams.push(team);
+  }
+  return teams;
+}
+
+// Parse "1-5, 10, 20-30" → Set of integers (null = no filter)
+function parseRanges(str) {
+  if (!str.trim()) return null;
+  const s = new Set();
+  for (const part of str.split(',')) {
+    const t = part.trim();
+    const m = t.match(/^(\d+)-(\d+)$/);
+    if (m) { for (let n=+m[1]; n<=+m[2]; n++) s.add(n); }
+    else if (/^\d+$/.test(t)) s.add(+t);
+  }
+  return s;
+}
+
+// ═══════════════════════════════════════════
+// LOGOS
+// ═══════════════════════════════════════════
+function loadEventLogo(inp) {
+  const f = inp.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    eventLogoSrc = e.target.result;
+    document.getElementById('eventLogoPreview').innerHTML =
+      `<img src="${eventLogoSrc}" style="max-height:36px;max-width:130px;object-fit:contain;">`;
+  };
+  rd.readAsDataURL(f);
+}
+
+function addSponsorLogo() {
+  const fi = document.getElementById('sponsorFile');
+  const pi = document.getElementById('sponsorParts').value.trim();
+  if (!fi.files[0]) return alert('Select an image first');
+  const rd = new FileReader();
+  rd.onload = e => {
+    const parts = pi ? new Set(pi.split(',').map(x=>x.trim())) : null;
+    sponsorLogos.push({ src: e.target.result, parts });
+    renderSponsorList();
+    fi.value = '';
+    document.getElementById('sponsorParts').value = '';
+  };
+  rd.readAsDataURL(fi.files[0]);
+}
+
+function removeSponsorLogo(i) { sponsorLogos.splice(i,1); renderSponsorList(); }
+
+function renderSponsorList() {
+  document.getElementById('sponsorList').innerHTML = sponsorLogos.map((s,i) => `
+    <div class="sponsor-entry">
+      <img src="${s.src}">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:10px;color:#7ec8e3;">Parts:</span>
+        <input type="text"
+          value="${s.parts ? [...s.parts].join(',') : ''}"
+          placeholder="empty = default"
+          style="padding:2px 5px;font-size:11px;width:100%;"
+          onchange="updateSponsorParts(${i}, this.value)"
+          title="Comma-separated part numbers, e.g. 1,2,3 — leave empty for default">
+      </div>
+      <button class="btn-sm" style="background:#c0392b;color:white;border:none;border-radius:3px;cursor:pointer;align-self:flex-start;" onclick="removeSponsorLogo(${i})">✕</button>
+    </div>`).join('');
+}
+
+function updateSponsorParts(i, val) {
+  const trimmed = val.trim();
+  sponsorLogos[i].parts = trimmed ? new Set(trimmed.split(',').map(x=>x.trim()).filter(Boolean)) : null;
+}
+
+function getSponsor(osuus) {
+  for (const s of sponsorLogos) if (s.parts && s.parts.has(osuus)) return s.src;
+  for (const s of sponsorLogos) if (!s.parts) return s.src;
+  return null;
+}
+
+// ═══════════════════════════════════════════
+// BIB GENERATION
+// ═══════════════════════════════════════════
+function generateBibs() {
+  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
+
+  const numFilter  = parseRanges(document.getElementById('filterNumbers').value);
+  const partFilter = parseRanges(document.getElementById('filterParts').value);
+
+  const area = document.getElementById('print-area');
+  area.innerHTML = '';
+
+  let count = 0;
+  for (const team of csvTeams) {
+    if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
+    for (const runner of team.runners) {
+      if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
+      area.appendChild(createBib(team, runner));
+      count++;
+    }
+  }
+
+  document.getElementById('bibCount').textContent = count ? `${count} bibs` : 'No bibs matched';
+
+  // Generate barcodes after repaint
+  requestAnimationFrame(() => {
+    area.querySelectorAll('.bc-svg').forEach(svg => {
+      try {
+        JsBarcode(svg, svg.dataset.val, {
+          format: 'CODE128', width: 2.8, height: 55,
+          displayValue: false, margin: 4
+        });
+      } catch(e) { console.warn('Barcode:', svg.dataset.val, e); }
+    });
+    if (editMode) applyEditToAll();
+  });
+}
+
+function createBib(team, runner) {
+  const isSingle   = !runner.osuus;
+  const showAlao   = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const sponsorSrc = getSponsor(runner.osuus);
+  const hasSponsor = !!sponsorSrc;
+  const hasEvLogo  = !!eventLogoSrc;
+
+  // Barcode value
+  let bcVal;
+  if (isSingle) {
+    bcVal = team.kilpailunumero;
+  } else if (showAlao) {
+    bcVal = `${team.kilpailunumero}-${runner.osuus}-${runner.alaosuus}`;
+  } else {
+    bcVal = `${team.kilpailunumero}-${runner.osuus}`;
+  }
+
+  // Font sizes (scale up number if no sponsor)
+  const numFsMm   = layout.numberArea.fontSize * (hasSponsor ? 1 : 1.35);
+  const osuusFsMm = numFsMm * 0.45;
+
+  const card = document.createElement('div');
+  card.className = 'bib-card';
+
+  // Helper: build a positioned div
+  function posDiv(key, extra) {
+    const l = layout[key];
+    const d = document.createElement('div');
+    d.dataset.lk = key;
+    d.style.left = l.cx + '%';
+    d.style.top  = l.y  + '%';
+    if (l.w) d.style.width  = l.w + '%';
+    if (l.h) d.style.height = l.h + '%';
+    if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
+    if (key === 'runnerInfo') d.className = 'bib-runner-info';
+    if (extra) Object.assign(d.style, extra);
+    return d;
+  }
+
+  // Event title
+  const titleText = document.getElementById('eventTitle').value.trim();
+  if (titleText) {
+    const d = posDiv('eventTitle');
+    d.style.fontWeight = 'bold';
+    d.innerHTML = esc(titleText);
+    card.appendChild(d);
+  }
+
+  // Event subtitle
+  const subtitleText = document.getElementById('eventSubtitle').value.trim();
+  if (subtitleText) {
+    const d = posDiv('eventSubtitle');
+    d.innerHTML = esc(subtitleText);
+    card.appendChild(d);
+  }
+
+  // Event logo
+  if (hasEvLogo) {
+    const d = posDiv('eventLogo');
+    d.innerHTML = `<img src="${eventLogoSrc}" style="width:100%;height:100%;object-fit:contain;">`;
+    card.appendChild(d);
+  }
+
+  // Number area
+  {
+    const d = posDiv('numberArea');
+    d.className += ' bib-num';
+    d.innerHTML = `<span class="n" style="font-size:${numFsMm}mm;">${esc(team.kilpailunumero)}</span>`
+      + (runner.osuus
+          ? `<span class="o" style="font-size:${osuusFsMm}mm;">&nbsp;${esc(runner.osuus)}${showAlao?'&#8209;'+esc(runner.alaosuus):''}</span>`
+          : '');
+    card.appendChild(d);
+  }
+
+  // Sponsor logo
+  if (hasSponsor) {
+    const d = posDiv('sponsorLogo');
+    d.innerHTML = `<img src="${sponsorSrc}" style="width:100%;height:100%;object-fit:contain;">`;
+    card.appendChild(d);
+  }
+
+  // Barcode
+  {
+    const d = posDiv('barcode');
+    const bcId = 'bc' + Math.random().toString(36).slice(2);
+    d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;display:block;"></svg>`;
+    card.appendChild(d);
+  }
+
+  // Barcode text (team name + barcode value)
+  {
+    const d = posDiv('barcodeText');
+    d.innerHTML = `<strong>${esc(team.joukkue)}</strong><br><span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
+    card.appendChild(d);
+  }
+
+  // Sarja (class/category)
+  if (team.sarja) {
+    const d = posDiv('sarja');
+    d.innerHTML = esc(team.sarja);
+    card.appendChild(d);
+  }
+
+  // Single-run: upside-down runner info
+  if (isSingle) {
+    const d = posDiv('runnerInfo');
+    d.innerHTML = `<div style="font-weight:bold;">${esc(runner.nimi)}</div>`
+      + `<div>${esc(team.sarja)}</div>`
+      + (runner.lahtöaika ? `<div>${esc(runner.lahtöaika)}</div>` : '');
+    card.appendChild(d);
+  }
+
+  if (editMode) attachDrag(card);
+  return card;
+}
+
+// ═══════════════════════════════════════════
+// LAYOUT SYNC
+// ═══════════════════════════════════════════
+function syncLayout() {
+  document.querySelectorAll('.bib-card').forEach(card => {
+    card.querySelectorAll('[data-lk]').forEach(el => applyPos(el, el.dataset.lk));
+  });
+  updateToolbar();
+}
+
+function applyPos(el, key) {
+  const l = layout[key]; if (!l) return;
+  el.style.left = l.cx + '%';
+  el.style.top  = l.y  + '%';
+  if (l.w !== undefined) el.style.width    = l.w  + '%';
+  if (l.h !== undefined) el.style.height   = l.h  + '%';
+  if (l.fontSize !== undefined) el.style.fontSize = l.fontSize + 'mm';
+}
+
+// ═══════════════════════════════════════════
+// EDIT MODE / DRAG
+// ═══════════════════════════════════════════
+function toggleEditMode() {
+  editMode = !editMode;
+  const btn = document.getElementById('editBtn');
+  btn.textContent = editMode ? 'Exit Edit Mode' : 'Edit Layout';
+  btn.className   = editMode ? 'bp' : 'bw';
+  document.querySelectorAll('.bib-card').forEach(card => {
+    card.classList.toggle('edit-mode', editMode);
+    if (editMode) attachDrag(card); else detachDrag(card);
+  });
+  const tb = document.getElementById('toolbar');
+  if (editMode) tb.classList.add('visible');
+  else { tb.classList.remove('visible'); selectedKey = null; clearSelection(); }
+}
+
+function applyEditToAll() {
+  document.querySelectorAll('.bib-card').forEach(card => {
+    card.classList.add('edit-mode');
+    attachDrag(card);
+  });
+}
+
+function attachDrag(card) {
+  card.querySelectorAll('[data-lk]').forEach(el => {
+    el.removeEventListener('mousedown', onMD);
+    el.addEventListener('mousedown', onMD);
+  });
+}
+
+function detachDrag(card) {
+  card.querySelectorAll('[data-lk]').forEach(el => el.removeEventListener('mousedown', onMD));
+}
+
+let drag = null;
+
+function onMD(e) {
+  if (!editMode) return;
+  e.preventDefault(); e.stopPropagation();
+  const el   = e.currentTarget;
+  const key  = el.dataset.lk;
+  const card = el.closest('.bib-card');
+  const cr   = card.getBoundingClientRect();
+
+  clearSelection();
+  el.classList.add('selected');
+  selectedKey = key;
+  updateToolbar();
+
+  drag = { key, x0: e.clientX, y0: e.clientY, cx0: layout[key].cx, y_0: layout[key].y, cw: cr.width, ch: cr.height };
+
+  const mm = me => {
+    if (!drag) return;
+    const dx = ((me.clientX - drag.x0) / drag.cw) * 100;
+    const dy = ((me.clientY - drag.y0) / drag.ch) * 100;
+    layout[drag.key].cx = clamp(drag.cx0 + dx, 0, 100);
+    layout[drag.key].y  = clamp(drag.y_0 + dy, 0, 95);
+    syncLayout();
+  };
+  const mu = () => {
+    drag = null;
+    document.removeEventListener('mousemove', mm);
+    document.removeEventListener('mouseup',   mu);
+  };
+  document.addEventListener('mousemove', mm);
+  document.addEventListener('mouseup',   mu);
+}
+
+function clearSelection() {
+  document.querySelectorAll('[data-lk].selected').forEach(e => e.classList.remove('selected'));
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// Toolbar adjustments
+function adj(prop, delta) {
+  if (!selectedKey) return;
+  const l = layout[selectedKey];
+  if (l[prop] === undefined) return;
+  if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
+  else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
+  else if (prop === 'fontSize') { l[prop] = clamp(l[prop]+delta, 2, 100); generateBibs(); return; }
+  syncLayout();
+}
+
+function updateToolbar() {
+  if (!selectedKey) return;
+  const l = layout[selectedKey];
+  document.getElementById('tb-name').textContent = selectedKey;
+  document.getElementById('tb-fs').textContent  = l.fontSize !== undefined ? l.fontSize.toFixed(1)+'mm' : '—';
+  document.getElementById('tb-w').textContent   = l.w        !== undefined ? l.w.toFixed(0)+'%'         : '—';
+  document.getElementById('tb-h').textContent   = l.h        !== undefined ? l.h.toFixed(0)+'%'         : '—';
+}
+
+// ═══════════════════════════════════════════
+// LAYOUT PERSISTENCE
+// ═══════════════════════════════════════════
+function saveLayout() {
+  localStorage.setItem('bibLayout', JSON.stringify(layout));
+  setStatus('Layout saved ✓');
+}
+
+function resetLayout() {
+  layout = deepClone(DEF_LAYOUT);
+  syncLayout();
+  setStatus('Layout reset to default');
+}
+
+function exportLayout() {
+  const a = document.createElement('a');
+  a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(layout, null, 2));
+  a.download = 'bib-layout.json';
+  a.click();
+}
+
+function importLayout() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = ev => {
+      try { layout = JSON.parse(ev.target.result); syncLayout(); setStatus('Layout imported ✓'); }
+      catch { alert('Invalid layout JSON'); }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('layoutStatus');
+  el.textContent = msg;
+}
+
+// ═══════════════════════════════════════════
+// PAGE SIZE
+// ═══════════════════════════════════════════
+const PAGE_SIZES = {
+  'A5 landscape': { w: 210, h: 148 },
+  'A5 portrait':  { w: 148, h: 210 },
+  'A4 landscape': { w: 297, h: 210 },
+  'A4 portrait':  { w: 210, h: 297 },
+};
+
+function applyPageSize() {
+  const sel  = document.getElementById('pageSize').value;
+  const dims = PAGE_SIZES[sel] || PAGE_SIZES['A5 landscape'];
+  // Use explicit mm dimensions — Firefox ignores named sizes like "A5 landscape"
+  document.getElementById('page-style').textContent =
+    `@page { size: ${dims.w}mm ${dims.h}mm; margin: 0; }\n` +
+    `.bib-card { width: ${dims.w}mm; height: ${dims.h}mm; }`;
+  document.getElementById('pageSizeInfo').textContent =
+    `${dims.w} × ${dims.h} mm`;
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function esc(s)  { if (!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+function escA(s) { return String(s||'').replace(/"/g,'&quot;'); }
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+document.getElementById('csvFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    const rows = parseCSV(e.target.result);
+    csvTeams = parseTeams(rows);
+    const total = csvTeams.reduce((s,t)=>s+t.runners.length,0);
+    document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
+  };
+  rd.readAsText(f, 'UTF-8');
+});
+
+// Load saved layout on start
+(function() {
+  const s = localStorage.getItem('bibLayout');
+  if (s) {
+    try {
+      const saved = JSON.parse(s);
+      // Merge: keep saved positions, fill in any keys added since last save
+      layout = Object.assign(deepClone(DEF_LAYOUT), saved);
+      setStatus('Layout: loaded from storage');
+    }
+    catch { setStatus('Layout: default'); }
+  } else {
+    setStatus('Layout: default');
+  }
+})();
+</script>
+</body>
+</html>
