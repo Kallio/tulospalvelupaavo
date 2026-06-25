@@ -127,6 +127,44 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
   .bib-card { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
 }
 
+/* ─── Panel Controls ─── */
+#panel-controls {
+  display: flex; gap: 5px; flex-shrink: 0;
+  align-self: flex-start; margin-left: auto;
+}
+#panel-controls button {
+  background: #0f3460; border: 1px solid #334; color: #7ec8e3;
+  padding: 4px 9px; font-size: 15px; border-radius: 4px;
+  cursor: pointer; line-height: 1.1; font-weight: normal;
+}
+#panel-controls button:hover { background: #1a4080; }
+
+/* Sidebar layout */
+body.sidebar-mode #app { display: flex; flex-direction: row; align-items: flex-start; }
+body.sidebar-mode #setup-panel {
+  flex-direction: column; flex-wrap: nowrap;
+  width: 270px; min-width: 270px; height: 100vh; max-height: 100vh;
+  overflow-y: auto; overflow-x: hidden;
+  position: sticky; top: 0; flex-shrink: 0;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+body.sidebar-mode #setup-panel .ps { flex: none; min-width: 0; width: 100%; }
+body.sidebar-mode #setup-panel #panel-controls {
+  order: 99; margin-left: 0; width: 100%; justify-content: flex-end;
+  border-top: 1px solid #334; padding-top: 8px; margin-top: 4px;
+}
+body.sidebar-mode #print-area { flex: 1; min-width: 0; }
+
+/* Collapsed panel */
+body.panel-collapsed #setup-panel .ps { display: none !important; }
+body.panel-collapsed #setup-panel { padding: 5px 12px; }
+body.sidebar-mode.panel-collapsed #setup-panel {
+  width: auto; min-width: 0; overflow: visible;
+}
+body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
+  flex-direction: column; border-top: none; padding-top: 0; gap: 7px;
+}
+
 /* ─── CSV Tooltip ─── */
 .csv-help {
   display: inline-flex; align-items: center; justify-content: center;
@@ -157,6 +195,10 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 
 <!-- ══════════════════ SETUP PANEL ══════════════════ -->
 <div id="setup-panel">
+  <div id="panel-controls">
+    <button id="btn-layout"   onclick="toggleSidebar()"       title="Move panel to left sidebar">⬅</button>
+    <button id="btn-collapse" onclick="togglePanelCollapse()" title="Collapse panel">−</button>
+  </div>
 
   <!-- 1. Navisport + CSV — data sources -->
   <div class="ps" style="min-width:230px;flex:2;">
@@ -1095,6 +1137,32 @@ async function tryLoadNavisportLogo(url) {
 }
 
 // ═══════════════════════════════════════════
+// PANEL LAYOUT
+// ═══════════════════════════════════════════
+function toggleSidebar() {
+  const on = document.body.classList.toggle('sidebar-mode');
+  localStorage.setItem('panelSidebar', on ? '1' : '0');
+  updatePanelControls();
+}
+
+function togglePanelCollapse() {
+  const on = document.body.classList.toggle('panel-collapsed');
+  localStorage.setItem('panelCollapsed', on ? '1' : '0');
+  updatePanelControls();
+}
+
+function updatePanelControls() {
+  const isSidebar   = document.body.classList.contains('sidebar-mode');
+  const isCollapsed = document.body.classList.contains('panel-collapsed');
+  const bl = document.getElementById('btn-layout');
+  const bc = document.getElementById('btn-collapse');
+  bl.textContent = isSidebar ? '⬆' : '⬅';
+  bl.title       = isSidebar ? 'Move panel to top' : 'Move panel to left sidebar';
+  bc.textContent = isCollapsed ? '+' : '−';
+  bc.title       = isCollapsed ? 'Expand panel' : 'Collapse panel';
+}
+
+// ═══════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════
 function esc(s)  { if (!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
@@ -1114,6 +1182,11 @@ document.getElementById('csvFile').addEventListener('change', function() {
   };
   rd.readAsText(f, 'UTF-8');
 });
+
+// Restore panel layout preferences
+if (localStorage.getItem('panelSidebar')   === '1') document.body.classList.add('sidebar-mode');
+if (localStorage.getItem('panelCollapsed') === '1') document.body.classList.add('panel-collapsed');
+updatePanelControls();
 
 // Load saved layout on start
 (function() {
