@@ -9,6 +9,9 @@
   @page { size: 210mm 148mm; margin: 0; }
   .bib-card { width: 210mm; height: 148mm; }
 </style>
+<style id="font-style">
+  .bib-card { font-family: Arial, sans-serif; }
+</style>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #e8e8e8; }
@@ -162,6 +165,10 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
       <input type="checkbox" id="showBarcode" checked onchange="showBarcode=this.checked">
       <label for="showBarcode" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Show barcode</label>
     </div>
+    <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="colorLegsChk" checked onchange="colorLegs=this.checked">
+      <label for="colorLegsChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Color relay legs</label>
+    </div>
     <div class="row" style="margin-top:8px;">
       <button class="bp" onclick="generateBibs()">Generate Bibs</button>
     </div>
@@ -198,6 +205,28 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
       <button class="bg btn-sm" onclick="importLayout()">Import JSON</button>
     </div>
     <div id="layoutStatus" style="margin-top:4px;"></div>
+    <div style="margin-top:8px;">
+      <label style="display:block;font-size:11px;color:#9aa;margin-bottom:3px;">Font</label>
+      <select id="fontFamilySelect" onchange="applyFontFamily()"
+              style="width:100%;padding:4px 6px;background:#0f3460;border:1px solid #334;border-radius:4px;color:#eee;font-size:12px;">
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Arial Black', sans-serif">Arial Black</option>
+        <option value="Impact, sans-serif">Impact</option>
+        <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+      </select>
+      <div style="margin-top:5px;display:flex;gap:5px;align-items:center;">
+        <input type="file" id="customFontFile" accept=".ttf,.otf,.woff,.woff2"
+               style="flex:1;font-size:10px;padding:3px 5px;"
+               onchange="loadCustomFont(this)">
+      </div>
+      <div id="customFontStatus" style="font-size:10px;color:#6a6;margin-top:3px;min-height:13px;"></div>
+    </div>
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
       <h3>Page Size</h3>
       <select id="pageSize" onchange="applyPageSize()" style="margin-top:4px;">
@@ -242,6 +271,12 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
     <span class="tb-val" id="tb-h">—</span>
     <button class="bg btn-sm" onclick="adj('h',+2)">+</button>
   </div>
+  <div class="tb-row">
+    <span>Spacing</span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',-0.05)">−</button>
+    <span class="tb-val" id="tb-ls">—</span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',+0.05)">+</button>
+  </div>
   <div class="tb-row" style="margin-top:4px;border-top:1px solid #334;padding-top:6px;">
     <span>Visible</span>
     <button class="bg btn-sm" id="tb-visible" onclick="toggleHidden()" style="min-width:52px;">—</button>
@@ -265,6 +300,21 @@ let sponsorLogos = []; // [{src, parts: Set|null}]
 let editMode    = false;
 let selectedKey = null;
 let showBarcode = true;
+let colorLegs   = true;
+
+// Background colors per relay leg (1-based index → color), wraps if more legs than colors
+const LEG_COLORS = [
+  '#FFF59D', // 1 yellow
+  '#90CAF9', // 2 blue
+  '#A5D6A7', // 3 green
+  '#FFCC80', // 4 orange
+  '#F48FB1', // 5 pink
+  '#CE93D8', // 6 purple
+  '#80DEEA', // 7 cyan
+  '#EF9A9A', // 8 red
+  '#C5E1A5', // 9 lime
+  '#BCAAA4', // 10 warm grey
+];
 
 // Layout: positions as % of card (210mm × 148mm)
 // cx = center-x%, y = top-y%, w = width%, h = height%, fontSize = mm
@@ -279,14 +329,14 @@ let showBarcode = true;
 //   sarja      90–93%  (≈133–138 mm)
 const DEF_LAYOUT = {
   eventLogo:     { cx:50, y:1,   w:32, h:12 },
-  eventTitle:    { cx:50, y:14,  fontSize:7,   w:80 },
-  eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70 },
-  numberArea:    { cx:50, y:25,  fontSize:42,  w:90 },
+  eventTitle:    { cx:50, y:14,  fontSize:7,   w:80, letterSpacing:0 },
+  eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70, letterSpacing:0 },
+  numberArea:    { cx:50, y:25,  fontSize:42,  w:90, letterSpacing:0 },
   sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
   barcode:       { cx:50, y:73,  w:70, h:12 },
-  barcodeText:   { cx:50, y:86,  fontSize:4.5, w:85 },
-  sarja:         { cx:50, y:92,  fontSize:4.5, w:60 },
-  runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, flipped:true },
+  barcodeText:   { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0 },
+  sarja:         { cx:50, y:92,  fontSize:4.5, w:60, letterSpacing:0 },
+  runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0, flipped:true },
 };
 
 let layout = deepClone(DEF_LAYOUT);
@@ -484,6 +534,10 @@ function createBib(team, runner) {
   const card = document.createElement('div');
   card.className = 'bib-card';
 
+  const legColor = (!isSingle && colorLegs && runner.osuus)
+    ? LEG_COLORS[(parseInt(runner.osuus, 10) - 1) % LEG_COLORS.length]
+    : null;
+
   // Helper: build a positioned div
   function posDiv(key, extra) {
     const l = layout[key];
@@ -495,6 +549,7 @@ function createBib(team, runner) {
     if (l.w) d.style.width  = l.w + '%';
     if (l.h) d.style.height = l.h + '%';
     if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
+    if (l.letterSpacing !== undefined) d.style.letterSpacing = l.letterSpacing + 'em';
     d.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
     if (extra) Object.assign(d.style, extra);
     return d;
@@ -528,6 +583,7 @@ function createBib(team, runner) {
   {
     const d = posDiv('numberArea');
     d.className += ' bib-num';
+    if (legColor) d.style.background = legColor;
     d.innerHTML = `<span class="n" style="font-size:${numFsMm}mm;">${esc(team.kilpailunumero)}</span>`
       + (runner.osuus
           ? `<span class="o" style="font-size:${osuusFsMm}mm;">&nbsp;${esc(runner.osuus)}${showAlao?'&#8209;'+esc(runner.alaosuus):''}</span>`
@@ -600,6 +656,7 @@ function applyPos(el, key) {
   if (l.w !== undefined) el.style.width    = l.w  + '%';
   if (l.h !== undefined) el.style.height   = l.h  + '%';
   if (l.fontSize !== undefined) el.style.fontSize = l.fontSize + 'mm';
+  if (l.letterSpacing !== undefined) el.style.letterSpacing = l.letterSpacing + 'em';
   el.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
   if (l.hidden) el.dataset.hidden = 'true';
   else          delete el.dataset.hidden;
@@ -684,10 +741,15 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function adj(prop, delta) {
   if (!selectedKey) return;
   const l = layout[selectedKey];
-  if (l[prop] === undefined) return;
-  if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
-  else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
-  else if (prop === 'fontSize') { l[prop] = clamp(l[prop]+delta, 2, 100); generateBibs(); return; }
+  if (prop === 'letterSpacing') {
+    // Allow initialising from undefined (layout saved before this property existed)
+    l.letterSpacing = parseFloat(clamp((l.letterSpacing ?? 0) + delta, -0.2, 1.0).toFixed(3));
+  } else {
+    if (l[prop] === undefined) return;
+    if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
+    else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
+    else if (prop === 'fontSize') { l[prop] = clamp(l[prop]+delta, 2, 100); generateBibs(); return; }
+  }
   syncLayout();
 }
 
@@ -709,9 +771,10 @@ function updateToolbar() {
   if (!selectedKey) return;
   const l = layout[selectedKey];
   document.getElementById('tb-name').textContent = selectedKey;
-  document.getElementById('tb-fs').textContent   = l.fontSize !== undefined ? l.fontSize.toFixed(1)+'mm' : '—';
-  document.getElementById('tb-w').textContent    = l.w        !== undefined ? l.w.toFixed(0)+'%'         : '—';
-  document.getElementById('tb-h').textContent    = l.h        !== undefined ? l.h.toFixed(0)+'%'         : '—';
+  document.getElementById('tb-fs').textContent   = l.fontSize      !== undefined ? l.fontSize.toFixed(1)+'mm'  : '—';
+  document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
+  document.getElementById('tb-h').textContent    = l.h             !== undefined ? l.h.toFixed(0)+'%'           : '—';
+  document.getElementById('tb-ls').textContent   = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2)+'em' : '—';
   const vBtn = document.getElementById('tb-visible');
   vBtn.textContent    = l.hidden ? 'Show' : 'Hide';
   vBtn.style.color    = l.hidden ? '#27ae60' : '#e94560';
@@ -748,7 +811,14 @@ function importLayout() {
     const f = e.target.files[0]; if (!f) return;
     const rd = new FileReader();
     rd.onload = ev => {
-      try { layout = JSON.parse(ev.target.result); syncLayout(); setStatus('Layout imported ✓'); }
+      try {
+        const imp = JSON.parse(ev.target.result);
+        const base2 = deepClone(DEF_LAYOUT);
+        const keys2 = new Set([...Object.keys(base2), ...Object.keys(imp)]);
+        layout = {};
+        keys2.forEach(k => { layout[k] = Object.assign({}, base2[k] || {}, imp[k] || {}); });
+        syncLayout(); setStatus('Layout imported ✓');
+      }
       catch { alert('Invalid layout JSON'); }
     };
     rd.readAsText(f);
@@ -783,6 +853,46 @@ function applyPageSize() {
 }
 
 // ═══════════════════════════════════════════
+// FONT
+// ═══════════════════════════════════════════
+function applyFontFamily() {
+  const val = document.getElementById('fontFamilySelect').value;
+  document.getElementById('font-style').textContent = `.bib-card { font-family: ${val}; }`;
+}
+
+async function loadCustomFont(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('customFontStatus');
+  statusEl.style.color = '#7ec8e3';
+  statusEl.textContent = 'Loading…';
+  try {
+    const buf  = await file.arrayBuffer();
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_');
+    const face = new FontFace(name, buf);
+    await face.load();
+    document.fonts.add(face);
+
+    const sel = document.getElementById('fontFamilySelect');
+    // Remove any previously loaded custom font option
+    const existing = sel.querySelector('option[data-custom]');
+    if (existing) existing.remove();
+    const opt = document.createElement('option');
+    opt.value       = `'${name}', sans-serif`;
+    opt.textContent = `${file.name} (custom)`;
+    opt.dataset.custom = '1';
+    sel.appendChild(opt);
+    sel.value = opt.value;
+    applyFontFamily();
+    statusEl.style.color = '#6a6';
+    statusEl.textContent = `Loaded: ${file.name}`;
+  } catch (e) {
+    statusEl.style.color = '#e94560';
+    statusEl.textContent = 'Failed: ' + e.message;
+  }
+}
+
+// ═══════════════════════════════════════════
 // NAVISPORT  (tRPC API — slug-based)
 // ═══════════════════════════════════════════
 async function loadFromNavisport() {
@@ -791,7 +901,7 @@ async function loadFromNavisport() {
   navStatus('Loading…', 'ok');
 
   // Extract slug from URL path: navisport.com/events/{slug}[/…]
-  const slugM = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  const slugM = raw.match(/navisport\.com\/events\/([^/?#\s]+)/i);
   const slug  = slugM ? slugM[1] : raw.trim();
 
   try {
@@ -955,8 +1065,12 @@ document.getElementById('csvFile').addEventListener('change', function() {
   if (s) {
     try {
       const saved = JSON.parse(s);
-      // Merge: keep saved positions, fill in any keys added since last save
-      layout = Object.assign(deepClone(DEF_LAYOUT), saved);
+      // Deep-merge per element: keep saved positions/values, but fill in any
+      // properties added to DEF_LAYOUT since the layout was saved (e.g. letterSpacing).
+      const base = deepClone(DEF_LAYOUT);
+      const allKeys = new Set([...Object.keys(base), ...Object.keys(saved)]);
+      layout = {};
+      allKeys.forEach(k => { layout[k] = Object.assign({}, base[k] || {}, saved[k] || {}); });
       setStatus('Layout: loaded from storage');
     }
     catch { setStatus('Layout: default'); }
