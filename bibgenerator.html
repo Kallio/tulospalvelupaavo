@@ -126,6 +126,30 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 @media screen {
   .bib-card { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
 }
+
+/* ─── CSV Tooltip ─── */
+.csv-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px;
+  background: #0f3460; border: 1px solid #7ec8e3; border-radius: 50%;
+  font-size: 9px; color: #7ec8e3; cursor: help;
+  position: relative; flex-shrink: 0; vertical-align: middle;
+}
+.csv-help .csv-tip {
+  display: none;
+  position: absolute; top: 20px; left: 0;
+  background: #0a1628; border: 1px solid #7ec8e3; border-radius: 6px;
+  padding: 10px 12px; width: 340px;
+  font-size: 10.5px; color: #ccc; line-height: 1.55;
+  z-index: 200; white-space: normal;
+}
+.csv-help:hover .csv-tip,
+.csv-help:focus .csv-tip { display: block; }
+.csv-tip code { background: #1a3a60; border-radius: 3px; padding: 0 3px; font-size: 10px; color: #7ec8e3; }
+.csv-tip table { border-collapse: collapse; width: 100%; margin-top: 5px; font-size: 10px; }
+.csv-tip th { color: #7ec8e3; text-align: left; padding: 2px 4px; border-bottom: 1px solid #334; }
+.csv-tip td { padding: 2px 4px; color: #bbb; }
+.csv-tip tr:nth-child(even) td { background: #0f2a4a; }
 </style>
 </head>
 <body>
@@ -144,7 +168,39 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
     </div>
     <div id="navisportStatus" style="font-size:11px;margin-top:5px;min-height:14px;"></div>
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
-      <label style="margin-top:0;">or load CSV file</label>
+      <label style="margin-top:0;display:flex;align-items:center;gap:4px;">
+        or load CSV file
+        <span class="csv-help" tabindex="0">ⓘ
+          <span class="csv-tip">
+            <strong style="color:#7ec8e3;">CSV format (comma-separated, UTF-8)</strong><br>
+            Row 1 must be a header row. Data starts on row 2.
+            <table>
+              <tr><th>Col</th><th>Field</th><th>Used for</th></tr>
+              <tr><td>1</td><td><code>Kilpailunumero</code></td><td>Bib number</td></tr>
+              <tr><td>2</td><td><code>Sarja</code></td><td>Class / category</td></tr>
+              <tr><td>3</td><td><code>Joukkueen nimi</code></td><td>Team name</td></tr>
+              <tr><td>4</td><td><code>Kansalaisuus</code></td><td>Ignored</td></tr>
+              <tr><td>5</td><td><code>Seura</code></td><td>Ignored</td></tr>
+              <tr><td>6</td><td><em>(separator)</em></td><td>Ignored</td></tr>
+            </table>
+            <br>
+            <strong style="color:#7ec8e3;">Then repeating 8-column blocks per runner:</strong>
+            <table>
+              <tr><th>+offset</th><th>Field</th></tr>
+              <tr><td>+0</td><td><code>Nimi</code> — runner name (required)</td></tr>
+              <tr><td>+1</td><td><code>Kilpailukortti</code> — chip number</td></tr>
+              <tr><td>+2</td><td><code>Lainakortti</code> — ignored</td></tr>
+              <tr><td>+3</td><td><code>Osuus</code> — relay leg (empty for individual)</td></tr>
+              <tr><td>+4</td><td><code>Alaosuus</code> — sub-leg</td></tr>
+              <tr><td>+5</td><td><code>Rata</code> — course</td></tr>
+              <tr><td>+6</td><td><code>Lähtöaika</code> — start time</td></tr>
+              <tr><td>+7</td><td><em>(separator)</em> — ignored</td></tr>
+            </table>
+            <br>
+            Up to 20 runner blocks per row. Leave <code>Osuus</code> empty for individual races.
+          </span>
+        </span>
+      </label>
       <input type="file" id="csvFile" accept=".csv">
       <div id="bibCount" style="font-size:11px;color:#7ec8e3;margin-top:6px;min-height:14px;"></div>
     </div>
