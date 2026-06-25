@@ -791,7 +791,7 @@ async function loadFromNavisport() {
   navStatus('Loading…', 'ok');
 
   // Extract slug from URL path: navisport.com/events/{slug}[/…]
-  const slugM = raw.match(/navisport\.com\/events\/([^/?#\s]+)/i);
+  const slugM = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
   const slug  = slugM ? slugM[1] : raw.trim();
 
   try {
