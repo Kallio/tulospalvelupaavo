@@ -129,8 +129,7 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 
 /* ─── Panel Controls ─── */
 #panel-controls {
-  display: flex; gap: 5px; flex-shrink: 0;
-  align-self: flex-start; margin-left: auto;
+  display: flex; gap: 5px; flex-shrink: 0; align-self: flex-start;
 }
 #panel-controls button {
   background: #0f3460; border: 1px solid #334; color: #7ec8e3;
@@ -150,8 +149,10 @@ body.sidebar-mode #setup-panel {
 }
 body.sidebar-mode #setup-panel .ps { flex: none; min-width: 0; width: 100%; }
 body.sidebar-mode #setup-panel #panel-controls {
-  order: 99; margin-left: 0; width: 100%; justify-content: flex-end;
-  border-top: 1px solid #334; padding-top: 8px; margin-top: 4px;
+  position: sticky; top: 0;
+  background: #1a1a2e; z-index: 10;
+  padding-bottom: 6px; margin-bottom: 4px;
+  border-bottom: 1px solid #334;
 }
 body.sidebar-mode #print-area { flex: 1; min-width: 0; }
 
@@ -162,7 +163,7 @@ body.sidebar-mode.panel-collapsed #setup-panel {
   width: auto; min-width: 0; overflow: visible;
 }
 body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
-  flex-direction: column; border-top: none; padding-top: 0; gap: 7px;
+  flex-direction: column; border-bottom: none; padding-bottom: 0; gap: 7px;
 }
 
 /* ─── CSV Tooltip ─── */
