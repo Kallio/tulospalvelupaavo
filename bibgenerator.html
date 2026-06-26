@@ -591,9 +591,9 @@ function populateSarjaFilter() {
 }
 
 // Replace characters not safe for CODE128 (non-ASCII, spaces, etc.) with underscore,
-// then collapse runs and strip leading/trailing underscores.
+// then collapse runs and strip leading/trailing underscores and spaces.
 function sanitizeForBarcode(str) {
-  return str.replace(/[^A-Za-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  return str.replace(/[^A-Za-z0-9]/g, '').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 // Returns a map {fullClassName → shortestUniquePrefix} for all classes present in teams.
