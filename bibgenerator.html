@@ -241,6 +241,11 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
             </table>
             <br>
             Up to 20 runner blocks per row. Leave <code>Osuus</code> empty for individual races.
+            <br><br>
+            <span style="color:#9aa;">Download example: </span>
+            <a onclick="downloadExampleCSV('individual')" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">individual</a>
+            &nbsp;·&nbsp;
+            <a onclick="downloadExampleCSV('relay')" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">relay</a>
           </span>
         </span>
       </label>
@@ -517,6 +522,37 @@ function parseRanges(str) {
     else if (/^\d+$/.test(t)) s.add(+t);
   }
   return s;
+}
+
+function downloadExampleCSV(type) {
+  const q = v => `"${v}"`;
+  const S = q(' '); // separator column
+  const teamHdr = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'].map(q).join(',');
+  const rHdr = n => [S, `Nimi-${n}`,`Kilpailukortti-${n}`,`Lainakortti-${n}`,`Osuus-${n}`,`Alaosuus-${n}`,`Rata-${n}`,`Lähtöaika-${n}`].map((v,i)=>i===0?v:q(v)).join(',');
+  const r = (nimi,chip,osuus,rata,aika) => [S,nimi,chip,'',osuus,'',rata,aika].map((v,i)=>i===0?v:q(v)).join(',');
+
+  let content, filename;
+  if (type === 'relay') {
+    content = [
+      teamHdr + ',' + [1,2,3].map(rHdr).join(','),
+      ['101','Jukola','Piipsjärven Pihinä','FIN','Club A'].map(q).join(',') + ',' + r('Astra Hyvärinen','12345','1','A','10:00:00') + ',' + r('Anna Hyvärinen','12346','2','A','') + ',' + r('Johanna Hyvärinen','12347','3','A',''),
+      ['102','Venlat','Luontaisesti vahvat','FIN','Club B'].map(q).join(',') + ',' + r('Leo Hyvärinen','23456','1','A','10:01:00') + ',' + r('Simo Hyvärinen','23457','2','A','') + ',' + r('Ville Hyvärinen','23458','3','A',''),
+    ].join('\r\n');
+    filename = 'example_relay.csv';
+  } else {
+    content = [
+      teamHdr + ',' + rHdr(1),
+      ['101','D21','Kotkajuuri Kaisa','FIN','Club A'].map(q).join(',')  + ',' + r('Kotkajuuri Kaisa','12345','','A','10:00:00'),
+      ['102','D21','Särkkä Saara','FIN','Club A'].map(q).join(',') + ',' + r('Särkkä Saara','12346','','A','10:01:00'),
+      ['103','H16','Ervo Pekka','FIN','Club B'].map(q).join(',') + ',' + r('Ervo Pekka','12347','','B','10:02:00'),
+    ].join('\r\n');
+    filename = 'example_individual.csv';
+  }
+  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ═══════════════════════════════════════════
