@@ -34,7 +34,7 @@ body { font-family: Arial, sans-serif; background: #e8e8e8; }
 .ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
 .ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
 .ps label:first-of-type { margin-top: 0; }
-input[type="file"], input[type="text"] {
+input[type="file"], input[type="text"], select {
   width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334; border-radius: 4px;
   color: #eee; font-size: 12px;
 }
@@ -260,6 +260,8 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <input type="text" id="filterNumbers" placeholder="empty = all">
     <label>Filter parts / Osuus (e.g. 1,2)</label>
     <input type="text" id="filterParts" placeholder="empty = all">
+    <label style="margin-top:6px;">Filter class / Sarja</label>
+    <select id="filterSarja"><option value="">All</option></select>
     <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
       <input type="checkbox" id="showBarcode" checked onchange="showBarcode=this.checked">
       <label for="showBarcode" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Show barcode</label>
@@ -580,6 +582,20 @@ function getSponsor(osuus) {
 // BIB GENERATION
 // ═══════════════════════════════════════════
 
+function populateSarjaFilter() {
+  const sel = document.getElementById('filterSarja');
+  const current = sel.value;
+  const classes = [...new Set(csvTeams.map(t => t.sarja).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All</option>'
+    + classes.map(c => `<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`).join('');
+}
+
+// Replace characters not safe for CODE128 (non-ASCII, spaces, etc.) with underscore,
+// then collapse runs and strip leading/trailing underscores.
+function sanitizeForBarcode(str) {
+  return str.replace(/[^A-Za-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 // Returns a map {fullClassName → shortestUniquePrefix} for all classes present in teams.
 // If a unique prefix shorter than the full name exists, it is used; otherwise full name is kept.
 function buildClassPrefixes(teams) {
@@ -602,8 +618,9 @@ function buildClassPrefixes(teams) {
 function generateBibs() {
   if (!csvTeams.length) { alert('Load a CSV file first'); return; }
 
-  const numFilter  = parseRanges(document.getElementById('filterNumbers').value);
-  const partFilter = parseRanges(document.getElementById('filterParts').value);
+  const numFilter   = parseRanges(document.getElementById('filterNumbers').value);
+  const partFilter  = parseRanges(document.getElementById('filterParts').value);
+  const sarjaFilter = document.getElementById('filterSarja').value;
 
   classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
 
@@ -613,6 +630,7 @@ function generateBibs() {
   let count = 0;
   for (const team of csvTeams) {
     if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
+    if (sarjaFilter && team.sarja !== sarjaFilter) continue;
     for (const runner of team.runners) {
       if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
       area.appendChild(createBib(team, runner));
@@ -644,7 +662,7 @@ function createBib(team, runner) {
   const hasEvLogo  = !!eventLogoSrc;
 
   // Barcode value
-  const classPrefix = team.sarja ? (classPrefixMap[team.sarja] ?? '') : '';
+  const classPrefix = team.sarja ? sanitizeForBarcode(classPrefixMap[team.sarja] ?? '') : '';
   const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
   let bcVal;
   if (isSingle) {
@@ -1048,6 +1066,7 @@ async function loadFromNavisport() {
     const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
     navStatus(`✓ ${name || slug} — ${csvTeams.length} entries, ${total} runners`, 'ok');
     document.getElementById('bibCount').textContent = `${csvTeams.length} entries, ${total} runners`;
+    populateSarjaFilter();
   } catch(e) {
     navStatus('Error: ' + e.message, 'err');
     console.error(e);
@@ -1201,6 +1220,7 @@ document.getElementById('csvFile').addEventListener('change', function() {
     csvTeams = parseTeams(rows);
     const total = csvTeams.reduce((s,t)=>s+t.runners.length,0);
     document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
+    populateSarjaFilter();
   };
   rd.readAsText(f, 'UTF-8');
 });
