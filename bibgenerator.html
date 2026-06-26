@@ -790,11 +790,17 @@ function createBib(team, runner) {
   }
 
   if (isSingle) {
-    // Individual race: sarja / start time / name on one line below barcode
     const d = posDiv('runnerInfo');
-    const infoParts = [team.sarja, runner.lahtöaika].filter(Boolean).map(esc);
-    d.innerHTML = (infoParts.length ? infoParts.join('  ') + '  ' : '')
-      + `<strong>${esc(runner.nimi)}</strong>`;
+    if (runner.stageLines?.length) {
+      // Multistage: name first, then one line per stage (sarja date time)
+      d.innerHTML = `<strong>${esc(runner.nimi)}</strong>`
+        + runner.stageLines.map(l => `<br>${esc(l)}`).join('');
+    } else {
+      // Individual race: sarja / start time / name on one line
+      const infoParts = [team.sarja, runner.lahtöaika].filter(Boolean).map(esc);
+      d.innerHTML = (infoParts.length ? infoParts.join('  ') + '  ' : '')
+        + `<strong>${esc(runner.nimi)}</strong>`;
+    }
     card.appendChild(d);
   } else {
     // Relay: team name in teamInfo (separate layout key, no flip), then sarja
@@ -1092,8 +1098,10 @@ async function loadFromNavisport() {
     // Logo is directly available on the event object
     if (json.logoUrl) await tryLoadNavisportLogo(json.logoUrl);
 
-    // raceType === 'Relay' → flat results array with a `leg` field per entry
-    if (json.raceType === 'Relay') {
+    const isMultistage = json.eventKind === 'Multistage event' || (json.events?.length > 1);
+    if (isMultistage) {
+      await navLoadMultistage(json);
+    } else if (json.raceType === 'Relay') {
       navLoadRelay(json);
     } else {
       navLoadIndividual(json);
@@ -1111,6 +1119,10 @@ async function loadFromNavisport() {
 
 // tRPC batch endpoint: response is [{result:{data:{...}}}]
 async function navFetch(slug) {
+  // UUID → REST API directly
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+    return navFetchByUUID(slug);
+  }
   const input = encodeURIComponent(JSON.stringify({ '0': slug }));
   const url   = `https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
   const res   = await fetch(url);
@@ -1120,6 +1132,12 @@ async function navFetch(slug) {
   const data  = batch?.[0]?.result?.data;
   if (!data)  throw new Error('Unexpected Navisport response shape');
   return data;
+}
+
+async function navFetchByUUID(uuid) {
+  const res = await fetch(`https://navisport.com/api/events/${uuid}`);
+  if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status} for event ${uuid}`);
+  return res.json();
 }
 
 function navStatus(msg, type) {
@@ -1193,6 +1211,84 @@ function navLoadRelay(json) {
 
   csvTeams = Object.values(teamMap);
   csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
+}
+
+// Multi-stage individual event: each stage becomes a leg (osuus = stageNumber).
+// Use the part/osuus filter to generate bibs for a specific stage.
+async function navLoadMultistage(json) {
+  const cc = {};
+  (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
+
+  const stages  = json.events || [];
+  const teamMap = {};  // bib → { team fields, stageEntries: [{stageIdx, date, time, nimi, chip, sarja}] }
+
+  for (let i = 0; i < stages.length; i++) {
+    const ev = stages[i];
+    let stageJson;
+    try {
+      navStatus(`Loading stage ${i + 1} / ${stages.length}…`, 'ok');
+      stageJson = await navFetchByUUID(ev.id);
+    } catch(e) {
+      console.warn('Stage load failed:', ev.id, e);
+      continue;
+    }
+
+    const stageCc = {};
+    (stageJson.courseClasses||[]).forEach(c => { stageCc[c.id] = c.name; });
+    const stageIdx  = ev.stageNumber ?? (i + 1);
+    const stageDate = stageJson.begin || ev.begin || null;
+
+    for (const r of (stageJson.results || [])) {
+      if (r.bibNumber == null || r.resultType === 'Team') continue;
+      const bib = String(r.bibNumber);
+      if (!teamMap[bib]) {
+        teamMap[bib] = {
+          kilpailunumero: bib,
+          sarja:          stageCc[r.classId] || cc[r.classId] || '',
+          joukkue:        r.club || navName(r),
+          stageEntries:   [],
+        };
+      }
+      if (!teamMap[bib].sarja) teamMap[bib].sarja = stageCc[r.classId] || cc[r.classId] || '';
+
+      teamMap[bib].stageEntries.push({
+        stageIdx,
+        date:  stageDate,
+        time:  navTime(r),
+        nimi:  navName(r),
+        chip:  String(r.chip || ''),
+        sarja: stageCc[r.classId] || cc[r.classId] || '',
+      });
+    }
+  }
+
+  // Build one bib per runner; stageLines = one formatted line per stage
+  csvTeams = Object.values(teamMap).map(team => {
+    team.stageEntries.sort((a, b) => a.stageIdx - b.stageIdx);
+    const first = team.stageEntries[0] || {};
+
+    const stageLines = team.stageEntries.map(s => {
+      const datePart = s.date
+        ? new Date(s.date).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
+        : `${s.stageIdx}.`;
+      return [s.sarja || team.sarja, datePart, s.time].filter(Boolean).join(' ');
+    });
+
+    return {
+      kilpailunumero: team.kilpailunumero,
+      sarja:          team.sarja,
+      joukkue:        team.joukkue,
+      runners: [{
+        nimi:           first.nimi || '',
+        kilpailukortti: first.chip || '',
+        osuus:          '',
+        alaosuus:       '',
+        rata:           '',
+        lahtöaika:      '',
+        stageLines,
+      }],
+    };
+  }).filter(t => t.runners[0].nimi);
 }
 
 async function tryLoadNavisportLogo(url) {
