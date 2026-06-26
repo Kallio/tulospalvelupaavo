@@ -268,6 +268,10 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
       <input type="checkbox" id="colorLegsChk" checked onchange="colorLegs=this.checked">
       <label for="colorLegsChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Color relay legs</label>
     </div>
+    <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="classPrefixChk" onchange="useClassPrefix=this.checked">
+      <label for="classPrefixChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Short class prefix</label>
+    </div>
     <div class="row" style="margin-top:8px;">
       <button class="bp" onclick="generateBibs()">Generate Bibs</button>
     </div>
@@ -398,8 +402,10 @@ let eventLogoSrc = null;
 let sponsorLogos = []; // [{src, parts: Set|null}]
 let editMode    = false;
 let selectedKey = null;
-let showBarcode = true;
-let colorLegs   = true;
+let showBarcode     = true;
+let colorLegs       = true;
+let useClassPrefix  = false;
+let classPrefixMap  = {};
 
 // Background colors per relay leg (1-based index → color), wraps if more legs than colors
 const LEG_COLORS = [
@@ -423,19 +429,18 @@ const LEG_COLORS = [
 //   eventSubtitle 20–23% (≈30–34 mm)
 //   numberArea 25–53%  (≈37–79 mm, 42mm font)
 //   sponsorLogo 55–72% (≈81–107 mm)
-//   barcode    73–85%  (≈108–126 mm)
-//   barcodeText 86–89% (≈127–132 mm)
-//   sarja      90–93%  (≈133–138 mm)
+//   barcode    73–90%  (≈108–133 mm, includes barcode text below SVG)
+//   sarja      91–94%  (≈135–139 mm)
 const DEF_LAYOUT = {
   eventLogo:     { cx:50, y:1,   w:32, h:12 },
   eventTitle:    { cx:50, y:14,  fontSize:7,   w:80, letterSpacing:0 },
   eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70, letterSpacing:0 },
   numberArea:    { cx:50, y:25,  fontSize:42,  w:90, letterSpacing:0 },
   sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
-  barcode:       { cx:50, y:73,  w:70, h:12 },
-  barcodeText:   { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0 },
-  sarja:         { cx:50, y:92,  fontSize:4.5, w:60, letterSpacing:0 },
+  barcode:       { cx:50, y:73,  w:70, h:17, fontSize:4.5 },
+  sarja:         { cx:50, y:91,  fontSize:4.5, w:60, letterSpacing:0 },
   runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0, flipped:true },
+  teamInfo:      { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0 },
 };
 
 let layout = deepClone(DEF_LAYOUT);
@@ -574,11 +579,33 @@ function getSponsor(osuus) {
 // ═══════════════════════════════════════════
 // BIB GENERATION
 // ═══════════════════════════════════════════
+
+// Returns a map {fullClassName → shortestUniquePrefix} for all classes present in teams.
+// If a unique prefix shorter than the full name exists, it is used; otherwise full name is kept.
+function buildClassPrefixes(teams) {
+  const names = [...new Set(teams.map(t => t.sarja).filter(Boolean))];
+  const map = {};
+  for (const name of names) {
+    let prefix = name;
+    for (let len = 1; len < name.length; len++) {
+      const p = name.slice(0, len);
+      if (!names.some(other => other !== name && other.startsWith(p))) {
+        prefix = p;
+        break;
+      }
+    }
+    map[name] = prefix;
+  }
+  return map;
+}
+
 function generateBibs() {
   if (!csvTeams.length) { alert('Load a CSV file first'); return; }
 
   const numFilter  = parseRanges(document.getElementById('filterNumbers').value);
   const partFilter = parseRanges(document.getElementById('filterParts').value);
+
+  classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
 
   const area = document.getElementById('print-area');
   area.innerHTML = '';
@@ -617,13 +644,15 @@ function createBib(team, runner) {
   const hasEvLogo  = !!eventLogoSrc;
 
   // Barcode value
+  const classPrefix = team.sarja ? (classPrefixMap[team.sarja] ?? '') : '';
+  const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
   let bcVal;
   if (isSingle) {
-    bcVal = team.kilpailunumero;
+    bcVal = bcBase;
   } else if (showAlao) {
-    bcVal = `${team.kilpailunumero}-${runner.osuus}-${runner.alaosuus}`;
+    bcVal = `${bcBase}-${runner.osuus}-${runner.alaosuus}`;
   } else {
-    bcVal = `${team.kilpailunumero}-${runner.osuus}`;
+    bcVal = `${bcBase}-${runner.osuus}`;
   }
 
   // Font sizes (scale up number if no sponsor)
@@ -697,11 +726,12 @@ function createBib(team, runner) {
     card.appendChild(d);
   }
 
-  // Barcode (optional via checkbox)
+  // Barcode + barcode text in one box
   if (showBarcode) {
     const d = posDiv('barcode');
     const bcId = 'bc' + Math.random().toString(36).slice(2);
-    d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;display:block;"></svg>`;
+    d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;display:block;"></svg>`
+      + `<div style="font-family:monospace;font-size:0.85em;text-align:center;">${esc(bcVal)}</div>`;
     card.appendChild(d);
   }
 
@@ -712,20 +742,11 @@ function createBib(team, runner) {
     d.innerHTML = (infoParts.length ? infoParts.join('  ') + '  ' : '')
       + `<strong>${esc(runner.nimi)}</strong>`;
     card.appendChild(d);
-
-    if (showBarcode) {
-      const bt = posDiv('barcodeText');
-      bt.innerHTML = `<span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
-      card.appendChild(bt);
-    }
   } else {
-    // Relay: team name + barcode value, then sarja
-    if (showBarcode) {
-      const d = posDiv('barcodeText');
-      d.innerHTML = `<strong>${esc(team.joukkue)}</strong><br>`
-        + `<span style="font-family:monospace;font-size:0.85em;">${esc(bcVal)}</span>`;
-      card.appendChild(d);
-    }
+    // Relay: team name in teamInfo (separate layout key, no flip), then sarja
+    const ri = posDiv('teamInfo');
+    ri.innerHTML = `<strong>${esc(team.joukkue)}</strong>`;
+    card.appendChild(ri);
 
     if (team.sarja) {
       const d = posDiv('sarja');
@@ -1000,7 +1021,7 @@ async function loadFromNavisport() {
   navStatus('Loading…', 'ok');
 
   // Extract slug from URL path: navisport.com/events/{slug}[/…]
-  const slugM = raw.match(/navisport\.com\/events\/([^/?#\s]+)/i);
+  const slugM = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
   const slug  = slugM ? slugM[1] : raw.trim();
 
   try {
