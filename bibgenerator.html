@@ -123,6 +123,33 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 }
 /* Page size is set dynamically via #page-style */
 
+/* ─── Barcode Sticker Sheet ─── */
+#sticker-area {
+  display: none;
+  padding: 8mm;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 3mm;
+}
+.sticker {
+  width: 45mm;
+  padding: 2mm;
+  border: 1px dashed #ccc;
+  text-align: center;
+  page-break-inside: avoid;
+}
+.sticker svg { width: 100%; display: block; }
+.sticker .sticker-text { font-family: monospace; font-size: 3mm; text-align: center; word-break: break-word; }
+
+body.printing-stickers #print-area { display: none !important; }
+body.printing-stickers #sticker-area { display: flex; }
+
+@media print {
+  body.printing-stickers { background: white; }
+  body.printing-stickers .sticker { border: none; }
+}
+
+
 @media screen {
   .bib-card { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
 }
@@ -350,6 +377,9 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
       <button class="bs" style="width:100%;" onclick="window.print()">🖨 Print All</button>
     </div>
+    <div style="margin-top:6px;">
+      <button class="bg" style="width:100%;" onclick="printBarcodeStickers()">🏷 Print Barcode Stickers</button>
+    </div>
   </div>
 
 </div>
@@ -357,6 +387,7 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
 
 <!-- ══════════════════ PRINT AREA ══════════════════ -->
 <div id="print-area"></div>
+<div id="sticker-area"></div>
 
 </div><!-- end app -->
 
@@ -444,7 +475,7 @@ const DEF_LAYOUT = {
   eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70, letterSpacing:0 },
   numberArea:    { cx:50, y:25,  fontSize:42,  w:90, letterSpacing:0 },
   sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
-  barcode:       { cx:50, y:73,  w:70, h:17, fontSize:4.5 },
+  barcode:       { cx:49.874, y:68.173,  w:70, h:17, fontSize:4.5 },
   sarja:         { cx:50, y:91,  fontSize:4.5, w:60, letterSpacing:0 },
   runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0, flipped:true },
   teamInfo:      { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0 },
@@ -651,12 +682,37 @@ function buildClassPrefixes(teams) {
   return map;
 }
 
-function generateBibs() {
-  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
-
+// Returns the filtered list of {team, runner} pairs per the current filter inputs.
+function getFilteredEntries() {
   const numFilter   = parseRanges(document.getElementById('filterNumbers').value);
   const partFilter  = parseRanges(document.getElementById('filterParts').value);
   const sarjaFilter = document.getElementById('filterSarja').value;
+
+  const entries = [];
+  for (const team of csvTeams) {
+    if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
+    if (sarjaFilter && team.sarja !== sarjaFilter) continue;
+    for (const runner of team.runners) {
+      if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
+      entries.push({ team, runner });
+    }
+  }
+  return entries;
+}
+
+// Barcode value shared between the bib card and the sticker sheet.
+function getBarcodeValue(team, runner) {
+  const isSingle = !runner.osuus;
+  const showAlao = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const classPrefix = team.sarja ? sanitizeForBarcode(classPrefixMap[team.sarja] ?? '') : '';
+  const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
+  if (isSingle) return bcBase;
+  if (showAlao) return `${bcBase}-${runner.osuus}-${runner.alaosuus}`;
+  return `${bcBase}-${runner.osuus}`;
+}
+
+function generateBibs() {
+  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
 
   classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
 
@@ -664,14 +720,9 @@ function generateBibs() {
   area.innerHTML = '';
 
   let count = 0;
-  for (const team of csvTeams) {
-    if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
-    if (sarjaFilter && team.sarja !== sarjaFilter) continue;
-    for (const runner of team.runners) {
-      if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
-      area.appendChild(createBib(team, runner));
-      count++;
-    }
+  for (const { team, runner } of getFilteredEntries()) {
+    area.appendChild(createBib(team, runner));
+    count++;
   }
 
   document.getElementById('bibCount').textContent = count ? `${count} bibs` : 'No bibs matched';
@@ -698,16 +749,7 @@ function createBib(team, runner) {
   const hasEvLogo  = !!eventLogoSrc;
 
   // Barcode value
-  const classPrefix = team.sarja ? sanitizeForBarcode(classPrefixMap[team.sarja] ?? '') : '';
-  const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
-  let bcVal;
-  if (isSingle) {
-    bcVal = bcBase;
-  } else if (showAlao) {
-    bcVal = `${bcBase}-${runner.osuus}-${runner.alaosuus}`;
-  } else {
-    bcVal = `${bcBase}-${runner.osuus}`;
-  }
+  const bcVal = getBarcodeValue(team, runner);
 
   // Font sizes (scale up number if no sponsor)
   const numFsMm   = layout.numberArea.fontSize * (hasSponsor ? 1 : 1.35);
@@ -817,6 +859,54 @@ function createBib(team, runner) {
 
   if (editMode) attachDrag(card);
   return card;
+}
+
+// ═══════════════════════════════════════════
+// BARCODE STICKER SHEET
+// ═══════════════════════════════════════════
+function printBarcodeStickers() {
+  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
+
+  classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
+
+  const entries = getFilteredEntries();
+  if (!entries.length) { alert('No bibs matched the current filters'); return; }
+
+  const area = document.getElementById('sticker-area');
+  area.innerHTML = '';
+
+  entries.forEach(({ team, runner }, i) => {
+    const bcVal = getBarcodeValue(team, runner);
+    const bcId  = 'stk' + i + '_' + Math.random().toString(36).slice(2);
+    const d = document.createElement('div');
+    d.className = 'sticker';
+    d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}"></svg>`
+      + `<div class="sticker-text">${esc(bcVal)}</div>`;
+    area.appendChild(d);
+  });
+
+  requestAnimationFrame(() => {
+    area.querySelectorAll('.bc-svg').forEach(svg => {
+      try {
+        JsBarcode(svg, svg.dataset.val, {
+          format: 'CODE128', width: 2, height: 40,
+          displayValue: false, margin: 2
+        });
+      } catch(e) { console.warn('Barcode:', svg.dataset.val, e); }
+    });
+
+    const pageStyleEl = document.getElementById('page-style');
+    const prevPageStyle = pageStyleEl.textContent;
+    pageStyleEl.textContent = '@page { size: A4 portrait; margin: 10mm; }';
+
+    document.body.classList.add('printing-stickers');
+    const cleanup = () => {
+      document.body.classList.remove('printing-stickers');
+      pageStyleEl.textContent = prevPageStyle;
+    };
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.print();
+  });
 }
 
 // ═══════════════════════════════════════════
