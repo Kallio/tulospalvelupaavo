@@ -124,29 +124,28 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 /* Page size is set dynamically via #page-style */
 
 /* ─── Barcode Sticker Sheet ─── */
-#sticker-area {
-  display: none;
-  padding: 8mm;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 3mm;
+#sticker-area { display: none; }
+body.stickers-active #print-area  { display: none !important; }
+body.stickers-active #sticker-area { display: block; }
+
+.sticker-page {
+  background: white;
+  position: relative;
+  margin: 0 auto 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 .sticker {
-  width: 45mm;
-  padding: 2mm;
-  border: 1px dashed #ccc;
+  position: absolute;
   text-align: center;
-  page-break-inside: avoid;
+  overflow: hidden;
 }
 .sticker svg { width: 100%; display: block; }
-.sticker .sticker-text { font-family: monospace; font-size: 3mm; text-align: center; word-break: break-word; }
-
-body.printing-stickers #print-area { display: none !important; }
-body.printing-stickers #sticker-area { display: flex; }
+.sticker .sticker-text { font-family: monospace; }
 
 @media print {
-  body.printing-stickers { background: white; }
-  body.printing-stickers .sticker { border: none; }
+  #sticker-area { padding: 0; }
+  .sticker-page { box-shadow: none; margin: 0; page-break-after: always; }
+  .sticker-page:last-child { page-break-after: auto; }
 }
 
 
@@ -377,8 +376,58 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
       <button class="bs" style="width:100%;" onclick="window.print()">🖨 Print All</button>
     </div>
-    <div style="margin-top:6px;">
-      <button class="bg" style="width:100%;" onclick="printBarcodeStickers()">🏷 Print Barcode Stickers</button>
+  </div>
+
+  <!-- 6. Sticker Sheet -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Sticker Sheet</h3>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="showStickerNameChk" checked onchange="showStickerName=this.checked; if(document.body.classList.contains('stickers-active')) renderStickerSheet();">
+      <label for="showStickerNameChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Show name (team/runner)</label>
+    </div>
+    <div style="font-size:10px;color:#556;margin:3px 0 8px;">Sheet size follows the Page Size setting below (Layout panel)</div>
+    <div class="row">
+      <label style="margin:0;flex:1;">Columns
+        <input type="number" id="stkCols" min="1" step="1" style="margin-top:2px;" onchange="updateStickerConfig('cols', this.value)">
+      </label>
+      <label style="margin:0;flex:1;">Rows
+        <input type="number" id="stkRows" min="1" step="1" style="margin-top:2px;" onchange="updateStickerConfig('rows', this.value)">
+      </label>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <label style="margin:0;flex:1;">Label W (mm)
+        <input type="number" id="stkLabelW" min="1" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('labelW', this.value)">
+      </label>
+      <label style="margin:0;flex:1;">Label H (mm)
+        <input type="number" id="stkLabelH" min="1" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('labelH', this.value)">
+      </label>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <label style="margin:0;flex:1;">Gap H (mm)
+        <input type="number" id="stkGapH" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('gapH', this.value)">
+      </label>
+      <label style="margin:0;flex:1;">Gap V (mm)
+        <input type="number" id="stkGapV" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('gapV', this.value)">
+      </label>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <label style="margin:0;flex:1;">Top margin (mm)
+        <input type="number" id="stkMarginTop" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('marginTop', this.value)">
+      </label>
+      <label style="margin:0;flex:1;">Left margin (mm)
+        <input type="number" id="stkMarginLeft" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('marginLeft', this.value)">
+      </label>
+    </div>
+    <div id="stickerStatus" style="font-size:11px;color:#7ec8e3;margin-top:8px;min-height:14px;"></div>
+    <div class="row" style="margin-top:8px;">
+      <button class="bg btn-sm" onclick="renderStickerSheet()">Generate / Update Preview</button>
+      <button class="bg btn-sm" onclick="resetStickerConfig()">Reset grid</button>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <button class="bw btn-sm" id="stkBackBtn" style="display:none;" onclick="hideStickerView()">← Back to Bibs</button>
+    </div>
+    <div class="row" style="margin-top:6px;">
+      <button class="bs" style="width:100%;" onclick="printStickerSheet()">🏷 Print Stickers</button>
     </div>
   </div>
 
@@ -440,6 +489,7 @@ let eventLogoSrc = null;
 let sponsorLogos = []; // [{src, parts: Set|null}]
 let editMode    = false;
 let selectedKey = null;
+let selectedLayoutObj = null; // points at `layout` or `stickerLayout`, whichever owns selectedKey
 let showBarcode     = true;
 let colorLegs       = true;
 let useClassPrefix  = false;
@@ -711,6 +761,24 @@ function getBarcodeValue(team, runner) {
   return `${bcBase}-${runner.osuus}`;
 }
 
+// Builds a positioned [data-lk] element from a layout object (bib `layout` or `stickerLayout`).
+// Shared by createBib() and renderStickerSheet() so both support the same edit-mode drag/toolbar.
+function makePosDiv(layoutObj, key, extra) {
+  const l = layoutObj[key];
+  const d = document.createElement('div');
+  d.dataset.lk = key;
+  if (l.hidden) d.dataset.hidden = 'true';
+  d.style.left = l.cx + '%';
+  d.style.top  = l.y  + '%';
+  if (l.w) d.style.width  = l.w + '%';
+  if (l.h) d.style.height = l.h + '%';
+  if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
+  if (l.letterSpacing !== undefined) d.style.letterSpacing = l.letterSpacing + 'em';
+  d.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
+  if (extra) Object.assign(d.style, extra);
+  return d;
+}
+
 function generateBibs() {
   if (!csvTeams.length) { alert('Load a CSV file first'); return; }
 
@@ -762,22 +830,8 @@ function createBib(team, runner) {
     ? LEG_COLORS[(parseInt(runner.osuus, 10) - 1) % LEG_COLORS.length]
     : null;
 
-  // Helper: build a positioned div
-  function posDiv(key, extra) {
-    const l = layout[key];
-    const d = document.createElement('div');
-    d.dataset.lk = key;
-    if (l.hidden) d.dataset.hidden = 'true';
-    d.style.left = l.cx + '%';
-    d.style.top  = l.y  + '%';
-    if (l.w) d.style.width  = l.w + '%';
-    if (l.h) d.style.height = l.h + '%';
-    if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
-    if (l.letterSpacing !== undefined) d.style.letterSpacing = l.letterSpacing + 'em';
-    d.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
-    if (extra) Object.assign(d.style, extra);
-    return d;
-  }
+  // Helper: build a positioned div using the bib layout
+  function posDiv(key, extra) { return makePosDiv(layout, key, extra); }
 
   // Event title
   const titleText = document.getElementById('eventTitle').value.trim();
@@ -864,26 +918,132 @@ function createBib(team, runner) {
 // ═══════════════════════════════════════════
 // BARCODE STICKER SHEET
 // ═══════════════════════════════════════════
-function printBarcodeStickers() {
-  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
+const DEF_STICKER_CONFIG = {
+  cols: 3, rows: 8,
+  labelW: 63.5, labelH: 33.9,
+  gapH: 2.5, gapV: 0,
+  marginTop: 15, marginLeft: 7,
+};
+let stickerConfig = deepClone(DEF_STICKER_CONFIG);
+let showStickerName = true;
+
+// Sticker element layout — positions as % of the label box, fontSize in mm.
+const DEF_STICKER_LAYOUT = {
+  stickerName:    { cx:50, y:2,  fontSize:2.6, w:92, letterSpacing:0 },
+  stickerBarcode: { cx:50, y:20, w:90, h:46 },
+  stickerText:    { cx:50, y:74, fontSize:2.6, w:92, letterSpacing:0 },
+};
+let stickerLayout = deepClone(DEF_STICKER_LAYOUT);
+
+// Returns the % of a page's area the current sticker page is (from the shared Page Size selector).
+function getPageDims() {
+  const sel = document.getElementById('pageSize').value;
+  return PAGE_SIZES[sel] || PAGE_SIZES['A5 landscape'];
+}
+
+// Name/team shown on a sticker: runner name for individual bibs, team name for relay legs.
+function getStickerNameText(team, runner) {
+  return !runner.osuus ? (runner.nimi || '') : (team.joukkue || '');
+}
+
+function populateStickerInputs() {
+  document.getElementById('stkCols').value       = stickerConfig.cols;
+  document.getElementById('stkRows').value       = stickerConfig.rows;
+  document.getElementById('stkLabelW').value     = stickerConfig.labelW;
+  document.getElementById('stkLabelH').value     = stickerConfig.labelH;
+  document.getElementById('stkGapH').value       = stickerConfig.gapH;
+  document.getElementById('stkGapV').value       = stickerConfig.gapV;
+  document.getElementById('stkMarginTop').value  = stickerConfig.marginTop;
+  document.getElementById('stkMarginLeft').value = stickerConfig.marginLeft;
+}
+
+function updateStickerConfig(key, rawVal) {
+  const isInt = key === 'cols' || key === 'rows';
+  let val = isInt ? parseInt(rawVal, 10) : parseFloat(rawVal);
+  if (!Number.isFinite(val) || val <= 0) val = DEF_STICKER_CONFIG[key];
+  stickerConfig[key] = val;
+  localStorage.setItem('stickerConfig', JSON.stringify(stickerConfig));
+  if (document.body.classList.contains('stickers-active')) renderStickerSheet();
+}
+
+function resetStickerConfig() {
+  stickerConfig = deepClone(DEF_STICKER_CONFIG);
+  localStorage.setItem('stickerConfig', JSON.stringify(stickerConfig));
+  populateStickerInputs();
+  if (document.body.classList.contains('stickers-active')) renderStickerSheet();
+  else setStickerStatus('Sticker sheet reset to A4 default');
+}
+
+function setStickerStatus(msg) {
+  document.getElementById('stickerStatus').textContent = msg;
+}
+
+function hideStickerView() {
+  document.body.classList.remove('stickers-active');
+  document.getElementById('stkBackBtn').style.display = 'none';
+}
+
+// Builds the sticker-sheet preview from the current filters + stickerConfig.
+// Sheet page size follows the shared Page Size selector (getPageDims()).
+// Returns the number of entries rendered (0 if nothing matched).
+function renderStickerSheet() {
+  if (!csvTeams.length) { alert('Load a CSV file first'); return 0; }
 
   classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
 
   const entries = getFilteredEntries();
-  if (!entries.length) { alert('No bibs matched the current filters'); return; }
+  if (!entries.length) { alert('No bibs matched the current filters'); return 0; }
+
+  const { cols, rows, labelW, labelH, gapH, gapV, marginTop, marginLeft } = stickerConfig;
+  const { w: pageW, h: pageH } = getPageDims();
+  const perPage = cols * rows;
 
   const area = document.getElementById('sticker-area');
   area.innerHTML = '';
 
-  entries.forEach(({ team, runner }, i) => {
-    const bcVal = getBarcodeValue(team, runner);
-    const bcId  = 'stk' + i + '_' + Math.random().toString(36).slice(2);
-    const d = document.createElement('div');
-    d.className = 'sticker';
-    d.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}"></svg>`
-      + `<div class="sticker-text">${esc(bcVal)}</div>`;
-    area.appendChild(d);
-  });
+  const pageCount = Math.ceil(entries.length / perPage);
+  for (let p = 0; p < pageCount; p++) {
+    const page = document.createElement('div');
+    page.className = 'sticker-page';
+    page.style.width  = pageW + 'mm';
+    page.style.height = pageH + 'mm';
+
+    const pageEntries = entries.slice(p * perPage, (p + 1) * perPage);
+    pageEntries.forEach(({ team, runner }, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const bcVal = getBarcodeValue(team, runner);
+      const bcId  = 'stk' + p + '_' + i + '_' + Math.random().toString(36).slice(2);
+
+      const d = document.createElement('div');
+      d.className = 'sticker';
+      d.style.left   = (marginLeft + col * (labelW + gapH)) + 'mm';
+      d.style.top    = (marginTop  + row * (labelH + gapV)) + 'mm';
+      d.style.width  = labelW + 'mm';
+      d.style.height = labelH + 'mm';
+
+      // Order: name/team info, then barcode, then barcode text.
+      if (showStickerName) {
+        const nameDiv = makePosDiv(stickerLayout, 'stickerName');
+        nameDiv.innerHTML = `<strong>${esc(getStickerNameText(team, runner))}</strong>`;
+        d.appendChild(nameDiv);
+      }
+
+      const bcDiv = makePosDiv(stickerLayout, 'stickerBarcode');
+      bcDiv.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;height:100%;display:block;"></svg>`;
+      d.appendChild(bcDiv);
+
+      const textDiv = makePosDiv(stickerLayout, 'stickerText');
+      textDiv.className += ' sticker-text';
+      textDiv.innerHTML = esc(bcVal);
+      d.appendChild(textDiv);
+
+      if (editMode) attachDrag(d);
+      page.appendChild(d);
+    });
+
+    area.appendChild(page);
+  }
 
   requestAnimationFrame(() => {
     area.querySelectorAll('.bc-svg').forEach(svg => {
@@ -894,33 +1054,43 @@ function printBarcodeStickers() {
         });
       } catch(e) { console.warn('Barcode:', svg.dataset.val, e); }
     });
-
-    const pageStyleEl = document.getElementById('page-style');
-    const prevPageStyle = pageStyleEl.textContent;
-    pageStyleEl.textContent = '@page { size: A4 portrait; margin: 10mm; }';
-
-    document.body.classList.add('printing-stickers');
-    const cleanup = () => {
-      document.body.classList.remove('printing-stickers');
-      pageStyleEl.textContent = prevPageStyle;
-    };
-    window.addEventListener('afterprint', cleanup, { once: true });
-    window.print();
+    if (editMode) applyEditToAll();
   });
+
+  const lastPageCount = entries.length - (pageCount - 1) * perPage;
+  setStickerStatus(
+    `${entries.length} stickers → ${pageCount} sheet${pageCount === 1 ? '' : 's'} (${perPage}/sheet)`
+    + (lastPageCount < perPage ? `, last sheet has ${lastPageCount}` : '')
+  );
+
+  document.body.classList.add('stickers-active');
+  document.getElementById('stkBackBtn').style.display = '';
+  return entries.length;
+}
+
+function printStickerSheet() {
+  const count = renderStickerSheet();
+  if (!count) return;
+  requestAnimationFrame(() => window.print());
 }
 
 // ═══════════════════════════════════════════
 // LAYOUT SYNC
 // ═══════════════════════════════════════════
+// Keys are disjoint between the bib layout and the sticker layout, so a
+// data-lk value unambiguously identifies which object owns it.
+function layoutObjFor(key) { return (key in stickerLayout) ? stickerLayout : layout; }
+function isStickerMode() { return document.body.classList.contains('stickers-active'); }
+
 function syncLayout() {
-  document.querySelectorAll('.bib-card').forEach(card => {
+  document.querySelectorAll('.bib-card, .sticker').forEach(card => {
     card.querySelectorAll('[data-lk]').forEach(el => applyPos(el, el.dataset.lk));
   });
   updateToolbar();
 }
 
 function applyPos(el, key) {
-  const l = layout[key]; if (!l) return;
+  const l = layoutObjFor(key)[key]; if (!l) return;
   el.style.left = l.cx + '%';
   el.style.top  = l.y  + '%';
   if (l.w !== undefined) el.style.width    = l.w  + '%';
@@ -940,17 +1110,17 @@ function toggleEditMode() {
   const btn = document.getElementById('editBtn');
   btn.textContent = editMode ? 'Exit Edit Mode' : 'Edit Layout';
   btn.className   = editMode ? 'bp' : 'bw';
-  document.querySelectorAll('.bib-card').forEach(card => {
+  document.querySelectorAll('.bib-card, .sticker').forEach(card => {
     card.classList.toggle('edit-mode', editMode);
     if (editMode) attachDrag(card); else detachDrag(card);
   });
   const tb = document.getElementById('toolbar');
   if (editMode) tb.classList.add('visible');
-  else { tb.classList.remove('visible'); selectedKey = null; clearSelection(); }
+  else { tb.classList.remove('visible'); selectedKey = null; selectedLayoutObj = null; clearSelection(); }
 }
 
 function applyEditToAll() {
-  document.querySelectorAll('.bib-card').forEach(card => {
+  document.querySelectorAll('.bib-card, .sticker').forEach(card => {
     card.classList.add('edit-mode');
     attachDrag(card);
   });
@@ -974,22 +1144,24 @@ function onMD(e) {
   e.preventDefault(); e.stopPropagation();
   const el   = e.currentTarget;
   const key  = el.dataset.lk;
-  const card = el.closest('.bib-card');
+  const card = el.closest('.bib-card, .sticker');
   const cr   = card.getBoundingClientRect();
+  const layoutObj = layoutObjFor(key);
 
   clearSelection();
   el.classList.add('selected');
   selectedKey = key;
+  selectedLayoutObj = layoutObj;
   updateToolbar();
 
-  drag = { key, x0: e.clientX, y0: e.clientY, cx0: layout[key].cx, y_0: layout[key].y, cw: cr.width, ch: cr.height };
+  drag = { key, layoutObj, x0: e.clientX, y0: e.clientY, cx0: layoutObj[key].cx, y_0: layoutObj[key].y, cw: cr.width, ch: cr.height };
 
   const mm = me => {
     if (!drag) return;
     const dx = ((me.clientX - drag.x0) / drag.cw) * 100;
     const dy = ((me.clientY - drag.y0) / drag.ch) * 100;
-    layout[drag.key].cx = clamp(drag.cx0 + dx, 0, 100);
-    layout[drag.key].y  = clamp(drag.y_0 + dy, 0, 95);
+    drag.layoutObj[drag.key].cx = clamp(drag.cx0 + dx, 0, 100);
+    drag.layoutObj[drag.key].y  = clamp(drag.y_0 + dy, 0, 95);
     syncLayout();
   };
   const mu = () => {
@@ -1010,7 +1182,7 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 // Toolbar adjustments
 function adj(prop, delta) {
   if (!selectedKey) return;
-  const l = layout[selectedKey];
+  const l = selectedLayoutObj[selectedKey];
   if (prop === 'letterSpacing') {
     // Allow initialising from undefined (layout saved before this property existed)
     l.letterSpacing = parseFloat(clamp((l.letterSpacing ?? 0) + delta, -0.2, 1.0).toFixed(3));
@@ -1018,28 +1190,32 @@ function adj(prop, delta) {
     if (l[prop] === undefined) return;
     if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
     else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
-    else if (prop === 'fontSize') { l[prop] = clamp(l[prop]+delta, 2, 100); generateBibs(); return; }
+    else if (prop === 'fontSize') {
+      l[prop] = clamp(l[prop]+delta, 2, 100);
+      if (selectedLayoutObj === stickerLayout) renderStickerSheet(); else generateBibs();
+      return;
+    }
   }
   syncLayout();
 }
 
 function toggleHidden() {
   if (!selectedKey) return;
-  layout[selectedKey].hidden = !layout[selectedKey].hidden;
+  selectedLayoutObj[selectedKey].hidden = !selectedLayoutObj[selectedKey].hidden;
   syncLayout();
   updateToolbar();
 }
 
 function toggleFlip() {
   if (!selectedKey) return;
-  layout[selectedKey].flipped = !layout[selectedKey].flipped;
+  selectedLayoutObj[selectedKey].flipped = !selectedLayoutObj[selectedKey].flipped;
   syncLayout();
   updateToolbar();
 }
 
 function updateToolbar() {
   if (!selectedKey) return;
-  const l = layout[selectedKey];
+  const l = selectedLayoutObj[selectedKey];
   document.getElementById('tb-name').textContent = selectedKey;
   document.getElementById('tb-fs').textContent   = l.fontSize      !== undefined ? l.fontSize.toFixed(1)+'mm'  : '—';
   document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
@@ -1056,21 +1232,35 @@ function updateToolbar() {
 // ═══════════════════════════════════════════
 // LAYOUT PERSISTENCE
 // ═══════════════════════════════════════════
+// These act on whichever layout is currently on screen — bib layout normally,
+// sticker layout while the sticker sheet preview is active — so the same
+// Edit Layout / Reset / Export / Import controls work in both views.
 function saveLayout() {
-  localStorage.setItem('bibLayout', JSON.stringify(layout));
-  setStatus('Layout saved ✓');
+  if (isStickerMode()) {
+    localStorage.setItem('stickerLayout', JSON.stringify(stickerLayout));
+    setStatus('Sticker layout saved ✓');
+  } else {
+    localStorage.setItem('bibLayout', JSON.stringify(layout));
+    setStatus('Layout saved ✓');
+  }
 }
 
 function resetLayout() {
-  layout = deepClone(DEF_LAYOUT);
+  if (isStickerMode()) {
+    stickerLayout = deepClone(DEF_STICKER_LAYOUT);
+    setStatus('Sticker layout reset to default');
+  } else {
+    layout = deepClone(DEF_LAYOUT);
+    setStatus('Layout reset to default');
+  }
   syncLayout();
-  setStatus('Layout reset to default');
 }
 
 function exportLayout() {
+  const data = isStickerMode() ? stickerLayout : layout;
   const a = document.createElement('a');
-  a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(layout, null, 2));
-  a.download = 'bib-layout.json';
+  a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
+  a.download = isStickerMode() ? 'sticker-layout.json' : 'bib-layout.json';
   a.click();
 }
 
@@ -1083,11 +1273,13 @@ function importLayout() {
     rd.onload = ev => {
       try {
         const imp = JSON.parse(ev.target.result);
-        const base2 = deepClone(DEF_LAYOUT);
+        const sticker = isStickerMode();
+        const base2 = deepClone(sticker ? DEF_STICKER_LAYOUT : DEF_LAYOUT);
         const keys2 = new Set([...Object.keys(base2), ...Object.keys(imp)]);
-        layout = {};
-        keys2.forEach(k => { layout[k] = Object.assign({}, base2[k] || {}, imp[k] || {}); });
-        syncLayout(); setStatus('Layout imported ✓');
+        const merged = {};
+        keys2.forEach(k => { merged[k] = Object.assign({}, base2[k] || {}, imp[k] || {}); });
+        if (sticker) stickerLayout = merged; else layout = merged;
+        syncLayout(); setStatus((sticker ? 'Sticker layout' : 'Layout') + ' imported ✓');
       }
       catch { alert('Invalid layout JSON'); }
     };
@@ -1469,6 +1661,34 @@ updatePanelControls();
     catch { setStatus('Layout: default'); }
   } else {
     setStatus('Layout: default');
+  }
+})();
+
+// Load saved sticker sheet config on start
+(function() {
+  const s = localStorage.getItem('stickerConfig');
+  if (s) {
+    try {
+      const saved = JSON.parse(s);
+      stickerConfig = Object.assign(deepClone(DEF_STICKER_CONFIG), saved);
+    }
+    catch { stickerConfig = deepClone(DEF_STICKER_CONFIG); }
+  }
+  populateStickerInputs();
+})();
+
+// Load saved sticker layout on start (same deep-merge approach as the bib layout)
+(function() {
+  const s = localStorage.getItem('stickerLayout');
+  if (s) {
+    try {
+      const saved = JSON.parse(s);
+      const base = deepClone(DEF_STICKER_LAYOUT);
+      const allKeys = new Set([...Object.keys(base), ...Object.keys(saved)]);
+      stickerLayout = {};
+      allKeys.forEach(k => { stickerLayout[k] = Object.assign({}, base[k] || {}, saved[k] || {}); });
+    }
+    catch { stickerLayout = deepClone(DEF_STICKER_LAYOUT); }
   }
 })();
 </script>
