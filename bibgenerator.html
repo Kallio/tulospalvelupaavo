@@ -137,9 +137,27 @@ body.stickers-active #sticker-area { display: block; }
 .sticker {
   position: absolute;
   text-align: center;
-  overflow: hidden;
+  /* No overflow:hidden here on purpose — content dragged past this cell's
+     edge should stay visible (may overlap the next cell) rather than
+     silently disappear behind the cell boundary while editing. */
+  overflow: visible;
 }
-.sticker svg { width: 100%; display: block; }
+/* stickerName/stickerBarcode/stickerText stack inside one draggable group anchor,
+   so they move/resize together instead of each having an independent position. */
+.sticker-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+}
+.sticker-group [data-lk] { position: static; transform: none; width: 100%; }
+/* Name and text always render at their full natural size (never shrunk); the
+   barcode is the flexible one — it yields real space to them first, shrinking
+   itself (down to its own min-height) rather than letting them get squeezed
+   out or overlapped, however many lines they end up wrapping to. */
+.sticker-group [data-lk]:not([data-lk="stickerBarcode"]) { flex: 0 0 auto; }
+.sticker-group [data-lk="stickerBarcode"] { flex: 1 1 auto; min-height: 4mm; }
+.sticker svg { width: 100%; height: 100%; display: block; }
 .sticker .sticker-text { font-family: monospace; }
 
 @media print {
@@ -394,22 +412,7 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
         <input type="number" id="stkRows" min="1" step="1" style="margin-top:2px;" onchange="updateStickerConfig('rows', this.value)">
       </label>
     </div>
-    <div class="row" style="margin-top:6px;">
-      <label style="margin:0;flex:1;">Label W (mm)
-        <input type="number" id="stkLabelW" min="1" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('labelW', this.value)">
-      </label>
-      <label style="margin:0;flex:1;">Label H (mm)
-        <input type="number" id="stkLabelH" min="1" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('labelH', this.value)">
-      </label>
-    </div>
-    <div class="row" style="margin-top:6px;">
-      <label style="margin:0;flex:1;">Gap H (mm)
-        <input type="number" id="stkGapH" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('gapH', this.value)">
-      </label>
-      <label style="margin:0;flex:1;">Gap V (mm)
-        <input type="number" id="stkGapV" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('gapV', this.value)">
-      </label>
-    </div>
+    <div style="font-size:10px;color:#556;margin:6px 0;">Each label = one grid cell (page minus margins, split evenly into columns × rows) — use Edit Layout below to reposition name/barcode/text as a group within the cell.</div>
     <div class="row" style="margin-top:6px;">
       <label style="margin:0;flex:1;">Top margin (mm)
         <input type="number" id="stkMarginTop" min="0" step="0.1" style="margin-top:2px;" onchange="updateStickerConfig('marginTop', this.value)">
@@ -489,7 +492,7 @@ let eventLogoSrc = null;
 let sponsorLogos = []; // [{src, parts: Set|null}]
 let editMode    = false;
 let selectedKey = null;
-let selectedLayoutObj = null; // points at `layout` or `stickerLayout`, whichever owns selectedKey
+let selectedRef = null; // the actual mutable layout object currently selected (see getLayoutRef)
 let showBarcode     = true;
 let colorLegs       = true;
 let useClassPrefix  = false;
@@ -920,25 +923,58 @@ function createBib(team, runner) {
 // ═══════════════════════════════════════════
 const DEF_STICKER_CONFIG = {
   cols: 3, rows: 8,
-  labelW: 63.5, labelH: 33.9,
-  gapH: 2.5, gapV: 0,
-  marginTop: 15, marginLeft: 7,
+  marginTop: 10, marginLeft: 10,
 };
 let stickerConfig = deepClone(DEF_STICKER_CONFIG);
 let showStickerName = true;
 
-// Sticker element layout — positions as % of the label box, fontSize in mm.
+// Sticker element layout, shared as a template across every cell: stickerName/
+// stickerBarcode/stickerText carry only size/visibility (fontSize in mm,
+// letterSpacing, hidden) — no position, since name+barcode+text always move
+// together as one group. stickerBarcode.h is % of the label cell's height.
 const DEF_STICKER_LAYOUT = {
-  stickerName:    { cx:50, y:2,  fontSize:2.6, w:92, letterSpacing:0 },
-  stickerBarcode: { cx:50, y:20, w:90, h:46 },
-  stickerText:    { cx:50, y:74, fontSize:2.6, w:92, letterSpacing:0 },
+  stickerName:    { fontSize:2.6, letterSpacing:0 },
+  stickerBarcode: { h:46 },
+  stickerText:    { fontSize:2.6, letterSpacing:0 },
 };
 let stickerLayout = deepClone(DEF_STICKER_LAYOUT);
+const STICKER_GROUP_MEMBERS = new Set(['stickerName', 'stickerBarcode', 'stickerText']);
 
-// Returns the % of a page's area the current sticker page is (from the shared Page Size selector).
+// The group's position/width is per physical grid cell (keyed "row-col"), not a
+// single shared template — so nudging one cell (e.g. for printer/paper skew)
+// never moves any other cell, and the same fix reapplies on every sheet.
+const DEF_GROUP_POS = { cx:50, y:6, w:92 };
+let stickerGroupPos = {};
+
+function getGroupPos(row, col) {
+  const k = row + '-' + col;
+  if (!stickerGroupPos[k]) stickerGroupPos[k] = deepClone(DEF_GROUP_POS);
+  return stickerGroupPos[k];
+}
+
+// Resolves a data-lk value to the actual mutable layout object it should edit:
+// a per-cell group position ("stickerGroup:r-c"), a sticker template entry, or
+// a bib layout entry.
+function getLayoutRef(key) {
+  const m = /^stickerGroup:(\d+)-(\d+)$/.exec(key);
+  if (m) return getGroupPos(+m[1], +m[2]);
+  if (Object.prototype.hasOwnProperty.call(stickerLayout, key)) return stickerLayout[key];
+  return layout[key];
+}
+
+// Returns the current page's mm dimensions (from the shared Page Size selector).
 function getPageDims() {
   const sel = document.getElementById('pageSize').value;
   return PAGE_SIZES[sel] || PAGE_SIZES['A5 landscape'];
+}
+
+// A label = one grid cell: the page minus margins, split evenly into cols × rows.
+function getStickerCellDims() {
+  const { w: pageW, h: pageH } = getPageDims();
+  const { cols, rows, marginTop, marginLeft } = stickerConfig;
+  const cellW = (pageW - marginLeft * 2) / cols;
+  const cellH = (pageH - marginTop * 2) / rows;
+  return { pageW, pageH, cellW, cellH };
 }
 
 // Name/team shown on a sticker: runner name for individual bibs, team name for relay legs.
@@ -946,13 +982,10 @@ function getStickerNameText(team, runner) {
   return !runner.osuus ? (runner.nimi || '') : (team.joukkue || '');
 }
 
+
 function populateStickerInputs() {
   document.getElementById('stkCols').value       = stickerConfig.cols;
   document.getElementById('stkRows').value       = stickerConfig.rows;
-  document.getElementById('stkLabelW').value     = stickerConfig.labelW;
-  document.getElementById('stkLabelH').value     = stickerConfig.labelH;
-  document.getElementById('stkGapH').value       = stickerConfig.gapH;
-  document.getElementById('stkGapV').value       = stickerConfig.gapV;
   document.getElementById('stkMarginTop').value  = stickerConfig.marginTop;
   document.getElementById('stkMarginLeft').value = stickerConfig.marginLeft;
 }
@@ -971,7 +1004,7 @@ function resetStickerConfig() {
   localStorage.setItem('stickerConfig', JSON.stringify(stickerConfig));
   populateStickerInputs();
   if (document.body.classList.contains('stickers-active')) renderStickerSheet();
-  else setStickerStatus('Sticker sheet reset to A4 default');
+  else setStickerStatus('Sticker grid reset to default');
 }
 
 function setStickerStatus(msg) {
@@ -994,8 +1027,8 @@ function renderStickerSheet() {
   const entries = getFilteredEntries();
   if (!entries.length) { alert('No bibs matched the current filters'); return 0; }
 
-  const { cols, rows, labelW, labelH, gapH, gapV, marginTop, marginLeft } = stickerConfig;
-  const { w: pageW, h: pageH } = getPageDims();
+  const { cols, rows, marginTop, marginLeft } = stickerConfig;
+  const { pageW, pageH, cellW, cellH } = getStickerCellDims();
   const perPage = cols * rows;
 
   const area = document.getElementById('sticker-area');
@@ -1017,26 +1050,62 @@ function renderStickerSheet() {
 
       const d = document.createElement('div');
       d.className = 'sticker';
-      d.style.left   = (marginLeft + col * (labelW + gapH)) + 'mm';
-      d.style.top    = (marginTop  + row * (labelH + gapV)) + 'mm';
-      d.style.width  = labelW + 'mm';
-      d.style.height = labelH + 'mm';
+      d.style.left   = (marginLeft + col * cellW) + 'mm';
+      d.style.top    = (marginTop  + row * cellH) + 'mm';
+      d.style.width  = cellW + 'mm';
+      d.style.height = cellH + 'mm';
 
-      // Order: name/team info, then barcode, then barcode text.
+      // Name/barcode/text are grouped under one draggable/resizable anchor per
+      // physical cell (row,col) — moving/resizing this cell's group never
+      // touches any other cell's group, on this page or any other page.
+      const gl = getGroupPos(row, col);
+      const group = document.createElement('div');
+      group.dataset.lk = `stickerGroup:${row}-${col}`;
+      group.className = 'sticker-group';
+      group.style.left = gl.cx + '%';
+      group.style.top  = gl.y + '%';
+      group.style.width = gl.w + '%';
+      // Fixed reference height (100% of the cell) so the barcode's available
+      // flex space (see CSS) never depends on the group's y position — dragging
+      // the group up/down should only move it, never resize its contents.
+      // Overflow past the cell edge stays visible (see .sticker's overflow:visible)
+      // rather than being clipped.
+      group.style.height = '100%';
+      group.style.transform = gl.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
+      d.appendChild(group);
+
+      // Order inside the group: name/team info, then barcode, then barcode text.
       if (showStickerName) {
-        const nameDiv = makePosDiv(stickerLayout, 'stickerName');
-        nameDiv.innerHTML = `<strong>${esc(getStickerNameText(team, runner))}</strong>`;
-        d.appendChild(nameDiv);
+        const nl = stickerLayout.stickerName;
+        const nameEl = document.createElement('div');
+        nameEl.dataset.lk = 'stickerName';
+        if (nl.hidden) nameEl.dataset.hidden = 'true';
+        if (nl.fontSize) nameEl.style.fontSize = nl.fontSize + 'mm';
+        if (nl.letterSpacing !== undefined) nameEl.style.letterSpacing = nl.letterSpacing + 'em';
+        nameEl.innerHTML = `<strong>${esc(getStickerNameText(team, runner))}</strong>`;
+        group.appendChild(nameEl);
       }
 
-      const bcDiv = makePosDiv(stickerLayout, 'stickerBarcode');
-      bcDiv.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;height:100%;display:block;"></svg>`;
-      d.appendChild(bcDiv);
+      const bl = stickerLayout.stickerBarcode;
+      const bcEl = document.createElement('div');
+      bcEl.dataset.lk = 'stickerBarcode';
+      if (bl.hidden) bcEl.dataset.hidden = 'true';
+      // max-height (not height): the barcode should shrink to make room for
+      // name/text if they need more of the group's space than this leaves —
+      // never grow past it if there's spare room.
+      bcEl.style.maxHeight = (cellH * (bl.h ?? 46) / 100) + 'mm';
+      bcEl.innerHTML = `<svg class="bc-svg" id="${bcId}" data-val="${escA(bcVal)}" style="width:100%;height:100%;display:block;"></svg>`;
+      group.appendChild(bcEl);
 
-      const textDiv = makePosDiv(stickerLayout, 'stickerText');
-      textDiv.className += ' sticker-text';
-      textDiv.innerHTML = esc(bcVal);
-      d.appendChild(textDiv);
+      const tl = stickerLayout.stickerText;
+      const textEl = document.createElement('div');
+      textEl.dataset.lk = 'stickerText';
+      textEl.className = 'sticker-text';
+      if (tl.hidden) textEl.dataset.hidden = 'true';
+      if (tl.fontSize) textEl.style.fontSize = tl.fontSize + 'mm';
+      if (tl.letterSpacing !== undefined) textEl.style.letterSpacing = tl.letterSpacing + 'em';
+      textEl.innerHTML = esc(bcVal);
+      group.appendChild(textEl);
 
       if (editMode) attachDrag(d);
       page.appendChild(d);
@@ -1077,9 +1146,6 @@ function printStickerSheet() {
 // ═══════════════════════════════════════════
 // LAYOUT SYNC
 // ═══════════════════════════════════════════
-// Keys are disjoint between the bib layout and the sticker layout, so a
-// data-lk value unambiguously identifies which object owns it.
-function layoutObjFor(key) { return (key in stickerLayout) ? stickerLayout : layout; }
 function isStickerMode() { return document.body.classList.contains('stickers-active'); }
 
 function syncLayout() {
@@ -1090,14 +1156,31 @@ function syncLayout() {
 }
 
 function applyPos(el, key) {
-  const l = layoutObjFor(key)[key]; if (!l) return;
-  el.style.left = l.cx + '%';
-  el.style.top  = l.y  + '%';
-  if (l.w !== undefined) el.style.width    = l.w  + '%';
-  if (l.h !== undefined) el.style.height   = l.h  + '%';
+  const l = getLayoutRef(key); if (!l) return;
+  // Sticker group members (stickerName/stickerBarcode/stickerText) have no cx/y —
+  // they're stacked in flow inside .sticker-group, which is the thing with a position.
+  if (l.cx !== undefined) {
+    el.style.left = l.cx + '%';
+    el.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
+  }
+  if (l.y !== undefined) {
+    el.style.top = l.y + '%';
+    // Only true group anchors have both cx and y — keep the group's own height
+    // bounded to what's left of the cell as it's dragged (see renderStickerSheet).
+    if (l.cx !== undefined) el.style.height = (100 - l.y) + '%';
+  }
+  if (l.w !== undefined) el.style.width = l.w + '%';
+  if (l.h !== undefined) {
+    if (key === 'stickerBarcode') {
+      // max-height, not height: barcode shrinks (flex: 1, see CSS) to make room
+      // for name/text rather than forcing a fixed size that could overflow.
+      el.style.maxHeight = (getStickerCellDims().cellH * l.h / 100) + 'mm';
+    } else {
+      el.style.height = l.h + '%';
+    }
+  }
   if (l.fontSize !== undefined) el.style.fontSize = l.fontSize + 'mm';
   if (l.letterSpacing !== undefined) el.style.letterSpacing = l.letterSpacing + 'em';
-  el.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
   if (l.hidden) el.dataset.hidden = 'true';
   else          delete el.dataset.hidden;
 }
@@ -1116,7 +1199,7 @@ function toggleEditMode() {
   });
   const tb = document.getElementById('toolbar');
   if (editMode) tb.classList.add('visible');
-  else { tb.classList.remove('visible'); selectedKey = null; selectedLayoutObj = null; clearSelection(); }
+  else { tb.classList.remove('visible'); selectedKey = null; selectedRef = null; clearSelection(); }
 }
 
 function applyEditToAll() {
@@ -1146,22 +1229,26 @@ function onMD(e) {
   const key  = el.dataset.lk;
   const card = el.closest('.bib-card, .sticker');
   const cr   = card.getBoundingClientRect();
-  const layoutObj = layoutObjFor(key);
+  // Clicking a sticker-group member (name/barcode/text) drags that specific
+  // cell's group anchor — found via its parent .sticker-group's own data-lk —
+  // so the group moves as one, and only for this cell, not every cell.
+  const posKey = STICKER_GROUP_MEMBERS.has(key) ? el.closest('.sticker-group').dataset.lk : key;
+  const posRef = getLayoutRef(posKey);
 
   clearSelection();
   el.classList.add('selected');
   selectedKey = key;
-  selectedLayoutObj = layoutObj;
+  selectedRef = getLayoutRef(key);
   updateToolbar();
 
-  drag = { key, layoutObj, x0: e.clientX, y0: e.clientY, cx0: layoutObj[key].cx, y_0: layoutObj[key].y, cw: cr.width, ch: cr.height };
+  drag = { posRef, x0: e.clientX, y0: e.clientY, cx0: posRef.cx, y_0: posRef.y, cw: cr.width, ch: cr.height };
 
   const mm = me => {
     if (!drag) return;
     const dx = ((me.clientX - drag.x0) / drag.cw) * 100;
     const dy = ((me.clientY - drag.y0) / drag.ch) * 100;
-    drag.layoutObj[drag.key].cx = clamp(drag.cx0 + dx, 0, 100);
-    drag.layoutObj[drag.key].y  = clamp(drag.y_0 + dy, 0, 95);
+    drag.posRef.cx = clamp(drag.cx0 + dx, 0, 100);
+    drag.posRef.y  = clamp(drag.y_0 + dy, 0, 95);
     syncLayout();
   };
   const mu = () => {
@@ -1181,8 +1268,8 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // Toolbar adjustments
 function adj(prop, delta) {
-  if (!selectedKey) return;
-  const l = selectedLayoutObj[selectedKey];
+  if (!selectedRef) return;
+  const l = selectedRef;
   if (prop === 'letterSpacing') {
     // Allow initialising from undefined (layout saved before this property existed)
     l.letterSpacing = parseFloat(clamp((l.letterSpacing ?? 0) + delta, -0.2, 1.0).toFixed(3));
@@ -1192,7 +1279,7 @@ function adj(prop, delta) {
     else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
     else if (prop === 'fontSize') {
       l[prop] = clamp(l[prop]+delta, 2, 100);
-      if (selectedLayoutObj === stickerLayout) renderStickerSheet(); else generateBibs();
+      if (isStickerMode()) renderStickerSheet(); else generateBibs();
       return;
     }
   }
@@ -1200,22 +1287,22 @@ function adj(prop, delta) {
 }
 
 function toggleHidden() {
-  if (!selectedKey) return;
-  selectedLayoutObj[selectedKey].hidden = !selectedLayoutObj[selectedKey].hidden;
+  if (!selectedRef) return;
+  selectedRef.hidden = !selectedRef.hidden;
   syncLayout();
   updateToolbar();
 }
 
 function toggleFlip() {
-  if (!selectedKey) return;
-  selectedLayoutObj[selectedKey].flipped = !selectedLayoutObj[selectedKey].flipped;
+  if (!selectedRef) return;
+  selectedRef.flipped = !selectedRef.flipped;
   syncLayout();
   updateToolbar();
 }
 
 function updateToolbar() {
-  if (!selectedKey) return;
-  const l = selectedLayoutObj[selectedKey];
+  if (!selectedRef) return;
+  const l = selectedRef;
   document.getElementById('tb-name').textContent = selectedKey;
   document.getElementById('tb-fs').textContent   = l.fontSize      !== undefined ? l.fontSize.toFixed(1)+'mm'  : '—';
   document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
@@ -1235,9 +1322,12 @@ function updateToolbar() {
 // These act on whichever layout is currently on screen — bib layout normally,
 // sticker layout while the sticker sheet preview is active — so the same
 // Edit Layout / Reset / Export / Import controls work in both views.
+// The sticker side persists as one bundle: { template: {stickerName, stickerBarcode,
+// stickerText}, groupPos: {"row-col": {cx,y,w}, ...} } — so per-cell group
+// positions survive save/export/import alongside the shared template.
 function saveLayout() {
   if (isStickerMode()) {
-    localStorage.setItem('stickerLayout', JSON.stringify(stickerLayout));
+    localStorage.setItem('stickerLayout', JSON.stringify({ template: stickerLayout, groupPos: stickerGroupPos }));
     setStatus('Sticker layout saved ✓');
   } else {
     localStorage.setItem('bibLayout', JSON.stringify(layout));
@@ -1248,6 +1338,7 @@ function saveLayout() {
 function resetLayout() {
   if (isStickerMode()) {
     stickerLayout = deepClone(DEF_STICKER_LAYOUT);
+    stickerGroupPos = {};
     setStatus('Sticker layout reset to default');
   } else {
     layout = deepClone(DEF_LAYOUT);
@@ -1257,7 +1348,7 @@ function resetLayout() {
 }
 
 function exportLayout() {
-  const data = isStickerMode() ? stickerLayout : layout;
+  const data = isStickerMode() ? { template: stickerLayout, groupPos: stickerGroupPos } : layout;
   const a = document.createElement('a');
   a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
   a.download = isStickerMode() ? 'sticker-layout.json' : 'bib-layout.json';
@@ -1273,13 +1364,22 @@ function importLayout() {
     rd.onload = ev => {
       try {
         const imp = JSON.parse(ev.target.result);
-        const sticker = isStickerMode();
-        const base2 = deepClone(sticker ? DEF_STICKER_LAYOUT : DEF_LAYOUT);
-        const keys2 = new Set([...Object.keys(base2), ...Object.keys(imp)]);
-        const merged = {};
-        keys2.forEach(k => { merged[k] = Object.assign({}, base2[k] || {}, imp[k] || {}); });
-        if (sticker) stickerLayout = merged; else layout = merged;
-        syncLayout(); setStatus((sticker ? 'Sticker layout' : 'Layout') + ' imported ✓');
+        if (isStickerMode()) {
+          const base2 = deepClone(DEF_STICKER_LAYOUT);
+          const tmpl = imp.template || {};
+          const keys2 = new Set([...Object.keys(base2), ...Object.keys(tmpl)]);
+          const merged = {};
+          keys2.forEach(k => { merged[k] = Object.assign({}, base2[k] || {}, tmpl[k] || {}); });
+          stickerLayout = merged;
+          stickerGroupPos = imp.groupPos || {};
+        } else {
+          const base2 = deepClone(DEF_LAYOUT);
+          const keys2 = new Set([...Object.keys(base2), ...Object.keys(imp)]);
+          const merged = {};
+          keys2.forEach(k => { merged[k] = Object.assign({}, base2[k] || {}, imp[k] || {}); });
+          layout = merged;
+        }
+        syncLayout(); setStatus((isStickerMode() ? 'Sticker layout' : 'Layout') + ' imported ✓');
       }
       catch { alert('Invalid layout JSON'); }
     };
@@ -1677,18 +1777,21 @@ updatePanelControls();
   populateStickerInputs();
 })();
 
-// Load saved sticker layout on start (same deep-merge approach as the bib layout)
+// Load saved sticker layout on start: template deep-merges like the bib layout;
+// per-cell group positions load as-is (missing cells just fall back to DEF_GROUP_POS).
 (function() {
   const s = localStorage.getItem('stickerLayout');
   if (s) {
     try {
       const saved = JSON.parse(s);
+      const tmpl = saved.template || {};
       const base = deepClone(DEF_STICKER_LAYOUT);
-      const allKeys = new Set([...Object.keys(base), ...Object.keys(saved)]);
+      const allKeys = new Set([...Object.keys(base), ...Object.keys(tmpl)]);
       stickerLayout = {};
-      allKeys.forEach(k => { stickerLayout[k] = Object.assign({}, base[k] || {}, saved[k] || {}); });
+      allKeys.forEach(k => { stickerLayout[k] = Object.assign({}, base[k] || {}, tmpl[k] || {}); });
+      stickerGroupPos = saved.groupPos || {};
     }
-    catch { stickerLayout = deepClone(DEF_STICKER_LAYOUT); }
+    catch { stickerLayout = deepClone(DEF_STICKER_LAYOUT); stickerGroupPos = {}; }
   }
 })();
 </script>
