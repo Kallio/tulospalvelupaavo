@@ -1613,25 +1613,37 @@ function navLoadIndividual(json) {
     }));
 }
 
-// Relay: all legs in one flat results array; `leg` field = osuus; `resultType='Team'` rows skipped
+// Relay: all legs in one flat results array; `leg` field = osuus.
+// Two result shapes exist:
+//  - legacy: bibNumber + club live directly on each runner row (resultType != 'Team')
+//  - parent/child: bibNumber + team name live only on the resultType='Team' row;
+//    runner rows are resultType='Individual' and link back via parentId.
 function navLoadRelay(json) {
   const cc      = {};
   (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
-  const teamMap = {};
 
-  for (const r of (json.results||[])) {
-    if (r.resultType === 'Team' || r.bibNumber == null) continue;
-    const bib = String(r.bibNumber);
+  const results   = json.results || [];
+  const teamsById = {};
+  results.filter(r => r.resultType === 'Team').forEach(r => { teamsById[r.id] = r; });
+
+  const teamMap = {};
+  for (const r of results) {
+    if (r.resultType === 'Team') continue;
+    const parent = r.parentId ? teamsById[r.parentId] : null;
+    const bibNum = parent?.bibNumber ?? r.bibNumber;
+    if (bibNum == null) continue;
+    const bib = String(bibNum);
+
     if (!teamMap[bib]) {
       teamMap[bib] = {
         kilpailunumero: bib,
-        sarja:          cc[r.classId] || '',
-        joukkue:        r.club || '',
+        sarja:          cc[r.classId] || cc[parent?.classId] || '',
+        joukkue:        parent?.name || r.club || '',
         runners:        [],
       };
     }
-    if (!teamMap[bib].sarja)   teamMap[bib].sarja   = cc[r.classId] || '';
-    if (!teamMap[bib].joukkue) teamMap[bib].joukkue  = r.club || '';
+    if (!teamMap[bib].sarja)   teamMap[bib].sarja   = cc[r.classId] || cc[parent?.classId] || '';
+    if (!teamMap[bib].joukkue) teamMap[bib].joukkue = parent?.name || r.club || '';
 
     teamMap[bib].runners.push({
       nimi:           navName(r),
