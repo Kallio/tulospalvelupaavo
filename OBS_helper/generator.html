@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBS Passings — URL Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+    background: #0a1628;
+    color: #ccc;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 20px;
+    color: #7ec8e3;
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+  h1 span { color: #555; font-weight: 400; }
+  .section {
+    background: #0f2440;
+    border: 1px solid #1a3a60;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .section h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #7ec8e3;
+    margin-bottom: 12px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: #8aa;
+    margin-bottom: 4px;
+    margin-top: 10px;
+  }
+  label:first-of-type { margin-top: 0; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 7px 10px;
+    background: #0a1628;
+    border: 1px solid #1a3a60;
+    border-radius: 4px;
+    color: #eee;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: #7ec8e3;
+  }
+  input[type="text"]:disabled, select:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  select {
+    cursor: pointer;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 160px; }
+  .radio-group {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 0;
+    cursor: pointer;
+    font-size: 13px;
+    color: #bbb;
+  }
+  .radio-group input[type="radio"] {
+    accent-color: #7ec8e3;
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #bbb;
+  }
+  .toggle input[type="checkbox"] {
+    accent-color: #7ec8e3;
+  }
+  button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .btn-primary {
+    background: #1a6b8a;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #2288aa; }
+  .btn-secondary {
+    background: #1a3a60;
+    color: #7ec8e3;
+    border: 1px solid #2a4a70;
+  }
+  .btn-secondary:hover { background: #1e4570; }
+  .btn-secondary.active {
+    background: #7ec8e3;
+    color: #0a1628;
+    border-color: #7ec8e3;
+  }
+  .btn-copy {
+    background: #1a6b3a;
+    color: #fff;
+    min-width: 130px;
+  }
+  .btn-copy:hover { background: #228a4a; }
+  .btn-copy.copied {
+    background: #2288aa;
+  }
+  .event-info {
+    font-size: 12px;
+    color: #6a6;
+    margin-top: 8px;
+    min-height: 18px;
+  }
+  .event-info.error { color: #e66; }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .status-dot.ok { background: #4d4; }
+  .status-dot.err { background: #d44; }
+  .status-dot.loading { background: #da4; }
+  .presets {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .output-section {
+    background: #0d1f35;
+    border: 1px solid #1a3a60;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 16px;
+  }
+  .output-section h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #7ec8e3;
+    margin-bottom: 10px;
+  }
+  .url-box {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .url-display {
+    flex: 1;
+    background: #050e1a;
+    border: 1px solid #1a3a60;
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #aaa;
+    word-break: break-all;
+    line-height: 1.6;
+    min-height: 44px;
+  }
+  .hidden { display: none !important; }
+  .inline-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .inline-row > * { flex: none; }
+  .inline-row .grow { flex: 1; }
+  .hint {
+    font-size: 10px;
+    color: #556;
+    margin-top: 3px;
+  }
+</style>
+</head>
+<body>
+
+<h1>OBS Passings <span>— URL Generator</span></h1>
+
+<!-- Event -->
+<div class="section">
+  <h2>Event</h2>
+  <label>Navisport event URL or slug</label>
+  <input type="text" id="eventInput" placeholder="e.g. jukola-2025 or https://navisport.com/events/jukola-2025">
+  <div class="inline-row" style="margin-top: 8px;">
+    <button class="btn-primary" onclick="loadEvent()">Load Event</button>
+    <div class="grow">
+      <div id="eventStatus" class="event-info"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Display Mode -->
+<div class="section">
+  <h2>Display Mode</h2>
+  <div class="radio-group">
+    <label><input type="radio" name="mode" value="finish" checked onchange="update()"> Finish results</label>
+    <label><input type="radio" name="mode" value="passing" onchange="update()"> Checkpoint passings</label>
+    <label><input type="radio" name="mode" value="startlist" onchange="update()"> Start list</label>
+  </div>
+</div>
+
+<!-- Layout -->
+<div class="section">
+  <h2>Layout</h2>
+  <div class="row">
+    <div class="col">
+      <label>Display size</label>
+      <div class="radio-group">
+        <label><input type="radio" name="layout" value="compact" checked onchange="update()"> Compact 800×250</label>
+        <label><input type="radio" name="layout" value="full" onchange="update()"> Fullscreen</label>
+      </div>
+    </div>
+    <div class="col" id="rowsCol">
+      <label>Rows (fullscreen)</label>
+      <select id="rowsSelect" onchange="update()">
+        <option value="5">5</option>
+        <option value="8">8</option>
+        <option value="10" selected>10</option>
+        <option value="12">12</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Relay -->
+<div class="section hidden" id="relaySection">
+  <h2>Relay Options</h2>
+  <div class="radio-group">
+    <label><input type="radio" name="relay" value="team" checked onchange="update()"> Team standings</label>
+    <label><input type="radio" name="relay" value="leg" onchange="update()"> Leg results</label>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="section">
+  <h2>Filters</h2>
+  <div class="row">
+    <div class="col">
+      <label>Class</label>
+      <div id="classCheckboxes">
+        <label class="toggle"><input type="checkbox" id="classAll" checked onchange="toggleClassAll()"> All classes</label>
+      </div>
+    </div>
+    <div class="col">
+      <label>Checkpoint</label>
+      <select id="checkpointSelect" onchange="update()">
+        <option value="latest">Latest per runner</option>
+      </select>
+      <div class="hint">For passing mode only</div>
+    </div>
+    <div class="col">
+      <label class="toggle"><input type="checkbox" id="clubToggle" checked onchange="update()"> Show club name</label>
+    </div>
+    <div class="col">
+      <label class="toggle"><input type="checkbox" id="bibToggle" onchange="update()"> Show bib number</label>
+    </div>
+  </div>
+</div>
+
+<!-- Pagination (startlist only) -->
+<div class="section hidden" id="paginationSection">
+  <h2>Pagination / Class Rotation</h2>
+  <div class="row">
+    <div class="col">
+      <label>Page interval (seconds)</label>
+      <select id="pageintervalSelect" onchange="update()">
+        <option value="0">Disabled</option>
+        <option value="5">5 seconds</option>
+        <option value="8">8 seconds</option>
+        <option value="10" selected>10 seconds</option>
+        <option value="15">15 seconds</option>
+        <option value="20">20 seconds</option>
+        <option value="30">30 seconds</option>
+      </select>
+    </div>
+    <div class="col">
+      <label>Transition</label>
+      <select id="transitionSelect" onchange="update()">
+        <option value="fade" selected>Fade</option>
+        <option value="horizontal">Slide horizontal</option>
+        <option value="vertical">Slide vertical</option>
+      </select>
+    </div>
+  </div>
+  <div class="hint">When no class is selected, this controls class rotation speed</div>
+</div>
+
+<!-- Typography -->
+<div class="section">
+  <h2>Typography</h2>
+  <div class="row">
+    <div class="col">
+      <label class="toggle"><input type="checkbox" id="allcapsToggle" onchange="update()"> ALLCAPS text</label>
+    </div>
+    <div class="col">
+      <label>Font family</label>
+      <select id="fontSelect" onchange="update()">
+        <option value="">Default (Segoe UI)</option>
+        <option value="Arial">Arial</option>
+        <option value="Impact">Impact</option>
+        <option value="Verdana">Verdana</option>
+        <option value="Trebuchet MS">Trebuchet MS</option>
+        <option value="Courier New">Courier New</option>
+        <option value="Georgia">Georgia</option>
+        <option value="Lucida Console">Lucida Console</option>
+      </select>
+    </div>
+    <div class="col">
+      <label>Font weight</label>
+      <select id="fontweightSelect" onchange="update()">
+        <option value="">Default</option>
+        <option value="normal">Normal</option>
+        <option value="bold">Bold</option>
+      </select>
+    </div>
+    <div class="col">
+      <label>Font style</label>
+      <select id="fontstyleSelect" onchange="update()">
+        <option value="">Default</option>
+        <option value="normal">Normal</option>
+        <option value="italic">Italic</option>
+      </select>
+    </div>
+    <div class="col">
+      <label>Font variant</label>
+      <select id="fontvariantSelect" onchange="update()">
+        <option value="">Default</option>
+        <option value="normal">Normal</option>
+        <option value="small-caps">Small Caps</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Presets -->
+<div class="section">
+  <h2>Presets</h2>
+  <div class="presets">
+    <button class="btn-secondary" onclick="applyPreset('finish-compact')">Finish compact</button>
+    <button class="btn-secondary" onclick="applyPreset('finish-full')">Finish fullscreen</button>
+    <button class="btn-secondary" onclick="applyPreset('startlist')">Start list</button>
+    <button class="btn-secondary" onclick="applyPreset('startlist-paged')">Start list (paged)</button>
+    <button class="btn-secondary" onclick="applyPreset('passings')">Checkpoint passings</button>
+  </div>
+</div>
+
+<!-- Output -->
+<div class="output-section">
+  <h2>OBS Browser Source URL</h2>
+  <div class="url-box">
+    <div class="url-display" id="urlDisplay">Enter an event and configure options above</div>
+    <button class="btn-copy" id="copyBtn" onclick="copyUrl()">Copy to Clipboard</button>
+  </div>
+</div>
+
+<script>
+var NAVISPORT_ORIGIN = 'https://navisport.com';
+var eventData = null;
+
+function getVal(id) {
+  var el = document.getElementById(id);
+  return el.value;
+}
+
+function getRadio(name) {
+  var radios = document.querySelectorAll('input[name="' + name + '"]');
+  for (var i = 0; i < radios.length; i++) {
+    if (radios[i].checked) return radios[i].value;
+  }
+  return '';
+}
+
+function setRadio(name, value) {
+  var radios = document.querySelectorAll('input[name="' + name + '"]');
+  for (var i = 0; i < radios.length; i++) {
+    radios[i].checked = radios[i].value === value;
+  }
+}
+
+function setVal(id, value) {
+  var el = document.getElementById(id);
+  el.value = value;
+}
+
+function toggleClassAll() {
+  var allCb = document.getElementById('classAll');
+  var cbs = document.querySelectorAll('.class-cb');
+  for (var i = 0; i < cbs.length; i++) {
+    cbs[i].disabled = allCb.checked;
+    if (allCb.checked) cbs[i].checked = false;
+  }
+  update();
+}
+
+function getSelectedClasses() {
+  if (document.getElementById('classAll').checked) return [];
+  var cbs = document.querySelectorAll('.class-cb:checked');
+  var result = [];
+  for (var i = 0; i < cbs.length; i++) result.push(cbs[i].value);
+  return result;
+}
+
+function extractSlug(raw) {
+  if (!raw) return '';
+  var m = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  return m ? m[1] : raw.trim();
+}
+
+function loadEvent() {
+  var raw = document.getElementById('eventInput').value.trim();
+  if (!raw) {
+    setEventStatus('Enter a Navisport event URL or slug', 'err');
+    return;
+  }
+  var slug = extractSlug(raw);
+  setEventStatus('Loading...', 'loading');
+
+  var isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+  var url;
+  if (isUUID) {
+    url = NAVISPORT_ORIGIN + '/api/events/' + slug;
+  } else {
+    var input = encodeURIComponent(JSON.stringify({ '0': slug }));
+    url = NAVISPORT_ORIGIN + '/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=' + input;
+  }
+
+  fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    var ev;
+    if (isUUID) {
+      ev = data;
+    } else {
+      ev = data && data[0] && data[0].result && data[0].result.data;
+    }
+    if (!ev || !ev.name) throw new Error('Event not found');
+    eventData = ev;
+    populateEventFields(ev);
+    setEventStatus('<span class="status-dot ok"></span>' + ev.name + ' — ' + (ev.raceType || 'Individual') + ' — ' + new Date(ev.begin).toLocaleDateString(), 'ok');
+    update();
+  }).catch(function(e) {
+    eventData = null;
+    setEventStatus('<span class="status-dot err"></span>Error: ' + e.message, 'err');
+    clearEventFields();
+    update();
+  });
+}
+
+function setEventStatus(html, type) {
+  var el = document.getElementById('eventStatus');
+  el.innerHTML = html;
+  el.className = 'event-info' + (type === 'err' ? ' error' : '');
+}
+
+function populateEventFields(ev) {
+  // Classes — checkboxes
+  var classContainer = document.getElementById('classCheckboxes');
+  classContainer.innerHTML = '<label class="toggle"><input type="checkbox" id="classAll" checked onchange="toggleClassAll()"> All classes</label>';
+  if (ev.courseClasses) {
+    ev.courseClasses.slice().sort(function(a, b) { return a.name.localeCompare(b.name); }).forEach(function(c) {
+      var lbl = document.createElement('label');
+      lbl.className = 'toggle';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'class-cb';
+      cb.value = c.name;
+      cb.disabled = true;
+      cb.onchange = function() {
+        document.getElementById('classAll').checked = false;
+        toggleClassAll();
+      };
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + c.name));
+      classContainer.appendChild(lbl);
+    });
+  }
+
+  // Checkpoints
+  var cpSelect = document.getElementById('checkpointSelect');
+  cpSelect.innerHTML = '<option value="latest">Latest per runner</option>';
+  var cps = ev.checkpoints || [];
+  cps.forEach(function(cp) {
+    var opt = document.createElement('option');
+    opt.value = cp.id;
+    opt.textContent = cp.name || cp.id;
+    cpSelect.appendChild(opt);
+  });
+
+  // Relay section
+  var relaySection = document.getElementById('relaySection');
+  if (ev.raceType === 'Relay') {
+    relaySection.classList.remove('hidden');
+  } else {
+    relaySection.classList.add('hidden');
+    setRadio('relay', 'team');
+  }
+}
+
+function clearEventFields() {
+  document.getElementById('classCheckboxes').innerHTML = '<label class="toggle"><input type="checkbox" id="classAll" checked onchange="toggleClassAll()"> All classes</label>';
+  document.getElementById('checkpointSelect').innerHTML = '<option value="latest">Latest per runner</option>';
+  document.getElementById('relaySection').classList.add('hidden');
+}
+
+function update() {
+  var mode = getRadio('mode');
+  var layout = getRadio('layout');
+
+  // Show/hide sections based on mode
+  document.getElementById('paginationSection').classList.toggle('hidden', mode !== 'startlist' && mode !== 'finish');
+
+  // Checkpoint: enabled for passing
+  var cpSelect = document.getElementById('checkpointSelect');
+  cpSelect.disabled = mode !== 'passing';
+
+  // Rows: visible for full layout
+  document.getElementById('rowsCol').style.visibility = layout === 'full' ? 'visible' : 'hidden';
+
+  generateUrl();
+}
+
+function generateUrl() {
+  var raw = document.getElementById('eventInput').value.trim();
+  var slug = extractSlug(raw);
+  if (!slug) {
+    document.getElementById('urlDisplay').textContent = 'Enter an event and configure options above';
+    document.getElementById('copyBtn').disabled = true;
+    return;
+  }
+
+  var params = [];
+  params.push('event=' + encodeURIComponent(slug));
+
+  var mode = getRadio('mode');
+  if (mode !== 'finish') params.push('mode=' + mode);
+
+  var relay = getRadio('relay');
+  if (eventData && eventData.raceType === 'Relay' && relay !== 'team') params.push('relay=' + relay);
+
+  var layout = getRadio('layout');
+  if (layout !== 'compact') params.push('layout=' + layout);
+
+  if (layout === 'full') {
+    var rows = getVal('rowsSelect');
+    if (rows !== '10') params.push('rows=' + rows);
+  }
+
+  var cls = getSelectedClasses();
+  if (cls.length > 0) params.push('class=' + encodeURIComponent(cls.join(',')));
+
+  var cp = getVal('checkpointSelect');
+  if (mode === 'passing' && cp !== 'latest') params.push('checkpoint=' + encodeURIComponent(cp));
+
+  var clubOn = document.getElementById('clubToggle').checked;
+  if (!clubOn) params.push('club=off');
+
+  var bibOn = document.getElementById('bibToggle').checked;
+  if (!bibOn) params.push('bib=off');
+
+  if (mode === 'startlist' || mode === 'finish') {
+    var pi = getVal('pageintervalSelect');
+    if (pi !== '0') params.push('pageinterval=' + pi);
+    if (mode === 'startlist') {
+      var tr = getVal('transitionSelect');
+      if (tr !== 'fade') params.push('transition=' + tr);
+    }
+  }
+
+  var allcapsOn = document.getElementById('allcapsToggle').checked;
+  if (allcapsOn) params.push('texttransform=on');
+
+  var font = getVal('fontSelect');
+  if (font) params.push('font=' + encodeURIComponent(font));
+
+  var fontweight = getVal('fontweightSelect');
+  if (fontweight) params.push('fontweight=' + fontweight);
+
+  var fontstyle = getVal('fontstyleSelect');
+  if (fontstyle) params.push('fontstyle=' + fontstyle);
+
+  var fontvariant = getVal('fontvariantSelect');
+  if (fontvariant) params.push('fontvariant=' + fontvariant);
+
+  var url = 'overlay.html?' + params.join('&');
+  document.getElementById('urlDisplay').textContent = url;
+  document.getElementById('copyBtn').disabled = false;
+}
+
+function copyUrl() {
+  var url = document.getElementById('urlDisplay').textContent;
+  if (!url || url.indexOf('?') < 0) return;
+  navigator.clipboard.writeText(url).then(function() {
+    var btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = 'Copy to Clipboard';
+      btn.classList.remove('copied');
+    }, 1500);
+  }).catch(function() {
+    // Fallback
+    var ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    var btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = 'Copy to Clipboard';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+function resetClassCheckboxes() {
+  var allCb = document.getElementById('classAll');
+  if (allCb) allCb.checked = true;
+  toggleClassAll();
+}
+
+function applyPreset(name) {
+  switch (name) {
+    case 'finish-compact':
+      setRadio('mode', 'finish');
+      setRadio('layout', 'compact');
+      resetClassCheckboxes();
+      document.getElementById('bibToggle').checked = false;
+      break;
+    case 'finish-full':
+      setRadio('mode', 'finish');
+      setRadio('layout', 'full');
+      setVal('rowsSelect', '10');
+      resetClassCheckboxes();
+      document.getElementById('bibToggle').checked = false;
+      break;
+    case 'startlist':
+      setRadio('mode', 'startlist');
+      setRadio('layout', 'full');
+      setVal('rowsSelect', '15');
+      setVal('pageintervalSelect', '0');
+      setVal('transitionSelect', 'fade');
+      resetClassCheckboxes();
+      document.getElementById('bibToggle').checked = true;
+      break;
+    case 'startlist-paged':
+      setRadio('mode', 'startlist');
+      setRadio('layout', 'full');
+      setVal('rowsSelect', '15');
+      setVal('pageintervalSelect', '10');
+      setVal('transitionSelect', 'fade');
+      resetClassCheckboxes();
+      document.getElementById('bibToggle').checked = true;
+      break;
+    case 'passings':
+      setRadio('mode', 'passing');
+      setRadio('layout', 'compact');
+      setVal('checkpointSelect', 'latest');
+      resetClassCheckboxes();
+      break;
+  }
+  update();
+}
+
+// Allow Enter key in event input
+document.getElementById('eventInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') loadEvent();
+});
+
+// Init
+update();
+</script>
+</body>
+</html>

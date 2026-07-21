@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OBS Orienteering Passings</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<style id="base-style">
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent;
+    font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+    color: #fff;
+    overflow: hidden;
+  }
+  #overlay {
+    position: relative;
+    width: 800px;
+    height: 250px;
+  }
+  #title {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    top: 5px;
+    height: 28px;
+    line-height: 28px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    padding: 0 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 10;
+  }
+  .row {
+    position: absolute;
+    left: 20px;
+    height: 32px;
+    line-height: 32px;
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 14px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+    opacity: 1;
+    transition: opacity 0.3s ease, transform 0.4s ease;
+    display: flex;
+    align-items: center;
+  }
+  .row.empty {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .row.page-exit { opacity: 0; }
+  .row.page-enter { opacity: 0; }
+  .row.page-enter.active { opacity: 1; }
+  #leader-row, #row-1, #row-2, #row-3, #row-4, #row-5, #row-6, #row-7 {
+    /* positions set dynamically by positionCompactRows() */
+  }
+  .rank {
+    display: inline-block;
+    width: 22px;
+    text-align: right;
+    margin-right: 4px;
+  }
+  .bib {
+    display: inline-block;
+    width: 34px;
+    text-align: right;
+    margin-right: 8px;
+  }
+  .club {
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .team {
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .time {
+    margin-left: auto;
+    display: inline-block;
+    width: 72px;
+    text-align: right;
+    margin-right: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .start-time {
+    margin-left: auto;
+    display: inline-block;
+    width: 64px;
+    text-align: right;
+    margin-right: 6px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.7);
+  }
+  .arrow {
+    display: inline-block;
+    font-size: 12px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .arrow.up { color: #4d4; }
+  .arrow.down { color: #58f; }
+  .page-indicator {
+    position: absolute;
+    bottom: 4px;
+    right: 12px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    z-index: 10;
+  }
+  #demo-btn {
+    position: fixed;
+    top: 6px;
+    right: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(0,0,0,0.5);
+    color: #888;
+    border: 1px solid #444;
+    border-radius: 3px;
+    z-index: 100;
+    user-select: none;
+  }
+  #demo-btn:hover {
+    background: rgba(0,0,0,0.7);
+    color: #bbb;
+  }
+  #demo-btn.active {
+    background: rgba(200, 50, 50, 0.8);
+    color: #fff;
+    border-color: #e44;
+  }
+  #status {
+    position: fixed;
+    top: 10px;
+    right: 100px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #444;
+    z-index: 100;
+  }
+  #status.connected { background: #4d4; }
+  #status.disconnected { background: #d44; }
+</style>
+<style id="full-style"></style>
+<style id="font-style"></style>
+</head>
+<body>
+
+<div id="overlay">
+  <div id="title"></div>
+  <div class="row empty" id="leader-row"></div>
+  <div class="row empty" id="row-1"></div>
+  <div class="row empty" id="row-2"></div>
+  <div class="row empty" id="row-3"></div>
+  <div class="row empty" id="row-4"></div>
+  <div class="row empty" id="row-5"></div>
+  <div class="row empty" id="row-6"></div>
+  <div class="row empty" id="row-7"></div>
+</div>
+<div id="page-indicator" class="page-indicator"></div>
+<div id="demo-btn">DEMO</div>
+<div id="status"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+function getConfig() {
+  var p = new URLSearchParams(window.location.search);
+  var rawEvent = p.get('event') || '';
+  var slugM = rawEvent.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  var event = slugM ? slugM[1] : rawEvent.trim();
+  var mode = p.get('mode') || 'finish';
+  if (['finish','passing','startlist'].indexOf(mode) < 0) mode = 'finish';
+  var relay = p.get('relay') || 'team';
+  if (['team','leg'].indexOf(relay) < 0) relay = 'team';
+  var layout = p.get('layout') || 'compact';
+  if (['compact','full'].indexOf(layout) < 0) layout = 'compact';
+  var rows = parseInt(p.get('rows'), 10) || 10;
+  if (rows < 5) rows = 5;
+  if (rows > 20) rows = 20;
+  var checkpoint = p.get('checkpoint') || 'latest';
+  var clsRaw = p.get('class') || '';
+  var cls = clsRaw ? clsRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var pageinterval = parseInt(p.get('pageinterval'), 10) || 0;
+  var transition = p.get('transition') || 'fade';
+  if (['fade','horizontal','vertical'].indexOf(transition) < 0) transition = 'fade';
+  var club = p.get('club') !== 'off';
+  var bib = p.get('bib') !== 'off';
+  var texttransform = p.get('texttransform') === 'on';
+  var font = p.get('font') || '';
+  var fontweight = p.get('fontweight') || '';
+  if (['normal','bold'].indexOf(fontweight) < 0) fontweight = '';
+  var fontstyle = p.get('fontstyle') || '';
+  if (['normal','italic'].indexOf(fontstyle) < 0) fontstyle = '';
+  var fontvariant = p.get('fontvariant') || '';
+  if (['normal','small-caps'].indexOf(fontvariant) < 0) fontvariant = '';
+  return { event: event, mode: mode, relay: relay, layout: layout, rows: rows,
+           checkpoint: checkpoint, cls: cls, pageinterval: pageinterval, transition: transition,
+           club: club, bib: bib, texttransform: texttransform, font: font,
+           fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant };
+}
+
+var config = getConfig();
+var NAVISPORT_ORIGIN = 'https://navisport.com';
+var LEGACY_WS_URL = 'ws://localhost:8080';
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+var passings = [];
+var prevPositions = {};
+var resultsMap = {};
+var passingsMap = {};
+var classIdMap = {};
+var eventId = null;
+var raceType = null;
+var checkpoints = [];
+var eventName = '';
+var socket = null;
+
+// Page state
+var currentPage = 0;
+var totalPages = 1;
+var pageTimer = null;
+var transitioning = false;
+
+// Class cycle state
+var classCycleNames = [];
+var classCycleIndex = 0;
+var classCycleTimer = null;
+
+// ═══════════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════════
+var overlayEl = document.getElementById('overlay');
+var titleEl = document.getElementById('title');
+var pageIndicatorEl = document.getElementById('page-indicator');
+var leaderRowEl = document.getElementById('leader-row');
+var compactEls = [
+  leaderRowEl,
+  document.getElementById('row-1'),
+  document.getElementById('row-2'),
+  document.getElementById('row-3'),
+  document.getElementById('row-4'),
+  document.getElementById('row-5'),
+  document.getElementById('row-6'),
+  document.getElementById('row-7'),
+];
+var dynamicRows = [];
+var activeRows = compactEls;
+var rowCount = 7;
+
+var ROW_H = 32;
+var ROW_GAP = 2;
+
+function positionCompactRows() {
+  var leftX = 20;
+  var rightX = 420;
+  var colW_left = 380;
+  var colW_right = 360;
+
+  if (config.mode === 'finish' || config.mode === 'startlist') {
+    // 2×4 layout: 8 cells, 4 per column
+    var startY = 38;
+    // Left column: indices 0-3
+    for (var i = 0; i < 4; i++) {
+      var el = compactEls[i];
+      el.style.display = '';
+      el.style.left = leftX + 'px';
+      el.style.top = (startY + i * (ROW_H + ROW_GAP)) + 'px';
+      el.style.width = colW_left + 'px';
+    }
+    // Right column: indices 4-7
+    for (var i = 0; i < 4; i++) {
+      var el = compactEls[4 + i];
+      el.style.display = '';
+      el.style.left = rightX + 'px';
+      el.style.top = (startY + i * (ROW_H + ROW_GAP)) + 'px';
+      el.style.width = colW_right + 'px';
+    }
+    activeRows = compactEls.slice(0, 8);
+    rowCount = 8;
+  } else {
+    // 4+3 layout: 7 cells, 4 left + 3 right
+    titleEl.style.display = '';
+    var startY = 38;
+    // Left column: indices 0-3 (leader-row, row-1, row-2, row-3)
+    for (var i = 0; i < 4; i++) {
+      var el = compactEls[i];
+      el.style.display = '';
+      el.style.left = leftX + 'px';
+      el.style.top = (startY + i * (ROW_H + ROW_GAP)) + 'px';
+      el.style.width = colW_left + 'px';
+    }
+    // Right column: indices 4-6 (row-4, row-5, row-6)
+    for (var i = 0; i < 3; i++) {
+      var el = compactEls[4 + i];
+      el.style.display = '';
+      el.style.left = rightX + 'px';
+      el.style.top = (startY + i * (ROW_H + ROW_GAP)) + 'px';
+      el.style.width = colW_right + 'px';
+    }
+    // Hide row-7
+    compactEls[7].style.display = 'none';
+    activeRows = compactEls.slice(0, 7);
+    rowCount = 7;
+  }
+}
+
+function applyLayout() {
+  var fullStyle = document.getElementById('full-style');
+  if (config.layout === 'full') {
+    fullStyle.textContent =
+      '#overlay { width: 100vw; height: 100vh; }' +
+      '.row { left: 20px; width: 760px; border-radius: 4px; }' +
+      '#title { left: 20px; right: auto; width: 760px; }' +
+      '#leader-row,#row-1,#row-2,#row-3,#row-4,#row-5,#row-6,#row-7 { display: none; }';
+    createDynamicRows(config.rows);
+    rowCount = config.rows;
+    activeRows = dynamicRows;
+  } else {
+    fullStyle.textContent = '';
+    removeDynamicRows();
+    compactEls.forEach(function(el) { el.style.display = ''; });
+    positionCompactRows();
+  }
+}
+
+var fontStyleEl = document.getElementById('font-style');
+function applyFontStyle() {
+  var css = '';
+  if (config.font) {
+    css += 'body { font-family: ' + config.font + '; }';
+  }
+  var parts = [];
+  if (config.fontweight) parts.push('font-weight: ' + config.fontweight + ';');
+  if (config.fontstyle) parts.push('font-style: ' + config.fontstyle + ';');
+  if (config.fontvariant) parts.push('font-variant: ' + config.fontvariant + ';');
+  if (parts.length) {
+    css += '.row, #title { ' + parts.join(' ') + ' }';
+  }
+  if (config.texttransform) {
+    css += '#overlay { text-transform: uppercase; }';
+  }
+  fontStyleEl.textContent = css;
+}
+
+function createDynamicRows(n) {
+  removeDynamicRows();
+  for (var i = 0; i < n; i++) {
+    var el = document.createElement('div');
+    el.className = 'row empty';
+    el.id = 'dyn-' + i;
+    overlayEl.appendChild(el);
+    dynamicRows.push(el);
+  }
+}
+
+function removeDynamicRows() {
+  dynamicRows.forEach(function(el) { if (el.parentNode) el.parentNode.removeChild(el); });
+  dynamicRows = [];
+}
+
+function positionDynamicRows() {
+  if (config.layout !== 'full') return;
+  var n = dynamicRows.length;
+  var topMargin = 38;
+  for (var i = 0; i < n; i++) {
+    var el = dynamicRows[i];
+    el.style.top = (topMargin + i * (ROW_H + ROW_GAP)) + 'px';
+    el.style.height = ROW_H + 'px';
+    el.style.lineHeight = ROW_H + 'px';
+    el.style.fontSize = '15px';
+    el.style.paddingTop = '0';
+    el.style.paddingBottom = '0';
+  }
+}
+
+window.addEventListener('resize', function() {
+  positionDynamicRows();
+  render();
+});
+
+// ═══════════════════════════════════════════
+// TRANSITIONS
+// ═══════════════════════════════════════════
+function pageExitAnimation(rows, cb) {
+  if (config.transition === 'cut' || rows.length === 0) { cb(); return; }
+  transitioning = true;
+  var cls = 'page-exit';
+  if (config.transition === 'horizontal') {
+    rows.forEach(function(r) { r.style.transform = 'translateX(-100%)'; r.style.opacity = '0'; });
+  } else if (config.transition === 'vertical') {
+    rows.forEach(function(r) { r.style.transform = 'translateY(-100%)'; r.style.opacity = '0'; });
+  } else {
+    rows.forEach(function(r) { r.style.opacity = '0'; });
+  }
+  setTimeout(function() {
+    rows.forEach(function(r) { r.style.transform = ''; r.style.opacity = ''; });
+    cb();
+  }, 400);
+}
+
+function pageEnterAnimation(rows) {
+  if (config.transition === 'cut' || rows.length === 0) { return; }
+  if (config.transition === 'horizontal') {
+    rows.forEach(function(r) { r.style.transform = 'translateX(100%)'; r.style.opacity = '0'; });
+  } else if (config.transition === 'vertical') {
+    rows.forEach(function(r) { r.style.transform = 'translateY(100%)'; r.style.opacity = '0'; });
+  } else {
+    rows.forEach(function(r) { r.style.opacity = '0'; });
+  }
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      rows.forEach(function(r) {
+        r.style.transform = '';
+        r.style.opacity = '';
+        r.classList.add('active');
+      });
+      setTimeout(function() {
+        rows.forEach(function(r) { r.classList.remove('page-enter', 'active'); });
+        transitioning = false;
+      }, 420);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════
+// TIME FORMATTING
+// ═══════════════════════════════════════════
+function formatTime(sec) {
+  if (sec == null || isNaN(sec)) return '';
+  sec = Math.round(sec);
+  if (sec < 0) sec = 0;
+  if (sec < 60) return sec + 's';
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function parseStartTime(isoStr) {
+  if (!isoStr) return '';
+  try {
+    var d = new Date(isoStr);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  } catch(e) { return ''; }
+}
+
+// ═══════════════════════════════════════════
+// NAME HELPER
+// ═══════════════════════════════════════════
+function navName(r) {
+  if (r.name && r.name.trim()) return r.name.trim();
+  var s = (r.surname || '').trim();
+  var g = (r.givenName || '').trim();
+  if (s && g) return s + ' ' + g;
+  return s || g || '';
+}
+
+// ═══════════════════════════════════════════
+// RENDERING
+// ═══════════════════════════════════════════
+function render() {
+  var totalEntries = passings.length;
+  totalPages = Math.max(1, Math.ceil(totalEntries / rowCount));
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  if (currentPage < 0) currentPage = 0;
+
+  var start = currentPage * rowCount;
+  var pageEntries = passings.slice(start, start + rowCount);
+
+  var newPositions = {};
+  for (var i = 0; i < passings.length; i++) {
+    newPositions[passings[i].key || passings[i].name] = passings[i].rank;
+  }
+
+  for (var i = 0; i < activeRows.length; i++) {
+    var el = activeRows[i];
+    if (i < pageEntries.length) {
+      var p = pageEntries[i];
+      var arrow = '';
+      var pkey = p.key || p.name;
+      if (pkey in prevPositions) {
+        var prev = prevPositions[pkey];
+        if (p.rank < prev) arrow = '<span class="arrow up">&#9650;</span>';
+        else if (p.rank > prev) arrow = '<span class="arrow down">&#9660;</span>';
+      }
+      var isLeader = (i === 0 && currentPage === 0 && p.rank === 1 && config.mode !== 'startlist');
+      if (config.layout === 'compact') {
+        el.style.background = isLeader ? 'rgba(200, 160, 0, 0.75)' : 'rgba(0, 0, 0, 0.7)';
+        el.style.fontWeight = isLeader ? '700' : '500';
+      }
+      var timeCol = '';
+      if (config.mode === 'startlist') {
+        timeCol = '<span class="start-time">' + (p.start_time || '') + '</span>';
+      } else {
+        var tb = p.time_behind || '';
+        if (tb && (config.mode === 'finish' || config.mode === 'passing') && p.rank > 1) tb = '+' + tb;
+        timeCol = '<span class="time">' + tb.padStart(8) + '</span>' + arrow;
+      }
+      var clubCol = config.club ? ('<span class="club">' + (p.club || '') + '</span>') : '';
+      var bibCol = config.bib ? ('<span class="bib">' + String(p.bib || '').padStart(3) + '</span>') : '';
+      if (config.mode === 'startlist') {
+        el.innerHTML =
+          bibCol +
+          clubCol +
+          '<span class="team">' + (p.team || p.name) + '</span>' +
+          timeCol;
+      } else {
+        el.innerHTML =
+          '<span class="rank">' + String(p.rank).padStart(2) + '</span>' +
+          bibCol +
+          clubCol +
+          '<span class="team">' + (p.team || p.name) + '</span>' +
+          timeCol;
+      }
+      el.classList.remove('empty');
+    } else {
+      el.innerHTML = '';
+      el.classList.add('empty');
+    }
+  }
+
+  prevPositions = newPositions;
+  updatePageIndicator();
+}
+
+function renderWithTransition() {
+  if (transitioning) return;
+  var visibleRows = [];
+  for (var i = 0; i < activeRows.length; i++) {
+    if (!activeRows[i].classList.contains('empty')) visibleRows.push(activeRows[i]);
+  }
+  pageExitAnimation(visibleRows, function() {
+    render();
+    var newVisible = [];
+    for (var i = 0; i < activeRows.length; i++) {
+      if (!activeRows[i].classList.contains('empty')) {
+        activeRows[i].classList.add('page-enter');
+        newVisible.push(activeRows[i]);
+      }
+    }
+    pageEnterAnimation(newVisible);
+  });
+}
+
+function updatePageIndicator() {
+  if (totalPages > 1) {
+    pageIndicatorEl.textContent = (currentPage + 1) + ' / ' + totalPages;
+  } else {
+    pageIndicatorEl.textContent = '';
+  }
+}
+
+function setStatus(s) {
+  document.getElementById('status').className = s;
+}
+
+// ═══════════════════════════════════════════
+// NAVISPORT REST FETCH
+// ═══════════════════════════════════════════
+function navFetchEvent(eventIdOrSlug) {
+  var isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventIdOrSlug);
+  var url;
+  if (isUUID) {
+    url = NAVISPORT_ORIGIN + '/api/events/' + eventIdOrSlug;
+  } else {
+    var input = encodeURIComponent(JSON.stringify({ '0': eventIdOrSlug }));
+    url = NAVISPORT_ORIGIN + '/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=' + input;
+  }
+  return fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    if (isUUID) return data;
+    var batch = data;
+    var event = batch && batch[0] && batch[0].result && batch[0].result.data;
+    if (!event) throw new Error('Unexpected response');
+    return event;
+  });
+}
+
+// ═══════════════════════════════════════════
+// MESSAGE DECODER
+// ═══════════════════════════════════════════
+function decodeMessage(data) {
+  try {
+    if (data instanceof ArrayBuffer) {
+      var inflated = pako.inflate(new Uint8Array(data), { to: 'string' });
+      return JSON.parse(inflated);
+    }
+    if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+      return data;
+    }
+    if (typeof data === 'string') {
+      var stripped = data;
+      if (stripped.charCodeAt(0) >= 48 && stripped.charCodeAt(0) <= 57) {
+        stripped = stripped.replace(/^\d+/, '');
+      }
+      if (stripped.length > 0) return JSON.parse(stripped);
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ═══════════════════════════════════════════
+// RESULTS / PASSINGS ACCUMULATORS
+// ═══════════════════════════════════════════
+function upsertResult(r) {
+  if (!r || !r.id) return;
+  resultsMap[r.id] = Object.assign(resultsMap[r.id] || {}, r);
+}
+
+function upsertPassing(p) {
+  if (!p || !p.id) return;
+  passingsMap[p.id] = Object.assign(passingsMap[p.id] || {}, p);
+}
+
+function removeResult(id) {
+  delete resultsMap[id];
+}
+
+function handleResultPayload(payload) {
+  if (!payload) return;
+  if (payload.result) upsertResult(payload.result);
+  if (payload.results) payload.results.forEach(upsertResult);
+  recalcDisplay();
+}
+
+function handlePassingPayload(payload) {
+  if (!payload) return;
+  if (payload.passing) upsertPassing(payload.passing);
+  if (payload.results) payload.results.forEach(upsertResult);
+  recalcDisplay();
+}
+
+function handleResultDelete(payload) {
+  if (payload && payload.resultId) {
+    removeResult(payload.resultId);
+    recalcDisplay();
+  }
+}
+
+// ═══════════════════════════════════════════
+// DISPLAY RECALCULATION
+// ═══════════════════════════════════════════
+function recalcDisplay() {
+  updateTitle();
+  if (config.mode === 'finish') recalcFinish();
+  else if (config.mode === 'passing') recalcPassing();
+  else if (config.mode === 'startlist') recalcStartlist();
+}
+
+function updateTitle() {
+  var parts = [];
+  if (config.mode === 'finish' || config.mode === 'startlist') {
+    if (eventName) parts.push(eventName);
+    if (config.cls.length > 0) {
+      parts.push(config.cls.join(', '));
+    } else {
+      var classNames = Object.values(classIdMap);
+      if (classNames.length === 1) {
+        parts.push(classNames[0]);
+      } else if (classNames.length > 1) {
+        parts.push('All classes');
+      }
+    }
+  } else if (config.mode === 'passing') {
+    if (config.cls.length > 0) parts.push(config.cls.join(', '));
+    var cpLabel = 'Latest';
+    if (config.checkpoint && config.checkpoint !== 'latest') {
+      for (var i = 0; i < checkpoints.length; i++) {
+        if (checkpoints[i].id === config.checkpoint) {
+          cpLabel = checkpoints[i].name || config.checkpoint;
+          break;
+        }
+      }
+    }
+    parts.push(cpLabel);
+  }
+  titleEl.textContent = parts.join(' — ');
+}
+
+function getClassId(name) {
+  for (var id in classIdMap) {
+    if (classIdMap[id] === name) return id;
+  }
+  return null;
+}
+
+function resolveClassName(classId) {
+  return classIdMap[classId] || '';
+}
+
+function resolveTeamName(r) {
+  if (r.parentId && resultsMap[r.parentId]) {
+    return resultsMap[r.parentId].name || resultsMap[r.parentId].club || '';
+  }
+  return navName(r);
+}
+
+function resolveBib(r) {
+  if (r.parentId && resultsMap[r.parentId] && resultsMap[r.parentId].bibNumber != null) {
+    return resultsMap[r.parentId].bibNumber;
+  }
+  return r.bibNumber;
+}
+
+function recalcFinish() {
+  var allResults = Object.values(resultsMap);
+  var filtered = allResults.filter(function(r) {
+    if (r.resultType === 'Team' && config.relay === 'leg') return false;
+    if (r.resultType === 'Team' && config.relay === 'team') {
+      // For team relay, only keep team-level entries
+      return true;
+    }
+    if (r.status && r.status !== 'Ok' && r.status !== 'Finished') return false;
+    if (config.cls.length > 0) {
+      var cn = resolveClassName(r.classId);
+      if (config.cls.indexOf(cn) < 0) return false;
+    }
+    return true;
+  });
+
+  // For relay team mode, group by bib
+  if (config.relay === 'team' && raceType === 'Relay') {
+    filtered = buildRelayTeams(filtered);
+  }
+
+  // Calculate elapsed times
+  filtered.forEach(function(r) {
+    if (r.finishTime && r.startTime) {
+      r._elapsed = (new Date(r.finishTime).getTime() - new Date(r.startTime).getTime()) / 1000;
+    } else if (r.totalTime != null) {
+      r._elapsed = Number(r.totalTime);
+    }
+  });
+
+  filtered.sort(function(a, b) {
+    if (a._elapsed == null && b._elapsed == null) return 0;
+    if (a._elapsed == null) return 1;
+    if (b._elapsed == null) return -1;
+    return a._elapsed - b._elapsed;
+  });
+
+  var leaderElapsed = filtered.length > 0 ? (filtered[0]._elapsed || 0) : 0;
+
+  passings = filtered.map(function(r, i) {
+    var elapsed = r._elapsed;
+    var key = r.id || (r.bibNumber + '-' + (r.leg || ''));
+    return {
+      rank: i + 1,
+      bib: r.bibNumber,
+      name: navName(r),
+      club: r.club || '',
+      team: resolveTeamName(r),
+      key: key,
+      time_behind: (i === 0 && elapsed != null) ? formatTime(elapsed) : (elapsed != null ? formatTime(elapsed - leaderElapsed) : ''),
+    };
+  });
+
+  render();
+}
+
+function buildRelayTeams(results) {
+  var teamMap = {};
+  // Index team results
+  results.forEach(function(r) {
+    if (r.resultType === 'Team') {
+      var bib = r.bibNumber;
+      if (bib != null) {
+        var key = String(bib);
+        if (!teamMap[key]) {
+          teamMap[key] = {
+            _teamResult: r,
+            bibNumber: r.bibNumber,
+            club: r.club || '',
+            name: r.name || '',
+            classId: r.classId,
+            _legs: [],
+          };
+        }
+      }
+    }
+  });
+  // Add individual legs
+  results.forEach(function(r) {
+    if (r.resultType !== 'Team') {
+      var parent = r.parentId ? resultsMap[r.parentId] : null;
+      var bib = parent ? parent.bibNumber : r.bibNumber;
+      if (bib != null) {
+        var key = String(bib);
+        if (!teamMap[key]) {
+          teamMap[key] = {
+            _teamResult: null,
+            bibNumber: bib,
+            club: (parent && parent.club) || r.club || '',
+            name: (parent && parent.name) || '',
+            classId: r.classId,
+            _legs: [],
+          };
+        }
+        teamMap[key]._legs.push(r);
+      }
+    }
+  });
+  // Build team entries
+  return Object.values(teamMap).map(function(t) {
+    t._legs.sort(function(a, b) { return (a.leg || 0) - (b.leg || 0); });
+    var totalTime = 0;
+    if (t._teamResult && t._teamResult.totalTime != null) {
+      totalTime = Number(t._teamResult.totalTime);
+    } else {
+      t._legs.forEach(function(l) {
+        if (l.finishTime && l.startTime) {
+          totalTime += (new Date(l.finishTime).getTime() - new Date(l.startTime).getTime()) / 1000;
+        } else if (l.totalTime != null) {
+          totalTime += Number(l.totalTime);
+        }
+      });
+    }
+    return {
+      id: t._teamResult ? t._teamResult.id : ('team-' + t.bibNumber),
+      bibNumber: t.bibNumber,
+      club: t.club,
+      name: t.name,
+      classId: t.classId,
+      status: 'Ok',
+      totalTime: totalTime,
+      _elapsed: totalTime > 0 ? totalTime : null,
+      resultType: 'Team',
+    };
+  });
+}
+
+function recalcPassing() {
+  var allPassings = Object.values(passingsMap);
+  var filtered = allPassings.filter(function(p) {
+    if (!p.resultId) return false;
+    if (config.checkpoint && config.checkpoint !== 'latest') {
+      if (p.checkpointId !== config.checkpoint) return false;
+    }
+    return true;
+  });
+
+  // For "latest": keep only the most recent passing per result
+  if (!config.checkpoint || config.checkpoint === 'latest') {
+    var latestMap = {};
+    filtered.forEach(function(p) {
+      var rid = p.resultId;
+      if (!latestMap[rid] || (p.time != null && (latestMap[rid].time == null || Number(p.time) > Number(latestMap[rid].time)))) {
+        latestMap[rid] = p;
+      }
+    });
+    filtered = Object.values(latestMap);
+  }
+
+  // Filter by class if set
+  if (config.cls.length > 0) {
+    var classIds = config.cls.map(function(name) { return getClassId(name); }).filter(Boolean);
+    if (classIds.length > 0) {
+      filtered = filtered.filter(function(p) {
+        var r = resultsMap[p.resultId];
+        return r && classIds.indexOf(r.classId) >= 0;
+      });
+    }
+  }
+
+  // Sort by total elapsed time
+  filtered.sort(function(a, b) {
+    var ta = a.time != null ? Number(a.time) : (a.totalTime != null ? Number(a.totalTime) : null);
+    var tb = b.time != null ? Number(b.time) : (b.totalTime != null ? Number(b.totalTime) : null);
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return ta - tb;
+  });
+
+  var leaderTime = filtered.length > 0 ? Number(filtered[0].time || filtered[0].totalTime || 0) : 0;
+
+  passings = filtered.map(function(p, i) {
+    var elapsed = Number(p.time != null ? p.time : (p.totalTime != null ? p.totalTime : 0));
+    var r = resultsMap[p.resultId] || {};
+    var key = p.resultId || p.id;
+    return {
+      rank: i + 1,
+      bib: r.bibNumber,
+      name: navName(r),
+      club: r.club || '',
+      team: resolveTeamName(r),
+      key: key,
+      time_behind: (i === 0) ? formatTime(elapsed) : formatTime(elapsed - leaderTime),
+    };
+  });
+
+  render();
+}
+
+function recalcStartlist() {
+  var allResults = Object.values(resultsMap);
+  var filtered = allResults.filter(function(r) {
+    if (config.cls.length > 0) {
+      var cn = resolveClassName(r.classId);
+      if (config.cls.indexOf(cn) < 0) return false;
+    }
+    return true;
+  });
+
+  // For relay, show individual legs or teams
+  if (raceType === 'Relay' && config.relay === 'team') {
+    filtered = filtered.filter(function(r) { return r.resultType === 'Team'; });
+  } else if (raceType === 'Relay' && config.relay === 'leg') {
+    filtered = filtered.filter(function(r) { return r.resultType !== 'Team'; });
+  }
+
+  var commonStartTime = null;
+  if (filtered.length > 0) {
+    commonStartTime = filtered[0].startTime || null;
+    for (var i = 1; i < filtered.length; i++) {
+      if ((filtered[i].startTime || null) !== commonStartTime) {
+        commonStartTime = null;
+        break;
+      }
+    }
+  }
+
+  filtered.sort(function(a, b) {
+    if (commonStartTime) {
+      if (!a.bibNumber && !b.bibNumber) return 0;
+      if (!a.bibNumber) return 1;
+      if (!b.bibNumber) return -1;
+      return parseInt(a.bibNumber) - parseInt(b.bibNumber);
+    }
+    if (!a.startTime && !b.startTime) return 0;
+    if (!a.startTime) return 1;
+    if (!b.startTime) return -1;
+    return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+  });
+
+  passings = filtered.map(function(r, i) {
+    return {
+      rank: i + 1,
+      bib: r.bibNumber,
+      name: navName(r),
+      club: r.club || '',
+      team: resolveTeamName(r),
+      key: r.id,
+      time_behind: '',
+      start_time: parseStartTime(r.startTime),
+    };
+  });
+
+  render();
+}
+
+// ═══════════════════════════════════════════
+// SOCKET.IO CONNECTION
+// ═══════════════════════════════════════════
+function connectNavisport() {
+  if (typeof io === 'undefined') {
+    setStatus('disconnected');
+    connectLegacy();
+    return;
+  }
+  try {
+    socket = io(NAVISPORT_ORIGIN, {
+      query: { eventId: config.event },
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: 100,
+    });
+
+    var classCyclingStarted = false;
+
+    socket.on('connect', function() {
+      setStatus('connected');
+      if (!classCyclingStarted) {
+        loadEventData(function() {
+          if (config.cls.length !== 1 && (config.mode === 'finish' || config.mode === 'startlist')) {
+            startClassCycle();
+          }
+          classCyclingStarted = true;
+        });
+      } else {
+        recalcDisplay();
+      }
+    });
+
+    socket.on('disconnect', function() {
+      setStatus('disconnected');
+    });
+
+    socket.on('connect_error', function() {
+      setStatus('disconnected');
+    });
+
+    socket.on('message', function(data) {
+      var msg = decodeMessage(data);
+      if (!msg || !msg.subject || !msg.operation) return;
+      if (msg.subject === 'Result') {
+        if (msg.operation === 'Update') handleResultPayload(msg.payload);
+        else if (msg.operation === 'Delete') handleResultDelete(msg.payload);
+      } else if (msg.subject === 'Passing') {
+        if (msg.operation === 'Update') handlePassingPayload(msg.payload);
+      }
+    });
+  } catch(e) {
+    setStatus('disconnected');
+    connectLegacy();
+  }
+}
+
+function loadEventData(onDone) {
+  navFetchEvent(config.event).then(function(ev) {
+    eventId = ev.id || config.event;
+    raceType = ev.raceType || 'Individual';
+    eventName = ev.name || '';
+
+    // Build class ID map
+    classIdMap = {};
+    if (ev.courseClasses) {
+      ev.courseClasses.forEach(function(c) { classIdMap[c.id] = c.name; });
+    }
+
+    // Build checkpoints
+    checkpoints = ev.checkpoints || [];
+
+    // Load initial results
+    if (ev.results) {
+      ev.results.forEach(function(r) { upsertResult(r); });
+    }
+
+    recalcDisplay();
+
+    if (onDone) onDone();
+  }).catch(function(e) {
+    console.warn('Failed to load event data:', e);
+  });
+}
+
+// ═══════════════════════════════════════════
+// LEGACY RAW WEBSOCKET (backward compat)
+// ═══════════════════════════════════════════
+function connectLegacy() {
+  try {
+    var ws = new WebSocket(LEGACY_WS_URL);
+    ws.onopen = function() { setStatus('connected'); };
+    ws.onclose = function() { setStatus('disconnected'); };
+    ws.onerror = function() { setStatus('disconnected'); };
+    ws.onmessage = function(e) {
+      try {
+        var entry = JSON.parse(e.data);
+        addPassingLegacy(entry);
+      } catch(err) {}
+    };
+  } catch(e) {
+    setStatus('disconnected');
+  }
+}
+
+function addPassingLegacy(entry) {
+  var idx = passings.findIndex(function(p) { return p.name === entry.name; });
+  if (idx >= 0) {
+    passings[idx] = entry;
+  } else {
+    passings.push(entry);
+  }
+  passings.sort(function(a, b) { return a.rank - b.rank; });
+  if (passings.length > 8) passings.length = 8;
+  render();
+}
+
+// ═══════════════════════════════════════════
+// PAGINATION
+// ═══════════════════════════════════════════
+function startPagination() {
+  stopPagination();
+  if (classCycleTimer) return;
+  if ((config.mode !== 'startlist' && config.mode !== 'finish') || config.pageinterval <= 0) return;
+  pageTimer = setInterval(function() {
+    if (transitioning) return;
+    if (passings.length <= rowCount) return;
+    var nextPage = currentPage + 1;
+    if (nextPage >= totalPages) nextPage = 0;
+    currentPage = nextPage;
+    renderWithTransition();
+  }, config.pageinterval * 1000);
+}
+
+function stopPagination() {
+  if (pageTimer) { clearInterval(pageTimer); pageTimer = null; }
+}
+
+// ═══════════════════════════════════════════
+// CLASS CYCLING
+// ═══════════════════════════════════════════
+function startClassCycle() {
+  stopClassCycle();
+  if (config.pageinterval <= 0) return;
+  if (config.cls.length > 0) {
+    classCycleNames = config.cls.slice().sort();
+  } else {
+    classCycleNames = Object.values(classIdMap).sort();
+  }
+  if (classCycleNames.length <= 1) return;
+  classCycleIndex = 0;
+  config.cls = [classCycleNames[0]];
+  currentPage = 0;
+  updateTitle();
+  recalcDisplay();
+  render();
+  classCycleTimer = setInterval(function() {
+    if (transitioning) return;
+    classCycleIndex = (classCycleIndex + 1) % classCycleNames.length;
+    config.cls = [classCycleNames[classCycleIndex]];
+    currentPage = 0;
+    prevPositions = {};
+    updateTitle();
+    recalcDisplay();
+    renderWithTransition();
+  }, config.pageinterval * 1000);
+}
+
+function stopClassCycle() {
+  if (classCycleTimer) { clearInterval(classCycleTimer); classCycleTimer = null; }
+  classCycleNames = [];
+  classCycleIndex = 0;
+}
+
+// ═══════════════════════════════════════════
+// DEMO MODE
+// ═══════════════════════════════════════════
+var DEMO_FIRSTS = ['A.','M.','O.','L.','J.','K.','P.','S.','T.','V.','R.','H.','N.','E.','I.'];
+var DEMO_LASTS = ['Korhonen','Viervo','Mäkelä','Virtanen','Heikkinen','Hämäläinen','Laine','Nieminen','Koskinen','Miettinen','Lehtonen','Saarinen','Kallio','Toivonen','Järvinen','Hakkarainen','Rantanen','Salminen','Laukkanen','Hautamäki','Vertanen','Mäkinen','Turunen','Laakso','Ojanen','Seppänen','Koivisto','Ahonen','Laitinen','Riihola'];
+var DEMO_CLUBS = ['AOK','AlahKi','AlatPi','AngA','AnttU','AR','AskU','Eks','EnonkU','EE','EsAk','EsSu','EuVe','EKU','EU','FU-47','GIF','HaapavU','HaHa','HalTo','Hanka','HauSi','HaHe','HeKi','HPV','HS','HTH','HiKi','Hiilto','Hiisi','HimU','HirvHe','HU-46','HoTa','HSU','HyRa','HlS','HlT','Brahe','Femman','SV','IinYr','IisVi','Iisu','IitPy','IkNV','Falken','Kronan','Örnen','IlU','InkTe','IHR','IPR','JalJa','JLOy','JoS','JoKu','JuvU','JYPS','JRV','JäPa','JSRasti','KaaRa','KRV','KajKu','KaSu','KaJu','KR','Keihäs','KangKi','KangSK','Kalske','KanSu','KannUra','KarhKk','KarjUra','KaRa','KarstKi','KauKa','KauWi','KPV','KauPo','KeimKa','KemijU','KemKi','KeU','KeKaRa','KeuKi','KiimU','KSF','KiU','Kiuru','KoKV','KoS','KonnU','KontU','Koovee','KortJV','KoskRi','KS','KuPe','KuoSu','KuorKä','KuortKu','KEV','KuUS','KyS','KyRa','KyKy','KärKV','KöLa','LaKa','LS-37','LaTa','LTH','LaihLu','LaiVe','LaJy','LamSä','LapSu','LapVe','LappRi','LapVi','LLuja','LehtJy','LemE','LeSi','LiePa','LieRa','LipTa','LohiRa','LohtVe','LoJa','LHR','LuuRa','Lynx','L-LL','LänRa','L-US','MaMa','Malax','Mesik','MiehVi','MSParma','MulPa','Mango Oy','MusNe','MuuRa','MuurVi','MS-52','MyMy','MU','Eräp','NIF','NaWi','NaTe','Navi','NilsNu','NiS','NivU','NurmSe','NOK','OCPuisto','OK77','Botnia','Kristina','Orient','Raseborg','Terjärv','Trian','ORa','OrPo','OJy','OuHu','OTaru','ONMKY','OulRe','OSVA','OuTa','OYUS','OH','PR','PalSkiO','PaltU','PIF','Pelikassit','PelPo','PerhKi','PertPe','PeRa','PeTo','PetPe','PiVe','PieHi','Pihkafit','Pihkan','PiKe','PirHi','PiTa','PoRa','PorvU','PosPy','PudU','PulkPo','PunKu','PyPo','PäijRa','PäLuLu','Raus','RaKaS','RR','RAPSU','Rasti88','RastiE4','RaHa','RasHy','RasTiimi','RaJu','Jyry','RasKa','RasKe','RasKu','RaLu','RaN','R-P','RaPi','RaVa','RaVi','RaTU','RiSu','SaPu','SahKu','SaKa','SalRe','SalVie','SalVil','SauvU','SaSu','SelSi','SievSi','SiikSi','SiiRa','SiSe','Ske','SodLah','SodU','SoU','SuorU','SuRa','SuOK','SudKu','SäyU','EiRA','HauRi','HieRi','TalRi','UudRi','VaLA','VaRi','VaSu','VehU','VehRi','VenU','ViS','VSO','ViRi','VirU','VoiU','VyU','VäinU','ÄäU','ÖdU','ÖjaU'];
+
+var demoTimer = null;
+var demoRunning = false;
+var demoNames = [];
+var demoArrivals = [];
+var demoNextIdx = 0;
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function refillNames() {
+  var f = shuffle(DEMO_FIRSTS);
+  var l = shuffle(DEMO_LASTS);
+  demoNames = [];
+  for (var i = 0; i < Math.min(f.length, l.length); i++) {
+    demoNames.push(f[i] + ' ' + l[i]);
+  }
+  demoNames = shuffle(demoNames);
+}
+
+function pickName() {
+  if (demoNames.length === 0) refillNames();
+  return demoNames.pop();
+}
+
+function pickClub() {
+  return DEMO_CLUBS[Math.floor(Math.random() * DEMO_CLUBS.length)];
+}
+
+function generateRace() {
+  var baseTime = 2700 + Math.floor(Math.random() * 1800);
+  var slowSpread = 300 + Math.floor(Math.random() * 300);
+  var baseBib = 100 + Math.floor(Math.random() * 900);
+  var pool = [];
+  for (var i = 0; i < 16; i++) {
+    var club = pickClub();
+    pool.push({
+      name: pickName(),
+      bib: baseBib + i,
+      club: club,
+      team: Math.random() < 0.4 ? club + ' ' + String.fromCharCode(65 + Math.floor(Math.random() * 4)) : undefined,
+      elapsed: baseTime + Math.floor(Math.random() * slowSpread),
+    });
+  }
+  pool.sort(function(a, b) { return a.elapsed - b.elapsed; });
+  var fastRunner = {
+    name: pickName(),
+    bib: baseBib + 16,
+    club: pickClub(),
+    team: undefined,
+    elapsed: pool[0].elapsed - 10 - Math.floor(Math.random() * 30),
+  };
+  pool.splice(6, 0, fastRunner);
+  demoArrivals = pool;
+  demoNextIdx = 0;
+}
+
+function recalcDemo() {
+  var arrived = demoArrivals.slice(0, demoNextIdx);
+  var sorted = arrived.slice().sort(function(a, b) { return a.elapsed - b.elapsed; });
+  if (sorted.length === 0) { passings = []; render(); return; }
+  var leaderElapsed = sorted[0].elapsed;
+  passings = sorted.map(function(r, i) {
+    return {
+      rank: i + 1,
+      bib: r.bib,
+      name: r.name,
+      club: r.club,
+      team: r.team,
+      key: r.name,
+      time_behind: formatTime(r.elapsed - leaderElapsed),
+    };
+  });
+  render();
+}
+
+function demoStep() {
+  if (!demoRunning) return;
+  if (demoNextIdx >= demoArrivals.length) {
+    passings = [];
+    prevPositions = {};
+    render();
+    demoTimer = setTimeout(function() {
+      if (!demoRunning) return;
+      generateRace();
+      demoTimer = setTimeout(demoStep, 2500);
+    }, 3000);
+    return;
+  }
+  demoNextIdx++;
+  recalcDemo();
+  demoTimer = setTimeout(demoStep, 2500);
+}
+
+function startDemo() {
+  demoRunning = true;
+  demoBtn.classList.add('active');
+  demoBtn.textContent = 'STOP';
+  passings = [];
+  prevPositions = {};
+  resultsMap = {};
+  passingsMap = {};
+  render();
+  generateRace();
+  demoTimer = setTimeout(demoStep, 2500);
+}
+
+function stopDemo() {
+  demoRunning = false;
+  clearTimeout(demoTimer);
+  demoTimer = null;
+  demoBtn.classList.remove('active');
+  demoBtn.textContent = 'DEMO';
+}
+
+var demoBtn = document.getElementById('demo-btn');
+demoBtn.addEventListener('click', function() {
+  if (demoRunning) stopDemo(); else startDemo();
+});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+applyLayout();
+applyFontStyle();
+positionDynamicRows();
+
+if (config.event) {
+  connectNavisport();
+} else {
+  connectLegacy();
+}
+
+startPagination();
+</script>
+</body>
+</html>
