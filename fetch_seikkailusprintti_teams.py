@@ -7,8 +7,7 @@ Usage: python3 fetch_seikkailusprintti_teams.py [output.csv]
 
 The site is a static SPA (Lovable/React) with the team list hardcoded into
 its JS bundle rather than served from an API, so this script scrapes that
-bundle instead of calling an endpoint. The page has no bib/competition
-number field, so Kilpailunumero is left blank for you to assign afterward.
+bundle instead of calling an endpoint.
 """
 
 import csv as csv_module
@@ -24,7 +23,7 @@ CAT_RE = re.compile(
     r'\{key:"(\w+)",label:"((?:[^"\\]|\\.)*)",teams:\[((?:[^\]]|\](?!\}))*)\]\}'
 )
 TEAM_RE = re.compile(
-    r'\{name:"((?:[^"\\]|\\.)*)",racer1:"((?:[^"\\]|\\.)*)",racer2:"((?:[^"\\]|\\.)*)"\}'
+    r'\{number:(\d+),name:"((?:[^"\\]|\\.)*)",racer1:"((?:[^"\\]|\\.)*)",racer2:"((?:[^"\\]|\\.)*)"\}'
 )
 
 
@@ -51,11 +50,12 @@ def extract_categories(bundle_js):
     for key, label, teams_blob in CAT_RE.findall(bundle_js):
         teams = [
             {
+                'number': number,
                 'name': unescape_js_string(name),
                 'racer1': unescape_js_string(r1),
                 'racer2': unescape_js_string(r2),
             }
-            for name, r1, r2 in TEAM_RE.findall(teams_blob)
+            for number, name, r1, r2 in TEAM_RE.findall(teams_blob)
         ]
         if teams:
             categories.append({'key': key, 'label': unescape_js_string(label), 'teams': teams})
@@ -68,8 +68,7 @@ def runner_header(n):
 
 def build_csv(categories):
     # Both racers on a team share a single timing chip, so they're written as
-    # one combined runner (not two Osuus legs) — one bib per team. The site
-    # has no bib-number field, so Kilpailunumero is left blank throughout.
+    # one combined runner (not two Osuus legs) — one bib per team.
     header = ['Kilpailunumero', 'Sarja', 'Joukkueen nimi', 'Kansalaisuus', 'Seura'] \
         + runner_header(1)
 
@@ -82,7 +81,7 @@ def build_csv(categories):
             runner_name = f"{team['racer1']} & {team['racer2']}"
             team_name = runner_name if team['name'] == '—' else team['name']
             row = [
-                '', cat['label'], team_name, '', '',
+                team['number'], cat['label'], team_name, '', '',
                 '', runner_name, '', '', '', '', '', '',
             ]
             writer.writerow(row)
