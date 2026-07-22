@@ -1,3 +1,6 @@
+<!-- OBS Passings - Orienteering live overlay for OBS Browser Source
+     Copyright (c) 2026 Espoon Suunta
+     Licensed under the MIT License - see LICENSE file or https://opensource.org/licenses/MIT -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -130,10 +133,16 @@
     border-radius: 3px;
     z-index: 100;
     user-select: none;
+    opacity: 0;
+    transition: opacity 0.2s;
   }
   #demo-btn:hover {
     background: rgba(0,0,0,0.7);
     color: #bbb;
+    opacity: 1;
+  }
+  #demo-btn.visible {
+    opacity: 1;
   }
   #demo-btn.active {
     background: rgba(200, 50, 50, 0.8);
@@ -207,10 +216,11 @@ function getConfig() {
   if (['normal','italic'].indexOf(fontstyle) < 0) fontstyle = '';
   var fontvariant = p.get('fontvariant') || '';
   if (['normal','small-caps'].indexOf(fontvariant) < 0) fontvariant = '';
+  var demo = p.get('demo') === '1';
   return { event: event, mode: mode, relay: relay, layout: layout, rows: rows,
            checkpoint: checkpoint, cls: cls, pageinterval: pageinterval, transition: transition,
            club: club, bib: bib, texttransform: texttransform, font: font,
-           fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant };
+           fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant, demo: demo };
 }
 
 var config = getConfig();
@@ -510,7 +520,7 @@ function render() {
         timeCol = '<span class="start-time">' + (p.start_time || '') + '</span>';
       } else {
         var tb = p.time_behind || '';
-        if (tb && (config.mode === 'finish' || config.mode === 'passing') && p.rank > 1) tb = '+' + tb;
+        if (tb && !isNaN(parseFloat(tb)) && (config.mode === 'finish' || config.mode === 'passing') && p.rank > 1) tb = '+' + tb;
         timeCol = '<span class="time">' + tb.padStart(8) + '</span>' + arrow;
       }
       var clubCol = config.club ? ('<span class="club">' + (p.club || '') + '</span>') : '';
@@ -726,7 +736,10 @@ function recalcFinish() {
   var filtered = allResults.filter(function(r) {
     if (r.resultType === 'Team' && config.relay === 'leg') return false;
     if (r.resultType === 'Team' && config.relay === 'team') {
-      // For team relay, only keep team-level entries
+      if (config.cls.length > 0) {
+        var cn = resolveClassName(r.classId);
+        if (config.cls.indexOf(cn) < 0) return false;
+      }
       return true;
     }
     if (r.status && r.status !== 'Ok' && r.status !== 'Finished') return false;
@@ -746,7 +759,7 @@ function recalcFinish() {
   filtered.forEach(function(r) {
     if (r.finishTime && r.startTime) {
       r._elapsed = (new Date(r.finishTime).getTime() - new Date(r.startTime).getTime()) / 1000;
-    } else if (r.totalTime != null) {
+    } else if (r.totalTime > 0) {
       r._elapsed = Number(r.totalTime);
     }
   });
@@ -770,7 +783,7 @@ function recalcFinish() {
       club: r.club || '',
       team: resolveTeamName(r),
       key: key,
-      time_behind: (i === 0 && elapsed != null) ? formatTime(elapsed) : (elapsed != null ? formatTime(elapsed - leaderElapsed) : ''),
+      time_behind: (i === 0 && elapsed != null) ? formatTime(elapsed) : (elapsed != null ? formatTime(elapsed - leaderElapsed) : (r.status && r.status !== 'Ok' && r.status !== 'Finished' ? r.status : '')),
     };
   });
 
@@ -822,17 +835,21 @@ function buildRelayTeams(results) {
   // Build team entries
   return Object.values(teamMap).map(function(t) {
     t._legs.sort(function(a, b) { return (a.leg || 0) - (b.leg || 0); });
+    var status = (t._teamResult && t._teamResult.status) || 'Ok';
+    var isFinished = !status || status === 'Ok' || status === 'Finished';
     var totalTime = 0;
-    if (t._teamResult && t._teamResult.totalTime != null) {
-      totalTime = Number(t._teamResult.totalTime);
-    } else {
-      t._legs.forEach(function(l) {
-        if (l.finishTime && l.startTime) {
-          totalTime += (new Date(l.finishTime).getTime() - new Date(l.startTime).getTime()) / 1000;
-        } else if (l.totalTime != null) {
-          totalTime += Number(l.totalTime);
-        }
-      });
+    if (isFinished) {
+      if (t._teamResult && t._teamResult.totalTime > 0) {
+        totalTime = Number(t._teamResult.totalTime);
+      } else {
+        t._legs.forEach(function(l) {
+          if (l.finishTime && l.startTime) {
+            totalTime += (new Date(l.finishTime).getTime() - new Date(l.startTime).getTime()) / 1000;
+          } else if (l.totalTime != null) {
+            totalTime += Number(l.totalTime);
+          }
+        });
+      }
     }
     return {
       id: t._teamResult ? t._teamResult.id : ('team-' + t.bibNumber),
@@ -840,7 +857,7 @@ function buildRelayTeams(results) {
       club: t.club,
       name: t.name,
       classId: t.classId,
-      status: 'Ok',
+      status: status,
       totalTime: totalTime,
       _elapsed: totalTime > 0 ? totalTime : null,
       resultType: 'Team',
@@ -1271,6 +1288,7 @@ function stopDemo() {
 }
 
 var demoBtn = document.getElementById('demo-btn');
+if (config.demo) demoBtn.classList.add('visible');
 demoBtn.addEventListener('click', function() {
   if (demoRunning) stopDemo(); else startDemo();
 });

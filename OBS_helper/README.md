@@ -2,7 +2,7 @@
 
 An OBS Browser Source overlay that displays live orienteering passings, finish results, and start lists via WebSocket.
 
-Supports **Navisport** live data (Socket.IO) and a **legacy raw WebSocket** mode for custom servers.
+Supports **[Navisport](https://navisport.com)** live data (Socket.IO) and a **legacy raw WebSocket** mode for custom servers.
 
 ## Quick Start
 
@@ -27,6 +27,7 @@ overlay.html?event=<slug>&mode=<mode>&relay=<relay>&layout=<layout>&rows=<n>&che
 | `class` | class name | _(empty = all)_ | Filter to specific class |
 | `pageinterval` | seconds | `0` | Auto-advance pages. Only for `mode=startlist` |
 | `transition` | `fade` / `horizontal` / `vertical` | `fade` | Page transition animation |
+| `demo` | `1` | _(hidden)_ | Show demo button permanently (hidden by default, hover to reveal) |
 
 ## Display Modes
 
@@ -96,7 +97,7 @@ Without an `?event` parameter, connects to `ws://localhost:8080` expecting raw J
 
 ### Demo Mode
 
-Click the **DEMO** button (top-right corner) to run a built-in simulation without any server.
+Hover over the top-right corner of the overlay to reveal the **DEMO** button, or make it permanently visible with `?demo=1`. Click to run a built-in simulation without any server.
 
 ## URL Generator
 
@@ -105,28 +106,6 @@ Open `generator.html` in a browser to access a visual configuration tool:
 - Enter a Navisport event URL or slug
 - Select mode, layout, class, checkpoint, and pagination options
 - Generate and copy the OBS Browser Source URL
-
-## Examples
-
-```bash
-# Finish overlay (compact, default)
-overlay.html?event=jukola-2025
-
-# Full-screen finish, 15 rows
-overlay.html?event=jukola-2025&layout=full&rows=15
-
-# Checkpoint passings at finish
-overlay.html?event=jukola-2025&mode=passing&checkpoint=<finish-checkpoint-id>
-
-# Start list for H21 class, fullscreen, auto-advancing pages
-overlay.html?event=jukola-2025&mode=startlist&class=H21&layout=full&rows=15&pageinterval=10&transition=fade
-
-# Relay team standings
-overlay.html?event=jukola-2025&relay=team
-
-# Legacy local WebSocket (no event parameter)
-overlay.html
-```
 
 ## Dependencies
 
@@ -141,3 +120,10 @@ overlay.html
 | `overlay.html` | The OBS Browser Source overlay |
 | `generator.html` | URL generator tool |
 | `README.md` | This file |
+| `LICENSE` | MIT license |
+
+## License
+
+MIT License - Copyright (c) 2026 Espoon Suunta
+
+See [LICENSE](LICENSE) for full text.
