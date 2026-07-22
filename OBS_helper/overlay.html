@@ -66,27 +66,60 @@
   #leader-row, #row-1, #row-2, #row-3, #row-4, #row-5, #row-6, #row-7 {
     /* positions set dynamically by positionCompactRows() */
   }
-  .rank {
+  .cell--rank {
     display: inline-block;
     width: 22px;
-    text-align: right;
+    text-align: left;
     margin-right: 4px;
   }
-  .bib {
+  .cell--bib {
     display: inline-block;
     width: 34px;
-    text-align: right;
+    text-align: left;
     margin-right: 8px;
   }
-  .club {
+  .cell--club {
     display: inline-block;
     margin-right: 8px;
   }
-  .team {
+  .cell--country {
+    display: inline-block;
+    margin-right: 4px;
+    font-size: 14px;
+  }
+  .cell--name {
     display: inline-block;
     margin-right: 8px;
   }
-  .time {
+  .cell--team {
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .cell {
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cell--club,
+  .cell--name,
+  .cell--team {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .cell-value {
+    display: inline;
+  }
+  .cell-aux {
+    display: none;
+  }
+  .cell-aux:not(:empty) {
+    display: inline;
+    margin-right: 2px;
+  }
+  .cell--time {
     margin-left: auto;
     display: inline-block;
     width: 72px;
@@ -94,7 +127,7 @@
     margin-right: 6px;
     font-variant-numeric: tabular-nums;
   }
-  .start-time {
+  .cell--start-time {
     margin-left: auto;
     display: inline-block;
     width: 64px;
@@ -103,14 +136,14 @@
     font-variant-numeric: tabular-nums;
     color: rgba(255,255,255,0.7);
   }
-  .arrow {
+  .cell--arrow {
     display: inline-block;
     font-size: 12px;
     margin-left: 4px;
     vertical-align: middle;
   }
-  .arrow.up { color: #4d4; }
-  .arrow.down { color: #58f; }
+  .cell--arrow.up { color: #4d4; }
+  .cell--arrow.down { color: #58f; }
   .page-indicator {
     position: absolute;
     bottom: 4px;
@@ -217,10 +250,16 @@ function getConfig() {
   var fontvariant = p.get('fontvariant') || '';
   if (['normal','small-caps'].indexOf(fontvariant) < 0) fontvariant = '';
   var demo = p.get('demo') === '1';
+  var flags = p.get('flags') !== 'off';
+  var relayname = p.get('relayname') || 'off';
+  if (['off','full','last'].indexOf(relayname) < 0) relayname = 'off';
+  var limit = parseInt(p.get('limit'), 10) || 0;
+  if (limit < 0) limit = 0;
   return { event: event, mode: mode, relay: relay, layout: layout, rows: rows,
            checkpoint: checkpoint, cls: cls, pageinterval: pageinterval, transition: transition,
            club: club, bib: bib, texttransform: texttransform, font: font,
-           fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant, demo: demo };
+           fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant, demo: demo,
+           flags: flags, relayname: relayname, limit: limit };
 }
 
 var config = getConfig();
@@ -482,9 +521,22 @@ function navName(r) {
   return s || g || '';
 }
 
+function countryEmoji(code) {
+  if (!code || code.length !== 2) return '';
+  var c = code.toUpperCase();
+  return String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65, 0x1F1E6 + c.charCodeAt(1) - 65);
+}
+
 // ═══════════════════════════════════════════
 // RENDERING
 // ═══════════════════════════════════════════
+function renderCell(type, content, opts) {
+  opts = opts || {};
+  var cls = 'cell cell--' + type + (opts.cls ? ' ' + opts.cls : '');
+  var aux = opts.aux || '';
+  return '<span class="' + cls + '" data-field="' + type + '"><span class="cell-aux">' + aux + '</span><span class="cell-value">' + content + '</span></span>';
+}
+
 function render() {
   var totalEntries = passings.length;
   totalPages = Math.max(1, Math.ceil(totalEntries / rowCount));
@@ -507,8 +559,8 @@ function render() {
       var pkey = p.key || p.name;
       if (pkey in prevPositions) {
         var prev = prevPositions[pkey];
-        if (p.rank < prev) arrow = '<span class="arrow up">&#9650;</span>';
-        else if (p.rank > prev) arrow = '<span class="arrow down">&#9660;</span>';
+        if (p.rank < prev) arrow = 'up';
+        else if (p.rank > prev) arrow = 'down';
       }
       var isLeader = (i === 0 && currentPage === 0 && p.rank === 1 && config.mode !== 'startlist');
       if (config.layout === 'compact') {
@@ -517,28 +569,44 @@ function render() {
       }
       var timeCol = '';
       if (config.mode === 'startlist') {
-        timeCol = '<span class="start-time">' + (p.start_time || '') + '</span>';
+        timeCol = renderCell('start-time', p.start_time || '');
       } else {
         var tb = p.time_behind || '';
         if (tb && !isNaN(parseFloat(tb)) && (config.mode === 'finish' || config.mode === 'passing') && p.rank > 1) tb = '+' + tb;
-        timeCol = '<span class="time">' + tb.padStart(8) + '</span>' + arrow;
+        var arrowHtml = '';
+        if (arrow === 'up') arrowHtml = renderCell('arrow', '&#9650;', { cls: 'up' });
+        else if (arrow === 'down') arrowHtml = renderCell('arrow', '&#9660;', { cls: 'down' });
+        timeCol = renderCell('time', tb.padStart(8)) + arrowHtml;
       }
-      var clubCol = config.club ? ('<span class="club">' + (p.club || '') + '</span>') : '';
-      var bibCol = config.bib ? ('<span class="bib">' + String(p.bib || '').padStart(3) + '</span>') : '';
-      if (config.mode === 'startlist') {
-        el.innerHTML =
-          bibCol +
-          clubCol +
-          '<span class="team">' + (p.team || p.name) + '</span>' +
-          timeCol;
-      } else {
-        el.innerHTML =
-          '<span class="rank">' + String(p.rank).padStart(2) + '</span>' +
-          bibCol +
-          clubCol +
-          '<span class="team">' + (p.team || p.name) + '</span>' +
-          timeCol;
+      var isRelay = raceType === 'Relay';
+      var isRelayTeam = isRelay && config.relay === 'team';
+      var isRelayLeg = isRelay && config.relay === 'leg';
+      var cells = [];
+      if (config.mode !== 'startlist') {
+        cells.push(renderCell('rank', String(p.rank).padStart(2)));
       }
+      if (config.bib) {
+        cells.push(renderCell('bib', String(p.bib || '').padStart(3)));
+      }
+      if (isRelayTeam || isRelayLeg) {
+        cells.push(renderCell('team', p.team || p.name));
+      }
+      if (isRelayTeam && config.relayname !== 'off' && p.runners && p.runners.length > 0) {
+        var nameContent = config.relayname === 'last'
+          ? p.runnerSurnames.join(' / ')
+          : p.runners.join(' / ');
+        cells.push(renderCell('name', nameContent));
+      } else if (isRelayLeg || !isRelay) {
+        cells.push(renderCell('name', p.name));
+      }
+      if (config.club) {
+        cells.push(renderCell('club', p.club || ''));
+      }
+      if (config.flags && p.country) {
+        cells.push(renderCell('country', countryEmoji(p.country)));
+      }
+      cells.push(timeCol);
+      el.innerHTML = cells.join('');
       el.classList.remove('empty');
     } else {
       el.innerHTML = '';
@@ -770,6 +838,7 @@ function recalcFinish() {
     if (b._elapsed == null) return -1;
     return a._elapsed - b._elapsed;
   });
+  if (config.limit > 0) filtered = filtered.slice(0, config.limit);
 
   var leaderElapsed = filtered.length > 0 ? (filtered[0]._elapsed || 0) : 0;
 
@@ -784,6 +853,9 @@ function recalcFinish() {
       team: resolveTeamName(r),
       key: key,
       time_behind: (i === 0 && elapsed != null) ? formatTime(elapsed) : (elapsed != null ? formatTime(elapsed - leaderElapsed) : (r.status && r.status !== 'Ok' && r.status !== 'Finished' ? r.status : '')),
+      country: r.country || r.countryCode || '',
+      runners: r.runners || null,
+      runnerSurnames: r.runnerSurnames || null,
     };
   });
 
@@ -861,6 +933,9 @@ function buildRelayTeams(results) {
       totalTime: totalTime,
       _elapsed: totalTime > 0 ? totalTime : null,
       resultType: 'Team',
+      runners: t._legs.map(function(l) { return navName(l); }),
+      runnerSurnames: t._legs.map(function(l) { return (l.surname || '').trim() || navName(l); }),
+      country: (t._teamResult && t._teamResult.countryCode) || '',
     };
   });
 }
@@ -907,6 +982,7 @@ function recalcPassing() {
     if (tb == null) return -1;
     return ta - tb;
   });
+  if (config.limit > 0) filtered = filtered.slice(0, config.limit);
 
   var leaderTime = filtered.length > 0 ? Number(filtered[0].time || filtered[0].totalTime || 0) : 0;
 
@@ -922,6 +998,7 @@ function recalcPassing() {
       team: resolveTeamName(r),
       key: key,
       time_behind: (i === 0) ? formatTime(elapsed) : formatTime(elapsed - leaderTime),
+      country: r.countryCode || '',
     };
   });
 
@@ -968,6 +1045,7 @@ function recalcStartlist() {
     if (!b.startTime) return -1;
     return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
   });
+  if (config.limit > 0) filtered = filtered.slice(0, config.limit);
 
   passings = filtered.map(function(r, i) {
     return {
@@ -979,6 +1057,7 @@ function recalcStartlist() {
       key: r.id,
       time_behind: '',
       start_time: parseStartTime(r.startTime),
+      country: r.countryCode || '',
     };
   });
 
@@ -1233,6 +1312,7 @@ function recalcDemo() {
   var arrived = demoArrivals.slice(0, demoNextIdx);
   var sorted = arrived.slice().sort(function(a, b) { return a.elapsed - b.elapsed; });
   if (sorted.length === 0) { passings = []; render(); return; }
+  if (config.limit > 0) sorted = sorted.slice(0, config.limit);
   var leaderElapsed = sorted[0].elapsed;
   passings = sorted.map(function(r, i) {
     return {
@@ -1243,6 +1323,7 @@ function recalcDemo() {
       team: r.team,
       key: r.name,
       time_behind: formatTime(r.elapsed - leaderElapsed),
+      country: '',
     };
   });
   render();

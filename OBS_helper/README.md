@@ -28,6 +28,9 @@ overlay.html?event=<slug>&mode=<mode>&relay=<relay>&layout=<layout>&rows=<n>&che
 | `pageinterval` | seconds | `0` | Auto-advance pages. Only for `mode=startlist` |
 | `transition` | `fade` / `horizontal` / `vertical` | `fade` | Page transition animation |
 | `demo` | `1` | _(hidden)_ | Show demo button permanently (hidden by default, hover to reveal) |
+| `flags` | `off` | _(on)_ | Show country flag emojis (requires Navisport data with `countryCode`) |
+| `relayname` | `off` / `full` / `last` | `off` | Show runner names in relay team mode. `full` = full names, `last` = surname only |
+| `limit` | 5, 10, 15, 20 | _(unlimited)_ | Limit display to top N results |
 
 ## Display Modes
 
@@ -68,6 +71,51 @@ Default 800×250 layout with two columns and 7 rows. Leader highlighted in gold.
 Single-column layout that fills the OBS source area. Configure row count with `?rows=10` (5–20).
 
 Recommended OBS source size for fullscreen: match your canvas resolution (e.g. 1920×1080).
+
+## Custom CSS Styling
+
+Each cell in a row has a `data-field` attribute, making it easy to target with OBS Browser Source's **Custom CSS** field.
+
+**Available `data-field` values:** `rank`, `bib`, `team`, `name`, `club`, `country`, `time`, `start-time`, `arrow`
+
+### Examples
+
+**Transparent pink bib numbers:**
+```css
+[data-field="bib"] {
+  background: rgba(255, 100, 100, 0.3);
+  border-radius: 3px;
+}
+```
+
+**Hide rank column:**
+```css
+[data-field="rank"] {
+  display: none !important;
+}
+```
+
+**Highlight leader name:**
+```css
+[data-field="name"] {
+  font-weight: bold;
+  color: #ffd700;
+}
+```
+
+**Bold team names in relay:**
+```css
+[data-field="team"] {
+  font-weight: 700;
+}
+```
+
+**Larger country flags:**
+```css
+[data-field="country"] {
+  font-size: 18px;
+}
+```
 
 ## Data Sources
 
