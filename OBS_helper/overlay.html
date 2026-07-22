@@ -255,11 +255,12 @@ function getConfig() {
   if (['off','full','last'].indexOf(relayname) < 0) relayname = 'off';
   var limit = parseInt(p.get('limit'), 10) || 0;
   if (limit < 0) limit = 0;
+  var debug = p.get('debug') === '1';
   return { event: event, mode: mode, relay: relay, layout: layout, rows: rows,
            checkpoint: checkpoint, cls: cls, pageinterval: pageinterval, transition: transition,
            club: club, bib: bib, texttransform: texttransform, font: font,
            fontweight: fontweight, fontstyle: fontstyle, fontvariant: fontvariant, demo: demo,
-           flags: flags, relayname: relayname, limit: limit };
+           flags: flags, relayname: relayname, limit: limit, debug: debug };
 }
 
 var config = getConfig();
@@ -527,6 +528,11 @@ function countryEmoji(code) {
   return String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65, 0x1F1E6 + c.charCodeAt(1) - 65);
 }
 
+function dbg(label, data) {
+  if (!config.debug) return;
+  console.log('[DEBUG ' + label + ']', data);
+}
+
 // ═══════════════════════════════════════════
 // RENDERING
 // ═══════════════════════════════════════════
@@ -702,11 +708,13 @@ function decodeMessage(data) {
 function upsertResult(r) {
   if (!r || !r.id) return;
   resultsMap[r.id] = Object.assign(resultsMap[r.id] || {}, r);
+  dbg('resultsMap', { size: Object.keys(resultsMap).length, id: r.id });
 }
 
 function upsertPassing(p) {
   if (!p || !p.id) return;
   passingsMap[p.id] = Object.assign(passingsMap[p.id] || {}, p);
+  dbg('passingsMap', { size: Object.keys(passingsMap).length, id: p.id, resultId: p.resultId, checkpointId: p.checkpointId });
 }
 
 function removeResult(id) {
@@ -715,6 +723,7 @@ function removeResult(id) {
 
 function handleResultPayload(payload) {
   if (!payload) return;
+  dbg('RESULT payload', { hasResult: !!payload.result, hasResults: !!payload.results, count: payload.results ? payload.results.length : (payload.result ? 1 : 0) });
   if (payload.result) upsertResult(payload.result);
   if (payload.results) payload.results.forEach(upsertResult);
   recalcDisplay();
@@ -722,6 +731,7 @@ function handleResultPayload(payload) {
 
 function handlePassingPayload(payload) {
   if (!payload) return;
+  dbg('PASSING payload', { hasPassing: !!payload.passing, hasResults: !!payload.results, passingKeys: payload.passing ? Object.keys(payload.passing) : null });
   if (payload.passing) upsertPassing(payload.passing);
   if (payload.results) payload.results.forEach(upsertResult);
   recalcDisplay();
@@ -942,6 +952,7 @@ function buildRelayTeams(results) {
 
 function recalcPassing() {
   var allPassings = Object.values(passingsMap);
+  dbg('PASSING step1', { total: allPassings.length, mapKeys: Object.keys(passingsMap).slice(0, 5) });
   var filtered = allPassings.filter(function(p) {
     if (!p.resultId) return false;
     if (config.checkpoint && config.checkpoint !== 'latest') {
@@ -949,6 +960,7 @@ function recalcPassing() {
     }
     return true;
   });
+  dbg('PASSING step2 afterCheckpoint', { count: filtered.length, checkpoint: config.checkpoint });
 
   // For "latest": keep only the most recent passing per result
   if (!config.checkpoint || config.checkpoint === 'latest') {
@@ -960,6 +972,7 @@ function recalcPassing() {
       }
     });
     filtered = Object.values(latestMap);
+    dbg('PASSING step3 afterLatestDedup', { count: filtered.length });
   }
 
   // Filter by class if set
@@ -972,6 +985,7 @@ function recalcPassing() {
       });
     }
   }
+  dbg('PASSING step4 afterClassFilter', { count: filtered.length, cls: config.cls });
 
   // Sort by total elapsed time
   filtered.sort(function(a, b) {
@@ -1074,6 +1088,7 @@ function connectNavisport() {
     return;
   }
   try {
+    dbg('SOCKET connecting', { eventId: config.event });
     socket = io(NAVISPORT_ORIGIN, {
       query: { eventId: config.event },
       transports: ['websocket'],
@@ -1082,32 +1097,25 @@ function connectNavisport() {
       reconnectionAttempts: 100,
     });
 
-    var classCyclingStarted = false;
-
     socket.on('connect', function() {
       setStatus('connected');
-      if (!classCyclingStarted) {
-        loadEventData(function() {
-          if (config.cls.length !== 1 && (config.mode === 'finish' || config.mode === 'startlist')) {
-            startClassCycle();
-          }
-          classCyclingStarted = true;
-        });
-      } else {
-        recalcDisplay();
-      }
+      dbg('SOCKET', { id: socket.id, transport: socket.io.engine.transport.name, eventId: config.event });
+      recalcDisplay();
     });
 
     socket.on('disconnect', function() {
+      dbg('SOCKET', 'disconnected');
       setStatus('disconnected');
     });
 
-    socket.on('connect_error', function() {
+    socket.on('connect_error', function(err) {
+      dbg('SOCKET', { error: err.message || err });
       setStatus('disconnected');
     });
 
     socket.on('message', function(data) {
       var msg = decodeMessage(data);
+      dbg('MSG', { subject: msg && msg.subject, operation: msg && msg.operation, keys: msg && msg.payload ? Object.keys(msg.payload) : null });
       if (!msg || !msg.subject || !msg.operation) return;
       if (msg.subject === 'Result') {
         if (msg.operation === 'Update') handleResultPayload(msg.payload);
@@ -1127,6 +1135,7 @@ function loadEventData(onDone) {
     eventId = ev.id || config.event;
     raceType = ev.raceType || 'Individual';
     eventName = ev.name || '';
+    dbg('EVENT', { id: eventId, name: eventName, raceType: raceType, resultsCount: (ev.results || []).length, classesCount: (ev.courseClasses || []).length, checkpointsCount: (ev.checkpoints || []).length });
 
     // Build class ID map
     classIdMap = {};
@@ -1136,11 +1145,14 @@ function loadEventData(onDone) {
 
     // Build checkpoints
     checkpoints = ev.checkpoints || [];
+    dbg('CHECKPOINTS', checkpoints.map(function(c) { return c.id + ':' + c.name; }));
 
     // Load initial results
     if (ev.results) {
       ev.results.forEach(function(r) { upsertResult(r); });
     }
+
+    dbg('MAPS', { resultsMapSize: Object.keys(resultsMap).length, passingsMapSize: Object.keys(passingsMap).length });
 
     recalcDisplay();
 
@@ -1382,7 +1394,14 @@ applyFontStyle();
 positionDynamicRows();
 
 if (config.event) {
-  connectNavisport();
+  loadEventData(function() {
+    dbg('EVENT resolved', { input: config.event, resolvedId: eventId });
+    config.event = eventId;
+    connectNavisport();
+    if (config.cls.length !== 1 && (config.mode === 'finish' || config.mode === 'startlist')) {
+      startClassCycle();
+    }
+  });
 } else {
   connectLegacy();
 }
