@@ -31,6 +31,7 @@ overlay.html?event=<slug>&mode=<mode>&relay=<relay>&layout=<layout>&rows=<n>&che
 | `flags` | `off` | _(on)_ | Show country flag emojis (requires Navisport data with `countryCode`) |
 | `relayname` | `off` / `full` / `last` | `off` | Show runner names in relay team mode. `full` = full names, `last` = surname only |
 | `limit` | 5, 10, 15, 20 | _(unlimited)_ | Limit display to top N results |
+| `debug` | `1` | _(off)_ | Enable console logging for troubleshooting Socket.IO data flow |
 
 ## Display Modes
 
@@ -155,6 +156,62 @@ Open `generator.html` in a browser to access a visual configuration tool:
 - Select mode, layout, class, checkpoint, and pagination options
 - Generate and copy the OBS Browser Source URL
 
+## vMix Integration (Python Server)
+
+The `overlay.html` is designed for OBS Browser Source. For **vMix Data Source** consumption, use the Python server which exposes HTTP JSON endpoints.
+
+### Setup
+
+```bash
+pip install -r requirements.txt
+python server.py --event <event-slug-or-uuid> --port 3000
+```
+
+### Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/tv-results?class=&limit=&relay=` | Finish results ranked by elapsed time |
+| `GET /api/tv-split?control=<id>&class=&limit=` | Split times at a specific control |
+| `GET /api/tv-runner?id=` | Individual runner details with all splits |
+
+### Query Parameters
+
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `class` | `H21`, `H21,D21` | _(all)_ | Filter by class name |
+| `limit` | 5, 10, 15, 20 | _(unlimited)_ | Limit results to top N |
+| `relay` | `team` / `leg` | `team` | Relay team or individual leg |
+| `control` | checkpoint ID / `latest` | `latest` | Which checkpoint for split |
+
+### vMix Configuration
+
+1. Open vMix → **Settings** → **Data Sources**
+2. Add new source, type **JSON**
+3. Set URL to e.g. `http://localhost:3000/api/tv-results?class=H21&limit=10`
+4. Set refresh interval (e.g. 1000ms)
+5. Map fields to your vMix title template (see below)
+
+### JSON Response Format
+
+```json
+[
+  {
+    "rank": "1",
+    "bib": "42",
+    "name": "Severi Kymäläinen",
+    "club": "Tampereen Pyrintö",
+    "time": "2:36:38",
+    "diff": "0:00",
+    "status": "OK"
+  }
+]
+```
+
+Fields: `rank`, `name`, `club`, `time`, `diff`, `status`, `bib` (optional), `country` (optional), `team` (optional).
+
+Status values: `OK`, `DNS`, `DNF`, `DSQ`, `MP`.
+
 ## Dependencies
 
 - **Socket.IO client v4.7.5** — CDN loaded for Navisport connection
@@ -167,6 +224,8 @@ Open `generator.html` in a browser to access a visual configuration tool:
 |------|-------------|
 | `overlay.html` | The OBS Browser Source overlay |
 | `generator.html` | URL generator tool |
+| `server.py` | Python vMix JSON API server |
+| `requirements.txt` | Python dependencies |
 | `README.md` | This file |
 | `LICENSE` | MIT license |
 
