@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lehdistötulokset – Navisport</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg: #f0f2ec;
+    --fg: #1a1e17;
+    --muted: #6b7264;
+    --accent: #b8860b;
+    --accent-hover: #9a7209;
+    --primary: #1b4332;
+    --primary-light: #2d6a4f;
+    --primary-dark: #0f2b1f;
+    --card: #ffffff;
+    --border: #d4d9cd;
+    --sidebar-bg: #152e23;
+    --sidebar-fg: #dde5df;
+    --sidebar-muted: #7f9e8b;
+    --sidebar-border: #254d38;
+    --radius: 7px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 3px 8px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05);
+    --status-dns: #9ca3af;
+    --status-dnf: #dc2626;
+    --status-mp: #d97706;
+    --status-dsq: #7c3aed;
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  .app-header {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    color: #fff; padding: 14px 24px;
+    display: flex; align-items: center; gap: 14px; position: relative;
+  }
+  .app-header::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(184,134,11,0.4), transparent);
+  }
+  .header-mark {
+    width: 36px; height: 36px; background: var(--accent); border-radius: 8px;
+    display: grid; place-items: center; font-size: 16px; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(184,134,11,0.35);
+  }
+  .header-text h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+  .header-text p { font-size: 12px; color: var(--sidebar-muted); font-weight: 400; }
+
+  .url-bar {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 10px 24px; display: flex; gap: 8px; align-items: center;
+    position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow-sm);
+  }
+  .url-bar input {
+    flex: 1; padding: 9px 13px; border: 1.5px solid var(--border); border-radius: var(--radius);
+    font-family: 'Source Code Pro', monospace; font-size: 12.5px;
+    background: var(--bg); color: var(--fg); transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+  }
+  .url-bar input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
+  .url-bar input::placeholder { color: var(--muted); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--radius);
+    font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12.5px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.12s ease; white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent-hover); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: var(--bg); border-color: var(--primary-light); }
+  .btn-sb { background: transparent; color: var(--sidebar-fg); border: 1.5px solid var(--sidebar-border); }
+  .btn-sb:hover { background: rgba(255,255,255,0.05); border-color: var(--sidebar-muted); }
+  .btn-ghost { background: transparent; color: var(--sidebar-muted); padding: 5px 8px; }
+  .btn-ghost:hover { color: #fff; background: rgba(255,255,255,0.07); }
+  .btn-sm { padding: 5px 10px; font-size: 11.5px; }
+  .spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .app-layout { display: flex; min-height: calc(100vh - 100px); }
+
+  /* Sidebar */
+  .sidebar {
+    width: 276px; flex-shrink: 0; background: var(--sidebar-bg); color: var(--sidebar-fg);
+    overflow-y: auto; transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    display: flex; flex-direction: column;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sb-sec { padding: 14px 16px; border-bottom: 1px solid var(--sidebar-border); }
+  .sb-sec:last-child { border-bottom: none; }
+  .sb-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: var(--sidebar-muted); margin-bottom: 8px; }
+  .ev-info h3 { font-size: 14px; font-weight: 700; line-height: 1.3; margin-bottom: 3px; }
+  .ev-info p { font-size: 11.5px; color: var(--sidebar-muted); }
+
+  .cls-list { display: flex; flex-direction: column; gap: 1px; max-height: 320px; overflow-y: auto; }
+  .cls-list::-webkit-scrollbar { width: 3px; }
+  .cls-list::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 3px; }
+  .cls-item {
+    display: flex; align-items: center; gap: 9px; padding: 6px 8px;
+    border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 12.5px;
+  }
+  .cls-item:hover { background: rgba(255,255,255,0.05); }
+  .cls-item input[type="checkbox"] {
+    appearance: none; width: 15px; height: 15px; border: 1.5px solid var(--sidebar-muted);
+    border-radius: 3px; cursor: pointer; position: relative; flex-shrink: 0; transition: all 0.12s;
+  }
+  .cls-item input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+  .cls-item input[type="checkbox"]:checked::after {
+    content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+    border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+  }
+  .cls-item .cls-cnt { margin-left: auto; font-size: 10.5px; color: var(--sidebar-muted); font-family: 'Source Code Pro', monospace; }
+
+  .quick-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    padding: 3px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 600;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--sidebar-border);
+    color: var(--sidebar-muted); cursor: pointer; transition: all 0.12s;
+  }
+  .chip:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .opt-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+  .opt-row label { font-size: 12.5px; cursor: pointer; }
+  .toggle { position: relative; width: 34px; height: 19px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .sl { position: absolute; inset: 0; background: var(--sidebar-border); border-radius: 10px; transition: 0.2s; }
+  .toggle .sl::before { content: ''; position: absolute; width: 15px; height: 15px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .sl { background: var(--accent); }
+  .toggle input:checked + .sl::before { transform: translateX(15px); }
+  .num-in {
+    width: 52px; padding: 3px 7px; border: 1px solid var(--sidebar-border); border-radius: 4px;
+    background: var(--primary-dark); color: var(--sidebar-fg);
+    font-size: 11.5px; font-family: 'Source Code Pro', monospace; text-align: center; outline: none;
+  }
+  .num-in:focus { border-color: var(--accent); }
+
+  .sb-acts {
+    padding: 12px 16px; display: flex; flex-direction: column; gap: 7px;
+    margin-top: auto; border-top: 1px solid var(--sidebar-border);
+  }
+  .sb-acts .btn { justify-content: center; width: 100%; }
+
+  /* Main */
+  .main-content { flex: 1; padding: 28px; overflow-y: auto; display: flex; justify-content: center; }
+
+  /* Empty state */
+  .empty-state { max-width: 480px; text-align: center; padding: 72px 20px; align-self: center; }
+  .empty-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    display: grid; place-items: center; margin: 0 auto 20px;
+    font-size: 24px; color: #fff; box-shadow: 0 4px 16px rgba(27,67,50,0.25);
+  }
+  .empty-state h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .empty-state > p { color: var(--muted); font-size: 13.5px; margin-bottom: 24px; line-height: 1.6; }
+  .steps { text-align: left; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .step { display: flex; gap: 11px; align-items: flex-start; }
+  .step-n {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff;
+    font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px;
+  }
+  .step-t { font-size: 13px; line-height: 1.5; }
+  .example-box {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 9px 13px; font-family: 'Source Code Pro', monospace;
+    font-size: 11.5px; color: var(--muted); text-align: left;
+    margin-bottom: 6px; word-break: break-all;
+  }
+
+  /* Paper */
+  .paper {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow-md); width: 100%; max-width: 760px;
+    padding: 44px 52px; min-height: 300px;
+  }
+  .paper .ev-hdr {
+    text-align: center; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid var(--fg);
+  }
+  .paper .ev-hdr h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; }
+  .paper .ev-hdr .ev-meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
+  .cls-sec { margin-bottom: 24px; }
+  .cls-sec:last-child { margin-bottom: 0; }
+  .cls-title { font-size: 13.5px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .cls-title .cls-meta { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+  .cls-div { height: 1.5px; background: var(--fg); margin-bottom: 4px; }
+
+  .rt { width: 100%; border-collapse: collapse; font-family: 'Source Code Pro', monospace; font-size: 12px; line-height: 1.75; }
+  .rt td { padding: 0; vertical-align: baseline; }
+  .rt .c-pos { width: 34px; text-align: right; padding-right: 5px; font-weight: 600; color: var(--muted); }
+  .rt .c-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 500; font-size: 12.5px; padding-right: 14px; white-space: nowrap; }
+  .rt .c-club { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; color: var(--muted); padding-right: 14px; white-space: nowrap; }
+  .rt .c-time { text-align: right; font-weight: 600; white-space: nowrap; }
+  .s-dns { color: var(--status-dns) !important; }
+  .s-dnf { color: var(--status-dnf) !important; }
+  .s-mp  { color: var(--status-mp) !important; }
+  .s-dsq { color: var(--status-dsq) !important; }
+
+  .no-sel { text-align: center; padding: 52px 20px; color: var(--muted); font-size: 13.5px; }
+  .no-sel i { font-size: 28px; display: block; margin-bottom: 10px; opacity: 0.35; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100;
+    display: grid; place-items: center; padding: 24px;
+    opacity: 0; visibility: hidden; transition: all 0.2s; backdrop-filter: blur(3px);
+  }
+  .modal-bg.show { opacity: 1; visibility: visible; }
+  .modal {
+    background: var(--card); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    width: 100%; max-width: 600px; max-height: 78vh;
+    display: flex; flex-direction: column; transform: translateY(10px); transition: transform 0.2s;
+  }
+  .modal-bg.show .modal { transform: translateY(0); }
+  .modal-hd { padding: 18px 22px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .modal-hd h3 { font-size: 15px; font-weight: 700; }
+  .modal-bd { padding: 18px 22px; overflow-y: auto; flex: 1; }
+  .modal-bd textarea {
+    width: 100%; min-height: 240px; padding: 12px; border: 1.5px solid var(--border);
+    border-radius: var(--radius); font-family: 'Source Code Pro', monospace; font-size: 11.5px;
+    resize: vertical; outline: none; background: var(--bg); color: var(--fg); line-height: 1.5;
+  }
+  .modal-bd textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
+  .modal-bd .hint { font-size: 11.5px; color: var(--muted); margin-top: 7px; line-height: 1.5; }
+  .modal-ft { padding: 14px 22px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); }
+
+  /* Toast */
+  .toast-wrap { position: fixed; top: 14px; right: 14px; z-index: 200; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
+  .toast {
+    pointer-events: auto; padding: 10px 16px; border-radius: var(--radius);
+    font-size: 12.5px; font-weight: 500; box-shadow: var(--shadow-md);
+    display: flex; align-items: center; gap: 9px; animation: tIn 0.25s ease; max-width: 380px;
+  }
+  .toast.out { animation: tOut 0.2s ease forwards; }
+  .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .toast-error i { color: #dc2626; }
+  .toast-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .toast-success i { color: #16a34a; }
+  @keyframes tIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes tOut { to { opacity: 0; transform: translateX(16px); } }
+
+  /* Error detail - näytetään hakuongelman yhteydessä */
+  .error-detail {
+    margin-top: 12px; padding: 12px 16px; background: #fef7ee;
+    border: 1px solid #fed7aa; border-radius: var(--radius);
+    font-size: 12px; color: #92400e; text-align: left;
+    max-height: 200px; overflow-y: auto; word-break: break-all;
+    font-family: 'Source Code Pro', monospace; line-height: 1.5;
+  }
+
+  @media (max-width: 840px) {
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 55; box-shadow: 4px 0 24px rgba(0,0,0,0.3); }
+    .paper { padding: 28px 18px; }
+    .url-bar { flex-wrap: wrap; padding: 8px 12px; }
+    .url-bar input { min-width: 180px; }
+  }
+  @media print {
+    body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .app-header, .url-bar, .sidebar, .toast-wrap, .modal-bg { display: none !important; }
+    .app-layout { display: block !important; }
+    .main-content { padding: 0 !important; }
+    .paper { box-shadow: none !important; border: none !important; border-radius: 0 !important; padding: 16px 28px !important; max-width: 100% !important; }
+    .cls-sec { page-break-inside: avoid; }
+    .rt .c-name, .rt .c-club { font-family: 'Source Code Pro', monospace !important; }
+    .s-dns, .s-dnf, .s-mp, .s-dsq { color: #444 !important; }
+  }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<header class="app-header">
+  <div class="header-mark"><i class="fas fa-newspaper"></i></div>
+  <div class="header-text">
+    <h1>Lehdistötulokset</h1>
+    <p>Navisport-tulosten lehdistömuotoilu</p>
+  </div>
+</header>
+
+<div class="url-bar">
+  <input type="text" id="urlIn" placeholder="Navisport URL, esim. https://navisport.com/events/jukola-2026">
+  <button class="btn btn-primary" id="fetchBtn" onclick="doFetch()"><i class="fas fa-download"></i> Hae</button>
+  <button class="btn btn-outline" onclick="openModal()"><i class="fas fa-paste"></i> Liitä JSON</button>
+</div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-sec ev-info" id="sbEv" style="display:none">
+      <div class="sb-lbl">Tapahtuma</div>
+      <h3 id="sbName"></h3>
+      <p id="sbMeta"></p>
+    </div>
+    <div class="sb-sec" id="sbChips" style="display:none">
+      <div class="sb-lbl">Pikavalinnat</div>
+      <div class="quick-chips" id="chips"></div>
+    </div>
+    <div class="sb-sec" id="sbCls" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="sb-lbl" style="margin-bottom:0">Sarjat</div>
+        <div style="display:flex;gap:3px">
+          <button class="btn-ghost btn-sm" onclick="selAll()" title="Valitse kaikki"><i class="fas fa-check-double"></i></button>
+          <button class="btn-ghost btn-sm" onclick="deselAll()" title="Poista valinnat"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div class="cls-list" id="clsList"></div>
+    </div>
+    <div class="sb-sec" id="sbClubs" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="sb-lbl" style="margin-bottom:0">Seurat</div>
+        <div style="display:flex;gap:3px">
+          <button class="btn-ghost btn-sm" onclick="selAllClubs()" title="Valitse kaikki"><i class="fas fa-check-double"></i></button>
+          <button class="btn-ghost btn-sm" onclick="deselAllClubs()" title="Poista valinnat"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div class="cls-list" id="clubList"></div>
+    </div>
+    <div class="sb-sec" id="sbOpts" style="display:none">
+      <div class="sb-lbl">Asetukset</div>
+      <div class="opt-row"><label>Sijanumerot</label><label class="toggle"><input type="checkbox" id="oPos" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Osallistujamäärä</label><label class="toggle"><input type="checkbox" id="oCnt" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Matka</label><label class="toggle"><input type="checkbox" id="oDist" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Näytä DNS</label><label class="toggle"><input type="checkbox" id="oDNS" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Näytä DNF</label><label class="toggle"><input type="checkbox" id="oDNF" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Näytä MP / DSQ</label><label class="toggle"><input type="checkbox" id="oMP" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Max / sarja</label><input type="number" class="num-in" id="oMax" value="0" min="0" onchange="syncOpts()"></div>
+      <div style="border-top:1px solid var(--sidebar-border);margin:6px 0 4px"></div>
+      <div class="opt-row"><label>Näytä parhaat + seurat</label><label class="toggle"><input type="checkbox" id="oClubTop" checked onchange="syncOpts()"><span class="sl"></span></label></div>
+      <div class="opt-row"><label>Parhaita / sarja</label><input type="number" class="num-in" id="oClubTopN" value="3" min="0" max="20" onchange="syncOpts()"></div>
+    </div>
+    <div class="sb-acts" id="sbActs" style="display:none">
+      <button class="btn btn-accent" onclick="doPrint()"><i class="fas fa-print"></i> Tulosta</button>
+      <button class="btn btn-sb" onclick="doCopy()"><i class="fas fa-copy"></i> Kopioi teksti</button>
+      <button class="btn btn-sb" onclick="doDownload()"><i class="fas fa-file-arrow-down"></i> Lataa .txt</button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="main">
+    <div class="empty-state" id="empty">
+      <div class="empty-icon"><i class="fas fa-newspaper"></i></div>
+      <h2>Luo lehdistötulokset</h2>
+      <p>Generoi tulostettava lehdistömuotoilu Navisport-tuloksista.</p>
+      <div class="steps">
+        <div class="step"><span class="step-n">1</span><span class="step-t">Liitä Navisport-tulosten URL osoitepalkkiin</span></div>
+        <div class="step"><span class="step-n">2</span><span class="step-t">Valitse sarjat sivupaneelista</span></div>
+        <div class="step"><span class="step-n">3</span><span class="step-t">Säädä asetukset ja tulosta tai kopioi</span></div>
+      </div>
+    </div>
+    <div class="paper" id="paper" style="display:none"><div id="paperBody"></div></div>
+  </main>
+</div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3><i class="fas fa-paste" style="margin-right:7px;color:var(--accent)"></i>Liitä JSON-data</h3>
+      <button class="btn-ghost" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-bd">
+      <textarea id="jsonIn" placeholder='Liitä Navisport JSON-data tähän...&#10;&#10;Voi kopioida selaimen DevTools → Network -välilehdeltä&#10;lataamalla tapahtumasivun https://navisport.com/events/{slug}'></textarea>
+      <p class="hint"><i class="fas fa-info-circle" style="margin-right:3px"></i>Odotettu muoto: EventDetail-objekti jossa <code>results</code>, <code>courseClasses</code> ja <code>courses</code>. Kopioi DevTools → Network-välilehdeltä <code>events/{uuid}</code>-pyynnön vastaus.</p>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-outline" onclick="closeModal()">Peruuta</button>
+      <button class="btn btn-primary" onclick="doPaste()"><i class="fas fa-check"></i> Tulkinta</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   TILA
+   ============================================================ */
+let D = null;           // { name, date, place, classes: [{name, dist, competitors:[...]}] }
+let sel = new Set();
+let clubSel = null;     // null = kaikki seurat; Set = valitut seurat
+let allClubs = [];      // uniikit seurat aakkosjärjestyksessä
+let O = { pos:true, cnt:true, dist:true, dns:true, dnf:true, mp:true, max:0, top:true, topN:3 };
+
+// Pikaryhmät
+const GROUPS = [
+  { l:'Miehet',   r:/^(H\d|Men\d|M\d)/i },
+  { l:'Naiset',   r:/^(D\d|Wom\d|N\d|W\d)/i },
+  { l:'E-luokat', r:/E$/ },
+  { l:'A-luokat', r:/A$/ },
+  { l:'Nuoret',   r:/\d{1,2}$/ },
+];
+
+/* ============================================================
+   APUFUNKTIOT
+   ============================================================ */
+const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// Ajan muotoilu: sekunnit → "m:ss" tai "h:mm:ss"
+function fmtTime(sec) {
+  if (sec == null || sec < 0) return '–';
+  const s = Math.round(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sc = s % 60;
+  return h > 0
+    ? h + ':' + String(m).padStart(2,'0') + ':' + String(sc).padStart(2,'0')
+    : m + ':' + String(sc).padStart(2,'0');
+}
+
+// Tilanumerosta teksti (Navisport käyttää numeroita: 0=OK, 1=DNS, 2=DNF, 3=MP, 4=DSQ)
+function statusTxt(v) {
+  if (v == null || v === 0) return 'OK';
+  if (typeof v === 'string') return v.toUpperCase().trim();
+  return ['OK','DNS','DNF','MP','DSQ','OTL'][v] || ('S' + v);
+}
+function statusCls(v) {
+  const t = statusTxt(v);
+  if (t === 'DNS') return 's-dns';
+  if (t === 'DNF') return 's-dnf';
+  if (t === 'MP')  return 's-mp';
+  if (t === 'DSQ' || t === 'OTL') return 's-dsq';
+  return '';
+}
+
+// Matkan muotoilu
+function fmtDist(d) {
+  if (!d) return '';
+  if (typeof d === 'number') return (d / 1000).toFixed(1).replace(/\.0$/, '') + ' km';
+  return String(d).replace(/^(\d+\.?\d*)\s*(km|m)?$/i, (_, n, u) => {
+    if (u === 'm' || (Number(n) > 100 && !u)) return (Number(n) / 1000).toFixed(1).replace(/\.0$/, '') + ' km';
+    return n + (u || ' km');
+  });
+}
+
+/* ============================================================
+   URL-JÄSENTÄMINEN – tunnistaa useita URL-muotoja:
+     navisport.com/events/{slug}
+     navisport.com/tapahtumat/{slug}
+     navisport.fi/tulokset/{id}/...
+     navisport.fi/tulokset-new/{id}/...
+     suora UUID tai slug
+   ============================================================ */
+function extractEventId(input) {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Suora UUID
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return { type: 'uuid', value: trimmed };
+  }
+
+  try {
+    const u = new URL(trimmed);
+    const p = u.pathname;
+
+    // navisport.com/events/{slug} tai /tapahtumat/{slug}
+    let m = p.match(/^\/(?:events|tapahtumat)\/([^/?#\s]+)/);
+    if (m) return { type: 'slug', value: m[1] };
+
+    // navisport.fi/tulokset-new/{id} tai navisport.fi/tulokset/{id}
+    m = p.match(/\/tulokset(?:-new)?\/([^/?#\s]+)/);
+    if (m) return { type: 'slug', value: m[1] };
+
+    return null;
+  } catch {
+    // Ei ole validi URL – käsitellään slugina
+    if (/^[\w-]+$/.test(trimmed)) return { type: 'slug', value: trimmed };
+    return null;
+  }
+}
+
+/* ============================================================
+   Datan hakeminen – käyttää navisport.com REST- ja tRPC-APIA
+   (sama taustajärjestelmä kuin bibgeneratorissa)
+   ============================================================ */
+async function doFetch() {
+  const url = document.getElementById('urlIn').value.trim();
+  if (!url) { toast('Syötä Navisport URL, UUID tai slug.', 'error'); return; }
+
+  const id = extractEventId(url);
+  if (!id) { toast('URL:sta ei löytynyt tapahtuma-tunnistetta.', 'error'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Haetaan...';
+  console.log('Haetaan tapahtumatietoja…', id);
+
+  try {
+    let eventData;
+    if (id.type === 'uuid') {
+      eventData = await fetchEventByUUID(id.value);
+    } else {
+      eventData = await fetchEventBySlug(id.value);
+    }
+
+    if (!eventData) throw new Error('API ei palauttanut tapahtumatietoja.');
+    if (!eventData.results) throw new Error('Tapahtumalla ei ole results-kenttää.');
+    if (!eventData.results.length) throw new Error('Tapahtumasta ei löytynyt tuloksia.');
+
+    console.log('Tapahtuma:', eventData.name, '| Tuloksia:', eventData.results.length, '| Luokkia:', (eventData.courseClasses||[]).length);
+
+    const flat = eventToFlatArray(eventData);
+    loadFromApi(flat);
+    toast('Tulokset ladattu! (' + flat.length + ' riviä, ' + (eventData.courseClasses||[]).length + ' sarjaa)', 'success');
+
+  } catch (err) {
+    console.error('Haku epäonnistui:', err);
+    toast(err.message, 'error');
+    // Näytä virhe myös paperilla jos se on tyhjä
+    const pb = document.getElementById('paperBody');
+    if (pb) pb.innerHTML = '<div style="padding:32px;text-align:center;color:#991b1b;"><i class="fas fa-circle-exclamation" style="font-size:32px;display:block;margin-bottom:12px;"></i><strong>' + esc(err.message) + '</strong></div>';
+    document.getElementById('paper').style.display = '';
+    document.getElementById('empty').style.display = 'none';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-download"></i> Hae';
+  }
+}
+
+/* ----------------------------------------------------------
+   Hakee tapahtuman suoraan UUID:lla REST-APIsta
+   GET https://navisport.com/api/events/{uuid}
+   ---------------------------------------------------------- */
+async function fetchWithTimeout(url, ms = 20000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    return resp;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+async function fetchEventByUUID(uuid) {
+  const resp = await fetchWithTimeout('https://navisport.com/api/events/' + encodeURIComponent(uuid));
+  if (!resp.ok) throw new Error('API palautti virhekoodin ' + resp.status + ' (UUID: ' + uuid + ')');
+  return resp.json();
+}
+
+/* ----------------------------------------------------------
+   Hakee tapahtuman slugilla tRPC-rajapinnasta
+   (sama kuin bibgeneratorin navFetch)
+   ---------------------------------------------------------- */
+async function fetchEventBySlug(slug) {
+  const input = encodeURIComponent(JSON.stringify({ '0': slug }));
+  const url = 'https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=' + input;
+  const resp = await fetchWithTimeout(url);
+  if (!resp.ok) throw new Error('API palautti virhekoodin ' + resp.status + ' (slug: ' + slug + ')');
+  const batch = await resp.json();
+  const data = batch?.[0]?.result?.data;
+  if (!data) throw new Error('Tapahtumaa ei löytynyt slugilla: ' + slug + '. Tarkista URL.');
+  return data;
+}
+
+/* ----------------------------------------------------------
+   Muuntaa EventDetail-rakenteen litteäksi taulukoksi,
+   jota loadFromApi osaa käsitellä
+   ---------------------------------------------------------- */
+function eventToFlatArray(event) {
+  // classId → { name, distance } (tRPC palauttaa distancesPerLeg, REST API courses)
+  const ccMap = {};
+  (event.courseClasses || []).forEach(c => {
+    let dist = null;
+    if (c.distancesPerLeg?.[0]?.distance) {
+      dist = c.distancesPerLeg[0].distance;
+    }
+    ccMap[c.id] = { name: c.name, distance: dist };
+  });
+
+  // courseId → ratatiedot (vain REST API, tRPC:lla ei courses-kenttää)
+  const courseMap = {};
+  (event.courses || []).forEach(c => { courseMap[c.id] = c; });
+
+  const evName = event.name || '';
+  const evDate = event.begin ? event.begin.substring(0, 10) : '';
+  const evPlace = event.address || event.organisation?.name || '';
+
+  // Numeerinen status (API käyttää "Ok" eikä "OK")
+  const stNum = s => ({ 'OK':0, 'DNS':1, 'DNF':2, 'MP':3, 'DSQ':4, 'OTL':5 })[(s||'').toUpperCase()] ?? 0;
+
+  const flat = [];
+  const empName = r => r.name?.trim() || [r.givenName, r.surname].filter(Boolean).join(' ') || '';
+
+  for (const r of (event.results || [])) {
+    if (r.resultType === 'Team') continue;
+
+    const ci = ccMap[r.classId] || {};
+    const course = r.courseId ? courseMap[r.courseId] : null;
+
+    flat.push({
+      name:           empName(r),
+      club:           r.club || '',
+      className:      ci.name || '',
+      time:           r.time,
+      status:         stNum(r.status),
+      position:       r.position,
+      distance:       course ? course.distance : ci.distance,
+      competitionName: evName,
+      competitionDate: evDate,
+      competitionPlace: evPlace,
+    });
+  }
+
+  return flat;
+}
+
+/* ============================================================
+   Datan lataus – kaksi polkua:
+   1) API-haku → loadFromApi(data)  [taulukko kilpailijoita]
+   2) Manuaalinen liitos → loadFromJson(data)  [JSON mistä muodosta tahansa]
+   ============================================================ */
+
+// Polku 1: Bibgenerator-muotoinen data
+// Data on taulukko jossa jokaisella rivillä on mm:
+//   firstName, lastName, club, className, time, status, position,
+//   distance, climb, controls, competitionName, competitionDate, competitionPlace
+function loadFromApi(arr) {
+  // Tapahtumatiedot ensimmäiseltä riviltä
+  const first = arr[0] || {};
+  const evName  = first.competitionName || first.eventName || '';
+  let evDate    = first.competitionDate || first.date || '';
+  const evPlace = first.competitionPlace || first.place || first.location || '';
+
+  // Päivämäärän siivous
+  if (evDate) {
+    if (evDate.length > 10) evDate = evDate.substring(0, 10);
+    try {
+      const d = new Date(evDate);
+      if (!isNaN(d)) evDate = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' });
+    } catch {}
+  }
+
+  // Ryhmitellään kilpailijat className:n perusteella
+  const classMap = new Map();
+  for (const row of arr) {
+    const cn = row.className || row.sarja || 'Tuntematon';
+    if (!classMap.has(cn)) {
+      classMap.set(cn, {
+        name: cn,
+        dist: fmtDist(row.distance || row.matka || ''),
+        climb: row.climb || row.nousu || '',
+        ctrl: row.controls || row.rastit || '',
+        competitors: []
+      });
+    }
+    classMap.get(cn).competitors.push(parseCompetitor(row));
+  }
+
+  // Järjestetään sarjat aakkosesti
+  const classes = [...classMap.values()].sort((a, b) => a.name.localeCompare(b.name, 'fi'));
+  assignPositions(classes);
+
+  D = { name: evName, date: evDate, place: evPlace, classes };
+  sel = new Set(classes.map(c => c.name));
+  allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
+  clubSel = null;
+  showSB(); renderEv(); renderChips(); renderCls(); renderClubs(); render();
+}
+
+// Yksittäisen kilpailijan parsinta API-rivistä
+function parseCompetitor(row) {
+  let name = '';
+  if (row.firstName && row.lastName) {
+    name = row.firstName + ' ' + row.lastName;
+  } else if (row.etunimi && row.sukunimi) {
+    name = row.etunimi + ' ' + row.sukunimi;
+  } else {
+    name = row.name || row.nimi || row.fullName || '';
+  }
+
+  const club = row.club || row.seura || row.organization || row.team || '';
+  const pos  = row.position != null ? Number(row.position) : null;
+
+  let time = '';
+  let status = 'OK';
+
+  // Bibgenerator: time on sekunteina (numero), status on numero (0=OK)
+  if (row.status != null && row.status !== 0) {
+    status = statusTxt(row.status);
+    time = status;
+  } else if (row.time != null) {
+    time = typeof row.time === 'number' ? fmtTime(row.time) : String(row.time);
+  } else {
+    time = '–';
+    status = '–';
+  }
+
+  return { pos, name, club, time, status };
+}
+
+// Täyttää position-tiedot jos API ei ole niitä palauttanut
+function assignPositions(classes) {
+  for (const c of classes) {
+    const anyHavePos = c.competitors.some(x => x.pos != null);
+    if (!anyHavePos) {
+      // Ei positioita ollenkaan — sortataan OK-sarjat ajan mukaan
+      const ok = c.competitors.filter(x => x.status === 'OK');
+      const rest = c.competitors.filter(x => x.status !== 'OK');
+      ok.sort((a, b) => {
+        if (a.time == null) return 1;
+        if (b.time == null) return -1;
+        if (a.time === b.time) return 0;
+        return a.time < b.time ? -1 : 1;
+      });
+      ok.forEach((x, i) => x.pos = i + 1);
+      c.competitors = [...ok, ...rest];
+    } else if (anyHavePos) {
+      // Täytetään puuttuvat positiot OK-kävijöille
+      let pos = 1;
+      for (const x of c.competitors) {
+        if (x.pos != null) { pos = x.pos + 1; continue; }
+        if (x.status === 'OK') x.pos = pos++;
+      }
+    }
+  }
+}
+
+// Polku 2: Yleisempi JSON (manuaalinen liitos)
+// Tukee myös sarjoittain jaettua rakennetta
+function loadFromJson(raw) {
+  if (Array.isArray(raw)) {
+    // Taulukko – oletetaan bibgenerator-muoto jos ensimmäisellä rivillä on className/firstName
+    if (raw.length > 0 && (raw[0].className || raw[0].firstName || raw[0].club)) {
+      loadFromApi(raw);
+      return;
+    }
+    // Muuten yritetään löytää sarjoja
+    raw = { results: raw };
+  }
+
+  let name = '', date = '', place = '', rcs = [];
+  const comp = raw.competition || raw.event || raw.tapahtuma || raw;
+  name  = comp.name || comp.nimi || comp.eventName || comp.title || '';
+
+  // Tukee myös EventDetail-kenttinimiä (begin, address)
+  let rawDate = comp.date || comp.pvm || comp.startDate || comp.begin || '';
+  if (rawDate && rawDate.length > 10) rawDate = rawDate.substring(0, 10);
+  date = rawDate;
+  if (date) { try { const d = new Date(date); if (!isNaN(d)) date = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' }); } catch {} }
+
+  place = comp.place || comp.paikka || comp.location || comp.city || comp.address || '';
+
+  rcs = raw.classes || raw.sarjat || raw.categories || comp.classes || comp.sarjat || [];
+  if (!rcs.length && (raw.results || raw.competitors || raw.tulokset)) {
+    rcs = [{ name: name || 'Tulokset', competitors: raw.results || raw.competitors || raw.tulokset }];
+  }
+  if (!rcs.length) {
+    for (const k of Object.keys(raw)) {
+      const v = raw[k];
+      if (Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object') {
+        if (v[0].name || v[0].nimi || v[0].className) { if (!rcs.length) rcs = v; }
+        else if (v[0].firstName || v[0].etunimi || v[0].club || v[0].time) {
+          rcs = [{ name: k, competitors: v }]; break;
+        }
+      }
+    }
+  }
+
+  const classes = rcs.map(c => {
+    const cn = c.name || c.nimi || c.className || c.title || '?';
+    const dist = fmtDist(c.distance || c.matka || c.length || '');
+    const climb = c.climb || c.nousu || '';
+    const ctrl = c.controls || c.rastit || '';
+    const rc = c.competitors || c.results || c.tulokset || c.participants || [];
+    const competitors = rc.map(x => parseCompetitor(x));
+    return { name: cn, dist, climb, ctrl, competitors };
+  });
+
+  assignPositions(classes);
+  D = { name, date, place, classes };
+  sel = new Set(classes.map(c => c.name));
+  allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
+  clubSel = null;
+  showSB(); renderEv(); renderChips(); renderCls(); renderClubs(); render();
+}
+
+/* ============================================================
+   KÄYTTÖLIITTYMÄN PÄIVITYS
+   ============================================================ */
+function showSB() {
+  document.getElementById('sidebar').classList.add('open');
+  ['sbEv', 'sbChips', 'sbCls', 'sbClubs', 'sbOpts', 'sbActs'].forEach(id =>
+    document.getElementById(id).style.display = ''
+  );
+}
+
+function renderEv() {
+  document.getElementById('sbName').textContent = D.name || 'Tuntematon tapahtuma';
+  const parts = [D.date, D.place].filter(Boolean);
+  document.getElementById('sbMeta').textContent = parts.join(', ') || '';
+}
+
+function renderChips() {
+  const el = document.getElementById('chips');
+  el.innerHTML = '';
+  GROUPS.forEach(g => {
+    const ch = document.createElement('span');
+    ch.className = 'chip';
+    ch.textContent = g.l;
+    ch.onclick = () => {
+      const on = ch.classList.toggle('on');
+      D.classes.forEach(c => { if (g.r.test(c.name)) on ? sel.add(c.name) : sel.delete(c.name); });
+      renderCls(); render();
+    };
+    el.appendChild(ch);
+  });
+}
+
+function renderCls() {
+  const el = document.getElementById('clsList');
+  el.innerHTML = '';
+  D.classes.forEach(c => {
+    const lbl = document.createElement('label');
+    lbl.className = 'cls-item';
+    lbl.innerHTML = `<input type="checkbox" ${sel.has(c.name) ? 'checked' : ''} data-c="${esc(c.name)}">
+      <span>${esc(c.name)}</span><span class="cls-cnt">${c.competitors.length}</span>`;
+    lbl.querySelector('input').onchange = e => {
+      e.target.checked ? sel.add(c.name) : sel.delete(c.name);
+      render();
+    };
+    el.appendChild(lbl);
+  });
+}
+
+function selAll()   { D.classes.forEach(c => sel.add(c.name));    renderCls(); render(); }
+function deselAll() { sel.clear(); renderCls(); render(); }
+
+function renderClubs() {
+  const el = document.getElementById('clubList');
+  el.innerHTML = '';
+  for (const club of allClubs) {
+    const lbl = document.createElement('label');
+    lbl.className = 'cls-item';
+    const checked = clubSel === null || clubSel.has(club);
+    lbl.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} data-c="${esc(club)}">
+      <span>${esc(club)}</span><span class="cls-cnt">${D.classes.reduce((s, c) => s + c.competitors.filter(x => x.club === club).length, 0)}</span>`;
+    lbl.querySelector('input').onchange = () => {
+      if (clubSel === null) clubSel = new Set(allClubs);
+      clubSel.has(club) ? clubSel.delete(club) : clubSel.add(club);
+      if (clubSel.size === allClubs.length) clubSel = null;
+      renderClubs(); render();
+    };
+    el.appendChild(lbl);
+  }
+}
+function selAllClubs()   { clubSel = null; renderClubs(); render(); }
+function deselAllClubs() { clubSel = new Set(); renderClubs(); render(); }
+
+function syncOpts() {
+  O.pos  = document.getElementById('oPos').checked;
+  O.cnt  = document.getElementById('oCnt').checked;
+  O.dist = document.getElementById('oDist').checked;
+  O.dns  = document.getElementById('oDNS').checked;
+  O.dnf  = document.getElementById('oDNF').checked;
+  O.mp   = document.getElementById('oMP').checked;
+  O.max  = parseInt(document.getElementById('oMax').value) || 0;
+  O.top  = document.getElementById('oClubTop').checked;
+  O.topN = parseInt(document.getElementById('oClubTopN').value) || 0;
+  render();
+}
+
+/* ----------------------------------------------------------
+   Apufunktiot suodatukseen
+   ---------------------------------------------------------- */
+function getTopPlusClub(competitors) {
+  // Top N from all OK finishers
+  const top = competitors
+    .filter(x => x.status === 'OK' && x.pos != null)
+    .sort((a, b) => a.pos - b.pos)
+    .slice(0, O.topN);
+  const topSet = new Set(top);
+  // Club members excluding those already in top
+  let club = competitors.filter(x => clubSel.has(x.club) && !topSet.has(x));
+  if (!O.dns) club = club.filter(x => x.status !== 'DNS');
+  if (!O.dnf) club = club.filter(x => x.status !== 'DNF');
+  if (!O.mp)  club = club.filter(x => x.status !== 'MP' && x.status !== 'DSQ' && x.status !== 'OTL');
+  return [...top, ...club];
+}
+
+function filteredCompetitors(c) {
+  const clubView = clubSel !== null && O.top && O.topN > 0;
+  if (clubView) return getTopPlusClub(c.competitors);
+  let list = [...c.competitors];
+  if (clubSel !== null) list = list.filter(x => clubSel.has(x.club));
+  if (!O.dns) list = list.filter(x => x.status !== 'DNS');
+  if (!O.dnf) list = list.filter(x => x.status !== 'DNF');
+  if (!O.mp)  list = list.filter(x => x.status !== 'MP' && x.status !== 'DSQ' && x.status !== 'OTL');
+  if (O.max > 0) list = list.slice(0, O.max);
+  return list;
+}
+
+function classHasClubMembers(c) {
+  if (clubSel === null) return true;
+  return c.competitors.some(x => clubSel.has(x.club));
+}
+
+/* ============================================================
+   TULOSTEN RENDERÖINTI (paper)
+   ============================================================ */
+function render() {
+  const paper = document.getElementById('paper');
+  const empty = document.getElementById('empty');
+  const body  = document.getElementById('paperBody');
+
+  if (!D) { paper.style.display = 'none'; empty.style.display = ''; return; }
+  paper.style.display = ''; empty.style.display = 'none';
+
+  let picked = D.classes.filter(c => sel.has(c.name));
+  if (clubSel !== null) picked = picked.filter(c => classHasClubMembers(c));
+  let h = '';
+
+  // Tapahtumaotsikko
+  h += '<div class="ev-hdr"><h2>' + esc(D.name) + '</h2>';
+  const meta = [D.date, D.place].filter(Boolean);
+  if (meta.length) h += '<div class="ev-meta">' + esc(meta.join(', ')) + '</div>';
+  h += '</div>';
+
+  if (!picked.length) {
+    h += '<div class="no-sel"><i class="fas fa-list-check"></i>Valitse sarjoja sivupaneelista.</div>';
+    body.innerHTML = h;
+    return;
+  }
+
+  for (const c of picked) {
+    const starters  = c.competitors.length;
+    const finishers = c.competitors.filter(x => x.status === 'OK').length;
+
+    h += '<div class="cls-sec"><div class="cls-title"><span>' + esc(c.name) + '</span>';
+
+    const mi = [];
+    if (O.dist && c.dist)  mi.push(c.dist);
+    if (c.climb)           mi.push(c.climb + ' m');
+    if (c.ctrl)            mi.push(c.ctrl + ' rastia');
+    if (O.cnt) {
+      mi.push(finishers < starters
+        ? starters + ' osallistujaa, ' + finishers + ' maaliin'
+        : starters + ' osallistujaa');
+    }
+    if (mi.length) h += '<span class="cls-meta">' + esc(mi.join('  ·  ')) + '</span>';
+    h += '</div><div class="cls-div"></div>';
+
+    // Suodatetaan
+    const list = filteredCompetitors(c);
+
+    if (!list.length) {
+      h += '<p style="font-size:12.5px;color:var(--muted);padding:6px 0">Ei tuloksia valituilla suodattimilla.</p>';
+    } else {
+      h += '<table class="rt">';
+      for (const x of list) {
+        const sc = statusCls(x.status);
+        h += '<tr>';
+        if (O.pos) h += '<td class="c-pos">' + (x.pos != null ? esc(String(x.pos)) : '') + '</td>';
+        h += '<td class="c-name">' + esc(x.name) + '</td>';
+        h += '<td class="c-club">' + esc(x.club) + '</td>';
+        h += '<td class="c-time ' + sc + '">' + esc(x.time) + '</td>';
+        h += '</tr>';
+      }
+      h += '</table>';
+    }
+    h += '</div>';
+  }
+
+  body.innerHTML = h;
+}
+
+/* ============================================================
+   TEKSTIMUOTO (kopiointi ja lataus)
+   ============================================================ */
+function plainText() {
+  if (!D) return '';
+  let picked = D.classes.filter(c => sel.has(c.name));
+  if (clubSel !== null) picked = picked.filter(c => classHasClubMembers(c));
+  if (!picked.length) return 'Ei valittuja sarjoja.';
+
+  let t = (D.name || '').toUpperCase() + '\n';
+  const meta = [D.date, D.place].filter(Boolean);
+  if (meta.length) t += meta.join(', ') + '\n';
+  t += '\n';
+
+  for (let i = 0; i < picked.length; i++) {
+    const c = picked[i];
+    if (i > 0) t += '\n';
+
+    const starters  = c.competitors.length;
+    const finishers = c.competitors.filter(x => x.status === 'OK').length;
+    const mi = [];
+    if (O.dist && c.dist)  mi.push(c.dist);
+    if (c.climb)           mi.push(c.climb + ' m');
+    if (c.ctrl)            mi.push(c.ctrl + ' rastia');
+    if (O.cnt) {
+      mi.push(finishers < starters
+        ? starters + ' osallistujaa, ' + finishers + ' maaliin'
+        : starters + ' osallistujaa');
+    }
+
+    let hdr = c.name;
+    if (mi.length) hdr += '  ' + mi.join('  ·  ');
+    t += hdr + '\n';
+    t += '─'.repeat(Math.max(hdr.length, 40)) + '\n';
+
+    const list = filteredCompetitors(c);
+
+    for (const x of list) {
+      const p = O.pos && x.pos != null ? String(x.pos).padStart(3) + '.' : '    ';
+      const n = (x.name || '').padEnd(28).substring(0, 28);
+      const cl = (x.club || '').padEnd(18).substring(0, 18);
+      t += p + '  ' + n + '  ' + cl + '  ' + x.time + '\n';
+    }
+  }
+  return t;
+}
+
+/* ============================================================
+   TAPAHTUMANKÄSITTELYT
+   ============================================================ */
+function doPrint() { window.print(); }
+
+async function doCopy() {
+  const t = plainText();
+  if (!t) return;
+  try { await navigator.clipboard.writeText(t); }
+  catch {
+    const a = document.createElement('textarea');
+    a.value = t; a.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(a); a.select(); document.execCommand('copy');
+    document.body.removeChild(a);
+  }
+  toast('Kopioitu leikepöydälle.', 'success');
+}
+
+function doDownload() {
+  const t = plainText();
+  if (!t) return;
+  const blob = new Blob([t], { type: 'text/plain;charset=utf-8' });
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u;
+  a.download = (D.name || 'lehdistotulokset').replace(/[^a-zA-ZäöåÄÖÅ0-9]/g, '_').substring(0, 40) + '_lehdistotulokset.txt';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(u);
+  toast('Tiedosto ladattu.', 'success');
+}
+
+function openModal()  { document.getElementById('modal').classList.add('show'); document.getElementById('jsonIn').focus(); }
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+function doPaste() {
+  const txt = document.getElementById('jsonIn').value.trim();
+  if (!txt) { toast('Liitä JSON-data kenttään.', 'error'); return; }
+  try {
+    const d = JSON.parse(txt);
+    if (!d) { toast('Data ei näytä tuloksilta.', 'error'); return; }
+
+    // EventDetail-objekti (courseClasses + results)
+    if (!Array.isArray(d) && d.courseClasses && d.results) {
+      const flat = eventToFlatArray(d);
+      loadFromApi(flat);
+      closeModal();
+      toast('JSON tulkittu! (' + flat.length + ' riviä, ' + d.courseClasses.length + ' sarjaa)', 'success');
+      return;
+    }
+
+    if (typeof d === 'object' && !Array.isArray(d) && !d.classes && !d.sarjat && !d.results && !d.competitors && !d.competition) {
+      toast('Data ei näytä tuloksilta.', 'error'); return;
+    }
+    loadFromJson(d);
+    closeModal();
+    toast('JSON tulkittu!', 'success');
+  } catch (e) {
+    toast('JSON-parsinta epäonnistui: ' + e.message, 'error');
+  }
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+function toast(msg, type = 'error') {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  const cls = type === 'success' ? 'toast-success' : 'toast-error';
+  t.className = 'toast ' + cls;
+  const ic = type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation';
+  t.innerHTML = '<i class="fas ' + ic + '"></i><span>' + esc(msg) + '</span>';
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 200); }, 4500);
+}
+
+/* ============================================================
+   NÄPPÄIMISTÖ & INIT
+   ============================================================ */
+document.getElementById('urlIn').addEventListener('keydown', e => { if (e.key === 'Enter') doFetch(); });
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ?url=... automaattihaku
+(function () {
+  const p = new URLSearchParams(location.search);
+  const u = p.get('url') || p.get('event') || p.get('slug');
+  if (u) { document.getElementById('urlIn').value = u; setTimeout(doFetch, 250); }
+})();
+</script>
+</body>
+</html>
