@@ -1,19 +1,9 @@
 # Tulospalvelupaavo — Orienteering & adventure race toolkit
 
-Almost everything in Finnish orienteering — from timing to TV broadcasting —
-relies on established systems that have been in use for decades. Navisport has
-become the central hub for live results, but many workflows around it still
-require manual bridging: CSV exports, club lookups, custom overlays, and
-data transformations that each club or event organiser ends up solving on their
-own.
-
-**Tulospalvelupaavo** is a collection of tools that sit alongside Navisport to
-fill those gaps. Not a single product — just a growing box of helpers that
+**Tulospalvelupaavo** is a collection of tools  — just a growing box of helpers that
 extend what Navisport can offer, making data equally accessible to organisers,
 broadcasters, and participants. Some are full HTML applications, others are
-quick one-off scripts. They exist because the existing systems do the hard work
-— these tools just help the data flow where it needs to go.
-
+quick one-off scripts. 
 ---
 
 ## Main tools
@@ -66,9 +56,9 @@ exports into a combined district view with AM-participant marking:
 | File | Purpose |
 |------|---------|
 | `seuroittain.html` | Startlist viewer filtered by club, with live clocks, CSV export |
-| `lahtoaikasort.js` | Bookmarklet to sort start list tables by time |
+| `lahtoaikasort.js` | Bookmarklet to sort old Pirilä style start list tables by time, just load after the start list page. Helps finding club members that might need a ride together with a same car |
 | `fetch_seikkailusprintti_teams.py` | Scrapes team data from seikkailusprintti.com into CSV for bibgenerator |
-| `bibnumbeexample.csv` | Example CSV file for bibgenerator |
+
 
 ## Licence
 
