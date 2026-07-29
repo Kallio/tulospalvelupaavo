@@ -273,7 +273,7 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
               <tr><td>2</td><td><code>Sarja</code></td><td>Class / category</td></tr>
               <tr><td>3</td><td><code>Joukkueen nimi</code></td><td>Team name</td></tr>
               <tr><td>4</td><td><code>Kansalaisuus</code></td><td>Ignored</td></tr>
-              <tr><td>5</td><td><code>Seura</code></td><td>Ignored</td></tr>
+              <tr><td>5</td><td><code>Seura</code></td><td>Club name</td></tr>
               <tr><td>6</td><td><em>(separator)</em></td><td>Ignored</td></tr>
             </table>
             <br>
@@ -328,6 +328,10 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
       <input type="checkbox" id="classPrefixChk" onchange="useClassPrefix=this.checked">
       <label for="classPrefixChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Short class prefix</label>
+    </div>
+    <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="showClubChk" onchange="showClub=this.checked">
+      <label for="showClubChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Show team / club name</label>
     </div>
     <div class="row" style="margin-top:8px;">
       <button class="bp" onclick="generateBibs()">Generate Bibs</button>
@@ -510,6 +514,7 @@ let showBarcode     = true;
 let colorLegs       = true;
 let useClassPrefix  = false;
 let classPrefixMap  = {};
+let showClub        = false;
 
 // Background colors per relay leg (1-based index → color), wraps if more legs than colors
 const LEG_COLORS = [
@@ -542,6 +547,7 @@ const DEF_LAYOUT = {
   numberArea:    { cx:50, y:25,  fontSize:42,  w:90, maxW:55, letterSpacing:0 },
   sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
   barcode:       { cx:49.874, y:68.173,  w:70, h:17, fontSize:4.5 },
+  clubInfo:      { cx:50, y:78,  fontSize:4.5, w:85, maxW:55, letterSpacing:0 },
   sarja:         { cx:50, y:91,  fontSize:4.5, w:60, maxW:55, letterSpacing:0 },
   runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, maxW:55, letterSpacing:0, flipped:true },
   teamInfo:      { cx:50, y:86,  fontSize:4.5, w:85, maxW:55, letterSpacing:0 },
@@ -586,6 +592,7 @@ function parseTeams(rows) {
       kilpailunumero: r[0]?.trim() || '',
       sarja:          r[1]?.trim() || '',
       joukkue:        r[2]?.trim() || '',
+      seura:          r[4]?.trim() || '',
       runners:        [],
     };
     // Runner blocks: start at col 6, each block = 8 cols (7 data + 1 separator)
@@ -902,6 +909,13 @@ function createBib(team, runner) {
   }
 
   if (isSingle) {
+    // Club / team name
+    if (showClub && team.joukkue) {
+      const d = posDiv('clubInfo');
+      d.innerHTML = esc(team.joukkue);
+      card.appendChild(d);
+    }
+
     const d = posDiv('runnerInfo');
     if (runner.stageLines?.length) {
       // Multistage: name first, then one line per stage (sarja date time)
@@ -1613,6 +1627,7 @@ function navLoadIndividual(json) {
       kilpailunumero: String(r.bibNumber),
       sarja:          cc[r.classId] || '',
       joukkue:        r.club || navName(r),
+      seura:          r.club || '',
       runners: [{
         nimi:           navName(r),
         kilpailukortti: String(r.chip||''),
@@ -1651,6 +1666,7 @@ function navLoadRelay(json) {
         kilpailunumero: bib,
         sarja:          cc[r.classId] || cc[parent?.classId] || '',
         joukkue:        parent?.name || r.club || '',
+        seura:          r.club || '',
         runners:        [],
       };
     }
@@ -1705,6 +1721,7 @@ async function navLoadMultistage(json) {
           kilpailunumero: bib,
           sarja:          stageCc[r.classId] || cc[r.classId] || '',
           joukkue:        r.club || navName(r),
+          seura:          r.club || '',
           stageEntries:   [],
         };
       }
@@ -1737,6 +1754,7 @@ async function navLoadMultistage(json) {
       kilpailunumero: team.kilpailunumero,
       sarja:          team.sarja,
       joukkue:        team.joukkue,
+      seura:          team.seura,
       runners: [{
         nimi:           first.nimi || '',
         kilpailukortti: first.chip || '',
