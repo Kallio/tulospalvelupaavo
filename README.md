@@ -1,16 +1,18 @@
 # Tulospalvelupaavo — Orienteering & adventure race toolkit
 
-Finnish orienteering runs on results systems whose roots trace back to 8-bit DOS
-era software from the 1980s and 90s. Those old tools are stubbornly reliable but
-hard to integrate with modern workflows — web publishing, live streaming,
-real-time data, and self-service race management.
+Almost everything in Finnish orienteering — from timing to TV broadcasting —
+relies on established systems that have been in use for decades. Navisport has
+become the central hub for live results, but many workflows around it still
+require manual bridging: CSV exports, club lookups, custom overlays, and
+data transformations that each club or event organiser ends up solving on their
+own.
 
-**Tulospalvelupaavo** ("Paavo's timing service") is a collection of tools that
-bridge that gap. Not a single product, but a growing box of helpers that sit
-between legacy data formats and modern services (Navisport, OBS, IOF XML,
-WordPress, CSV). Some are quick one-off scripts, others are full HTML
-applications. All of them exist because the old DOS tools still do the hard work
-— and these tools help translate the result to where it needs to go next.
+**Tulospalvelupaavo** is a collection of tools that sit alongside Navisport to
+fill those gaps. Not a single product — just a growing box of helpers that
+extend what Navisport can offer, making data equally accessible to organisers,
+broadcasters, and participants. Some are full HTML applications, others are
+quick one-off scripts. They exist because the existing systems do the hard work
+— these tools just help the data flow where it needs to go.
 
 ---
 
