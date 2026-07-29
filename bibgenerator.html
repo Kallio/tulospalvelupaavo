@@ -1172,9 +1172,7 @@ function applyPos(el, key) {
   }
   if (l.y !== undefined) {
     el.style.top = l.y + '%';
-    // Only true group anchors have both cx and y — keep the group's own height
-    // bounded to what's left of the cell as it's dragged (see renderStickerSheet).
-    if (l.cx !== undefined) el.style.height = (100 - l.y) + '%';
+    if (l.cx !== undefined && key && key.startsWith('stickerGroup:')) el.style.height = (100 - l.y) + '%';
   }
   if (l.w !== undefined) el.style.width = l.w + '%';
   if (l.h !== undefined) {
