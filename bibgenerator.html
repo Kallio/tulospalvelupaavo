@@ -466,6 +466,12 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <button class="bg btn-sm" onclick="adj('w',+2)">+</button>
   </div>
   <div class="tb-row">
+    <span>Max W %</span>
+    <button class="bg btn-sm" onclick="adj('maxW',-2)">−</button>
+    <span class="tb-val" id="tb-mw">—</span>
+    <button class="bg btn-sm" onclick="adj('maxW',+2)">+</button>
+  </div>
+  <div class="tb-row">
     <span>Height %</span>
     <button class="bg btn-sm" onclick="adj('h',-2)">−</button>
     <span class="tb-val" id="tb-h">—</span>
@@ -531,14 +537,14 @@ const LEG_COLORS = [
 //   sarja      91–94%  (≈135–139 mm)
 const DEF_LAYOUT = {
   eventLogo:     { cx:50, y:1,   w:32, h:12 },
-  eventTitle:    { cx:50, y:14,  fontSize:7,   w:80, letterSpacing:0 },
-  eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70, letterSpacing:0 },
-  numberArea:    { cx:50, y:25,  fontSize:42,  w:90, letterSpacing:0 },
+  eventTitle:    { cx:50, y:14,  fontSize:7,   w:80, maxW:55, letterSpacing:0 },
+  eventSubtitle: { cx:50, y:20,  fontSize:4.5, w:70, maxW:55, letterSpacing:0 },
+  numberArea:    { cx:50, y:25,  fontSize:42,  w:90, maxW:55, letterSpacing:0 },
   sponsorLogo:   { cx:50, y:55,  w:42, h:17 },
   barcode:       { cx:49.874, y:68.173,  w:70, h:17, fontSize:4.5 },
-  sarja:         { cx:50, y:91,  fontSize:4.5, w:60, letterSpacing:0 },
-  runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0, flipped:true },
-  teamInfo:      { cx:50, y:86,  fontSize:4.5, w:85, letterSpacing:0 },
+  sarja:         { cx:50, y:91,  fontSize:4.5, w:60, maxW:55, letterSpacing:0 },
+  runnerInfo:    { cx:50, y:86,  fontSize:4.5, w:85, maxW:55, letterSpacing:0, flipped:true },
+  teamInfo:      { cx:50, y:86,  fontSize:4.5, w:85, maxW:55, letterSpacing:0 },
 };
 
 let layout = deepClone(DEF_LAYOUT);
@@ -1175,6 +1181,8 @@ function applyPos(el, key) {
     if (l.cx !== undefined && key && key.startsWith('stickerGroup:')) el.style.height = (100 - l.y) + '%';
   }
   if (l.w !== undefined) el.style.width = l.w + '%';
+  if (l.maxW !== undefined && editMode) el.style.maxWidth = l.maxW + '%';
+  else if (!editMode) el.style.maxWidth = '';
   if (l.h !== undefined) {
     if (key === 'stickerBarcode') {
       // max-height, not height: barcode shrinks (flex: 1, see CSS) to make room
@@ -1205,6 +1213,7 @@ function toggleEditMode() {
   const tb = document.getElementById('toolbar');
   if (editMode) tb.classList.add('visible');
   else { tb.classList.remove('visible'); selectedKey = null; selectedRef = null; clearSelection(); }
+  syncLayout();
 }
 
 (function initToolbarDrag() {
@@ -1300,9 +1309,11 @@ function onMD(e) {
     drag.posRef.cx = clamp(drag.cx0 + dx, 0, 100);
     drag.posRef.y  = clamp(drag.y_0 + dy, 0, 95);
     syncLayout();
+    updateGuides();
   };
   const mu = () => {
     drag = null;
+    clearGuides();
     document.removeEventListener('mousemove', mm);
     document.removeEventListener('mouseup',   mu);
   };
@@ -1326,6 +1337,7 @@ function adj(prop, delta) {
   } else {
     if (l[prop] === undefined) return;
     if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
+    else if (prop === 'maxW') l[prop] = clamp((l[prop] ?? 55) + delta, 10, 100);
     else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
     else if (prop === 'fontSize') {
       l[prop] = clamp(l[prop]+delta, 2, 100);
@@ -1356,6 +1368,7 @@ function updateToolbar() {
   document.getElementById('tb-name').textContent = selectedKey;
   document.getElementById('tb-fs').textContent   = l.fontSize      !== undefined ? l.fontSize.toFixed(1)+'mm'  : '—';
   document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
+  document.getElementById('tb-mw').textContent   = l.maxW          !== undefined ? l.maxW.toFixed(0)+'%'         : '—';
   document.getElementById('tb-h').textContent    = l.h             !== undefined ? l.h.toFixed(0)+'%'           : '—';
   document.getElementById('tb-ls').textContent   = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2)+'em' : '—';
   const vBtn = document.getElementById('tb-visible');
@@ -1609,6 +1622,7 @@ function navLoadIndividual(json) {
         lahtöaika:      navTime(r),
       }]
     }));
+  sortTeams();
 }
 
 // Relay: all legs in one flat results array; `leg` field = osuus.
@@ -1655,6 +1669,7 @@ function navLoadRelay(json) {
 
   csvTeams = Object.values(teamMap);
   csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
+  sortTeams();
 }
 
 // Multi-stage individual event: each stage becomes a leg (osuus = stageNumber).
@@ -1733,6 +1748,7 @@ async function navLoadMultistage(json) {
       }],
     };
   }).filter(t => t.runners[0].nimi);
+  sortTeams();
 }
 
 async function tryLoadNavisportLogo(url) {
@@ -1785,6 +1801,40 @@ function updatePanelControls() {
 function esc(s)  { if (!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
 function escA(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
+function sortTeams() {
+  csvTeams.sort((a, b) => +a.kilpailunumero - +b.kilpailunumero);
+}
+
+function updateGuides() {
+  if (!drag) return;
+  const cx = drag.posRef.cx;
+  const y  = drag.posRef.y;
+  const vGuides = [25, 50, 75];
+  const hGuides = [50];
+  const nearV = vGuides.find(g => Math.abs(cx - g) < 2);
+  const nearH = hGuides.find(g => Math.abs(y - g) < 2);
+  document.querySelectorAll('.alignment-guides').forEach(el => el.remove());
+  if (nearV === undefined && nearH === undefined) return;
+  document.querySelectorAll('.bib-card, .sticker-page').forEach(card => {
+    if (nearV !== undefined) {
+      const line = document.createElement('div');
+      line.className = 'alignment-guides';
+      line.style.cssText = `position:absolute;top:0;left:${nearV}%;width:1px;height:100%;background:#ff8c00;pointer-events:none;z-index:50;opacity:0.7;`;
+      card.appendChild(line);
+    }
+    if (nearH !== undefined) {
+      const line = document.createElement('div');
+      line.className = 'alignment-guides';
+      line.style.cssText = `position:absolute;top:${nearH}%;left:0;width:100%;height:1px;background:#ff8c00;pointer-events:none;z-index:50;opacity:0.7;`;
+      card.appendChild(line);
+    }
+  });
+}
+
+function clearGuides() {
+  document.querySelectorAll('.alignment-guides').forEach(el => el.remove());
+}
+
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
@@ -1794,6 +1844,7 @@ document.getElementById('csvFile').addEventListener('change', function() {
   rd.onload = e => {
     const rows = parseCSV(e.target.result);
     csvTeams = parseTeams(rows);
+    sortTeams();
     const total = csvTeams.reduce((s,t)=>s+t.runners.length,0);
     document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
     populateSarjaFilter();
