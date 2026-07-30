@@ -1,0 +1,1366 @@
+{
+  "disclaimer": "This data is gathered from IRMA's public API but is not an official IRMA export. Use at your own risk.",
+  "updated": "2026-07-30T16:42:52",
+  "areas": [
+    {
+      "id": 1,
+      "name": "Etelä-Pohjanmaa",
+      "abbreviation": "E-P"
+    },
+    {
+      "id": 2,
+      "name": "FSO",
+      "abbreviation": "FSO"
+    },
+    {
+      "id": 3,
+      "name": "Häme",
+      "abbreviation": "Häme"
+    },
+    {
+      "id": 6,
+      "name": "Kaakko",
+      "abbreviation": "Kaak"
+    },
+    {
+      "id": 7,
+      "name": "Kainuu",
+      "abbreviation": "Kain"
+    },
+    {
+      "id": 4,
+      "name": "Keski-Pohjanmaa",
+      "abbreviation": "K-P"
+    },
+    {
+      "id": 5,
+      "name": "Keski-Suomi",
+      "abbreviation": "K-S"
+    },
+    {
+      "id": 9,
+      "name": "Lappi",
+      "abbreviation": "Lap"
+    },
+    {
+      "id": 10,
+      "name": "Pohjois-Pohjanmaa",
+      "abbreviation": "P-P"
+    },
+    {
+      "id": 8,
+      "name": "Päijät-Häme",
+      "abbreviation": "P-H"
+    },
+    {
+      "id": 12,
+      "name": "Satakunta",
+      "abbreviation": "Sata"
+    },
+    {
+      "id": 11,
+      "name": "Savo-Karjala",
+      "abbreviation": "S-K"
+    },
+    {
+      "id": 13,
+      "name": "Uusimaa",
+      "abbreviation": "Uusi"
+    },
+    {
+      "id": 14,
+      "name": "Varsinais-Suomi",
+      "abbreviation": "V-S"
+    }
+  ],
+  "clubMap": {
+    "Angelniemen Ankkuri": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Downtown 65 Endurance": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Akilles OK": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Alatornion Pirkat": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Alahärmän Kisa": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Askolan Urheilijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Asikkalan Raikas": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Anttolan Urheilijat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Epilän Esa": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Eksymä": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Enonkosken Urheilijat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Eurajoen Veikot": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Espoon Akilles": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Evijärven Urheilijat": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Eura-Kauttuan Urheilijat": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Espoon Suunta": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Fiskarin Urheilijat -47": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Free Adventure": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Gamlakarleby IF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Haapaveden Urheilijat": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Hauhon Sisu": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Hankasalmen Hanka": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Halikon Hakoniskat": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Halsuan Toivo": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Haukiputaan Heitto": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Helsingin Kisailijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Helsingin Poliisi-Voimailijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Haukivuoren Kisailijat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Hiiltomiehet": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Helsingin Suunnistajat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Hiidenkiertäjät": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Herttoniemen Hiihtäjät ": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Hiisirasti": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Himangan Urheilijat": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Hinnerjoen Yritys": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Hirvensalon Heitto": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Hollolan Urheilijat -46": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Holvastin Tana": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Honkajoen Seudun Urheilijat": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Hyvinkään Rasti": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Hämeenlinnan Suunnistajat": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Hämeenlinnan Tarmo": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "IF Femman": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "IF Minken": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "IF Brahe": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Iin Yritys": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Iisalmen Visa": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "IF Åland": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "IF Sibbo-Vargarna": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Iitin Pyrintö": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Iisu": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Ikaalisten Nouseva-Voima": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "IK Falken": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "IK Kronan": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Ilomantsin Urheilijat": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "IK Örnen": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Inkeroisten Terho": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Itä-Hämeen Rasti": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Itä-Päijänteen Rasti": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Jatkuva Liike Oy": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Jalasjärven Jalas": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Joen Suunta": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Joutsenon Kullervo": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Juuan Jänne": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Juvan Urheilijat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Jyväskylän Pyöräilyseura": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Jämsän Retki-Veikot": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Järvenpään Palo": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Kaakon Rasti": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Järviseudun Rasti": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Kainuun Rastiviikko ry": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Kajaanin Kuohu": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Kajaanin Suunnistajat": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Kalajoen Junkkarit": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Kalvolan Keihäs": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kalevan Rasti": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Kangasalan Kisa": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kangasala SK": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kankaanpään Suunnistajat": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Kangasniemen Kalske": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Kannuksen Ura": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Karjaan Ura": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Karstulan Kiva": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Karkki-Rasti": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Kauhajoen Karhu": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Karhulan Korvenkiertäjät": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Kauhavan Wisa": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Kaustisen Pohjan-Veikot": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Kauvatsan Ponteva": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Kemijärven Urheilijat": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Kemiön Kiilat": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Keimolan Kaiku": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Keski-Karjalan Rasti": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Keravan Urheilijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Keuruun Kisailijat": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Kiimingin Urheilijat": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Kimito SF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Kiukaisten Urheilijat": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Kiuruveden Urheilijat": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Konneveden Urheilijat": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Kodisjoen Kaiku": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Kokkolan Suunnistajat": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Kontiolahden Urheilijat": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Kortesjärven Järvi-Veikot": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Koovee": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kuhmon Peurat": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Kouvolan Suunnistajat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Kunnon Suunta Oy": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Koskelankylän Riento": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Kuopion Suunnistajat": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Kuoreveden Kärki": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kuortaneen Kunto": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Kuusankosken Urheiluseura": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Kuusamon Erä-Veikot": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Kymin Suunnistajat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Kyrös-Rasti": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Kyyjärven KyKy": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Köyliön Lallit": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Kärkölän Kisa-Veikot": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Lahden Taimi": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Lahden Suunnistajat-37": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Lahden Työväen Hiihtäjät": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Laihian Luja": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Lapin Sudet": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Laitasaaren Veto": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Laitilan Jyske": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Lammin Säkiä": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Lapin Veikot": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Lappeen Riento": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Lauttakylän Luja": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Lehtimäen Jyske": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Lapuan Virkiä": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Lemin Eskot": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Leppävaaran Sisu": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Liedon Parma": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Lieksan Rasti": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Liperin Taimi Suunnistus": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Loimaan Jankko": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Lohtajan Veikot": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Lounais-Hämeen Rasti": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Luumäen Rasti": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Lynx": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Länsi-Lavian Loiske": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Länsi-Rajan Rasti": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Länsi-Uudenmaan Suunnistajat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Malax IF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Maarian Mahti": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Mesikämmenet": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Miehikkälän Vilkas": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "MS Parma": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Musta Mango Oy": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Mustalammen Pallo": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Musta Neliö": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Muuramen Rasti": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Muurlan Vihuri": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Myrskylän Myrsky": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Mynämäen Suunnistajat -52": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Mäntsälän Urheilijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Mäntän Seudun Eräpirkat": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Nakkilan Wisa": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Nagu IF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Navi": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Nilsiän Nujakka": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Nivalan Suunnistajat": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Northern Adventure Team": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "OC Puisto ": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Närpes OK": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK 77": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK Botnia": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK Kristina": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK Raseborg": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK Terjärv": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "OK Trian": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Olavin Rasti": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Oriveden Ponnistus": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Otaniemen Jyllääjät": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Oulaisten Huima": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Oulaisten Taru": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Oulun NMKY:n Urheilijat": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Kokemäen Kova-Väki Suunnistus": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Oulunsalon Vasama": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Oulun Tarmo": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Lahden Kaleva": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Oulun Yliopiston Urheiluseura": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Ounasvaaran Hiihtoseura": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Paimion Rasti": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Paljakka Ski-O": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Paltamon Urheilijat": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Pargas IF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Pelikassit": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Pellon Ponsi": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Perhon Kiri": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Perttelin Peikot": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Perämeren Rasti": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Peräseinäjoen Toive": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Pieksämäen Veikot": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Petäjäveden Petäjäiset": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Pietarsaaren Hiihtäjät": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Pihkafit Oy": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Nastolan Terä": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Pihkaniskat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Nivalan Urheilijat": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Pirkkalan Hiihtäjät": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Piikkiön Kehitys": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Nurmeksen Sepot": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Pitäjänmäen Tarmo": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Porvoon Urheilijat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Posion Pyrintö": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Pudasjärven Urheilijat": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Punkalaitumen Kunto": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Puolangan Ryhti": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "OK Orient": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Pyhäjärven Pohti": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Pälkäneen Luja-Lukko": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Päijät-Rasti": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Raisu Lumous": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Raja-Karjalan Suunnistajat": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "RAPSU": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Rajamäen Rykmentti": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Rasti 88": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Rasti E4": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Rastihaukat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Rasti-Hyry": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "RasTiimi": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Rasti-Jussit": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Rasti-Jyry": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Rastikarhut": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Rasti-Kurikka": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Rasti-Nokia": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Rasti-Lukko": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Rasti-Perniö": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "RastiPiikkiö": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Rasti-Vihti": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Rauman Työväen Urheilijat": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Riihimäen Suunnistajat": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Saarijärven Pullistus": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Sallan Karhut": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Saloisten Reipas": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Lohimaan Rasti": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Salon Vilpas": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Sauvon Urheilijat": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Savon Suunta": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Selkien Sisu": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Sievin Sisu": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Oulun Reipas": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Siilin Rasti": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Sinkki-Sepot": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "SK Pohjantähti": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "SK Uusi": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "SK Vuoksi": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "SOC Asikkala": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Solf IK": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Someron Esa": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Pohjankyrön Rasti": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Pulkkilan Ponsi": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Sonkajärven Pahka": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Sotkamon Jymy": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Sulkavan Urheilijat -41": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Stormin Teräs": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Sumiaisten Kunto": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Suomen Suunnistusliitto": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Suomen Suunnistusliitto2": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Suomusjärven Sisu": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Suonenjoen Vasama": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Suomussalmen Rasti": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Suunta 2000": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Suunta Jurva": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Suunta Jyväskylä": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Suunta-Sepot": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Rastiketut": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Suunta-Veikot": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Säyneisen Salpa": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Taivalkosken Kuohu": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Rastivarsat": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    },
+    "Tampereen Iltarastit": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Tampereen Pyrintö": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Tarpian Suunta": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Testiseura": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Teuvan Rivakka": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Turengin Sarastus": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Turun Metsänkävijät": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Sahalahden Kunto": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Turun NMKY": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Turun Suunnistajat": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Turun Visat": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Tuupovaaran Sepot": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Tuusulan Voima-Veikot": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Ulvilan Ura": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Urjalan Urheilijat": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Uuraisten Urheilijat": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Salon Viesti": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Vaajakosken Terä": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Vaasan Suunnistajat": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Vakka-Rasti": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Valkealan Kajo": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Vallan Suunta": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Valkeakosken Haka": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Vehkalahden Veikot": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Vetelin Urheilijat": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Vieremän Koitto": {
+      "areaId": 11,
+      "areaName": "Savo-Karjala"
+    },
+    "Vihtavuoren Pamaus": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Viitasaaren Suunta": {
+      "areaId": 5,
+      "areaName": "Keski-Suomi"
+    },
+    "Virtain Urheilijat": {
+      "areaId": 3,
+      "areaName": "Häme"
+    },
+    "Vuokatti Sport Resort Oy": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Vuokattisport Club": {
+      "areaId": 7,
+      "areaName": "Kainuu"
+    },
+    "Vähänkyrön Viesti": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "XYZ Eksyy-Setät": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Vörå IF": {
+      "areaId": 2,
+      "areaName": "FSO"
+    },
+    "Ykspihlajan Reima": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Ylikiimingin Nuijamiehet": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Ylivieskan Kuula": {
+      "areaId": 4,
+      "areaName": "Keski-Pohjanmaa"
+    },
+    "Ylläksen Rasti": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Ylistaron Kilpa-Veljet": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Ylämaan Pyrkijät": {
+      "areaId": 6,
+      "areaName": "Kaakko"
+    },
+    "Äänekosken Sarjakuvaseura": {
+      "areaId": 13,
+      "areaName": "Uusimaa"
+    },
+    "Yläneen Kiri": {
+      "areaId": 14,
+      "areaName": "Varsinais-Suomi"
+    },
+    "Ähtärin Urheilijat": {
+      "areaId": 1,
+      "areaName": "Etelä-Pohjanmaa"
+    },
+    "Siikaisten Sisu": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Suosmeren Salpa": {
+      "areaId": 12,
+      "areaName": "Satakunta"
+    },
+    "Tmi Omataivainen": {
+      "areaId": 9,
+      "areaName": "Lappi"
+    },
+    "Vaalan Karhu": {
+      "areaId": 10,
+      "areaName": "Pohjois-Pohjanmaa"
+    },
+    "Yökuppi": {
+      "areaId": 8,
+      "areaName": "Päijät-Häme"
+    }
+  }
+}
