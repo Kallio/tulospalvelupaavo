@@ -55,6 +55,13 @@
   }
   .header-text h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
   .header-text p { font-size: 12px; color: var(--sidebar-muted); font-weight: 400; }
+  .header-acts { margin-left: auto; display: flex; gap: 7px; align-items: center; }
+  .btn-hdr { padding: 7px 13px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; transition: all 0.12s; font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
+  .btn-hdr:active { transform: scale(0.97); }
+  .btn-hdr.btn-accent { background: var(--accent); color: #fff; }
+  .btn-hdr.btn-accent:hover { background: var(--accent-hover); }
+  .btn-hdr-sec { background: rgba(255,255,255,0.1); color: var(--sidebar-fg); }
+  .btn-hdr-sec:hover { background: rgba(255,255,255,0.2); }
 
   .url-bar {
     background: var(--card); border-bottom: 1px solid var(--border);
@@ -96,7 +103,7 @@
   /* Sidebar */
   .sidebar {
     width: 276px; flex-shrink: 0; background: var(--sidebar-bg); color: var(--sidebar-fg);
-    overflow-y: auto; transform: translateX(-100%);
+    transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
     display: flex; flex-direction: column;
   }
@@ -149,12 +156,6 @@
     font-size: 11.5px; font-family: 'Source Code Pro', monospace; text-align: center; outline: none;
   }
   .num-in:focus { border-color: var(--accent); }
-
-  .sb-acts {
-    padding: 12px 16px; display: flex; flex-direction: column; gap: 7px;
-    margin-top: auto; border-top: 1px solid var(--sidebar-border);
-  }
-  .sb-acts .btn { justify-content: center; width: 100%; }
 
   /* Main */
   .main-content { flex: 1; padding: 28px; overflow-y: auto; display: flex; justify-content: center; }
@@ -295,6 +296,11 @@
     <h1>Lehdistötulokset</h1>
     <p>Navisport-tulosten lehdistömuotoilu</p>
   </div>
+  <div class="header-acts" id="headerActs" style="display:none">
+    <button class="btn btn-accent btn-hdr" onclick="doPrint()"><i class="fas fa-print"></i> Tulosta</button>
+    <button class="btn btn-hdr btn-hdr-sec" onclick="doCopy()"><i class="fas fa-copy"></i> Kopioi teksti</button>
+    <button class="btn btn-hdr btn-hdr-sec" onclick="doDownload()"><i class="fas fa-file-arrow-down"></i> Lataa .txt</button>
+  </div>
 </header>
 
 <div class="url-bar">
@@ -351,11 +357,6 @@
       <div class="opt-row"><label>Näytä parhaat + seurat</label><label class="toggle"><input type="checkbox" id="oClubTop" checked onchange="syncOpts()"><span class="sl"></span></label></div>
       <div class="opt-row"><label>Parhaita / sarja</label><input type="number" class="num-in" id="oClubTopN" value="3" min="0" max="20" onchange="syncOpts()"></div>
     </div>
-    <div class="sb-acts" id="sbActs" style="display:none">
-      <button class="btn btn-accent" onclick="doPrint()"><i class="fas fa-print"></i> Tulosta</button>
-      <button class="btn btn-sb" onclick="doCopy()"><i class="fas fa-copy"></i> Kopioi teksti</button>
-      <button class="btn btn-sb" onclick="doDownload()"><i class="fas fa-file-arrow-down"></i> Lataa .txt</button>
-    </div>
   </aside>
 
   <main class="main-content" id="main">
@@ -406,10 +407,10 @@ let clubToArea = {};    // club name (lowercase) → area name
 // Pikaryhmät
 const GROUPS = [
   { l:'Miehet',   r:/^(H\d|Men\d|M\d)/i },
-  { l:'Naiset',   r:/^(D\d|Wom\d|N\d|W\d)/i },
+  { l:'Naiset',   r:/^(D\d|Wom\d)/i },
   { l:'E-luokat', r:/E$/ },
   { l:'A-luokat', r:/A$/ },
-  { l:'Nuoret',   r:/(?:8RR|10(?:RR)?|1[02468](?:TR)?|20)$/ },
+  { l:'Nuoret',   r:/(?:8RR|1[0-9](?:TR|RR)?|20)$/ },
 ];
 
 /* ============================================================
@@ -804,7 +805,8 @@ function loadFromJson(raw) {
    ============================================================ */
 function showSB() {
   document.getElementById('sidebar').classList.add('open');
-  ['sbEv', 'sbChips', 'sbCls', 'sbClubs', 'sbArea', 'sbOpts', 'sbActs'].forEach(id =>
+  document.getElementById('headerActs').style.display = '';
+  ['sbEv', 'sbChips', 'sbCls', 'sbClubs', 'sbArea', 'sbOpts'].forEach(id =>
     document.getElementById(id).style.display = ''
   );
 }
@@ -882,18 +884,63 @@ function deselAllAreas() { areaSel = new Set(); renderAreas(); render(); }
    ---------------------------------------------------------- */
 function loadAreaData() {
   fetch('clubs_with_districts.json')
-    .then(r => r.ok ? r.json() : Promise.reject())
-    .then(data => {
-      areaData = data;
-      clubToArea = {};
-      for (const [name, info] of Object.entries(data.clubMap)) {
-        if (info.areaName) clubToArea[name.toLowerCase()] = info.areaName;
-      }
-      computeResultAreas();
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(data => processAreaData(data))
+    .catch(err => {
+      console.error('Alueaineiston lataus epäonnistui:', err);
+      areaData = null; clubToArea = {}; areaSel = null;
       renderAreas();
-      render();
-    })
-    .catch(() => { areaData = null; clubToArea = {}; areaSel = null; });
+    });
+}
+
+function processAreaData(data) {
+  areaData = data;
+  clubToArea = {};
+  for (const [name, info] of Object.entries(data.clubMap)) {
+    if (info.areaName) clubToArea[name.toLowerCase()] = info.areaName;
+  }
+  console.log('Alueaineisto ladattu:', Object.keys(clubToArea).length, 'seuraa kartoitettu');
+  computeResultAreas();
+  renderAreas();
+  render();
+}
+
+function setupAreaDrop() {
+  const el = document.getElementById('sbArea');
+  if (el.dataset.dropReady) return;
+  el.dataset.dropReady = '1';
+
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file';
+  fileIn.accept = '.json';
+  fileIn.style.display = 'none';
+  fileIn.onchange = () => {
+    const file = fileIn.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { try { processAreaData(JSON.parse(ev.target.result)); toast('Alueaineisto ladattu tiedostosta.', 'success'); } catch (err) { toast('Virhe parsittaessa JSON-tiedostoa: ' + err.message, 'error'); } };
+    reader.onerror = () => toast('Tiedoston luku epäonnistui.', 'error');
+    reader.readAsText(file);
+    fileIn.value = '';
+  };
+  el.appendChild(fileIn);
+
+  el.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); el.style.borderColor = 'var(--accent)'; });
+  el.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); el.style.borderColor = ''; });
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); el.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.json')) { toast('Pudota .json-tiedosto (clubs_with_districts.json).', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => { try { processAreaData(JSON.parse(ev.target.result)); toast('Alueaineisto ladattu tiedostosta.', 'success'); } catch (err) { toast('Virhe parsittaessa JSON-tiedostoa: ' + err.message, 'error'); } };
+    reader.onerror = () => toast('Tiedoston luku epäonnistui.', 'error');
+    reader.readAsText(file);
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target.id === 'areaDropHint') { e.preventDefault(); fileIn.click(); }
+  });
 }
 
 function computeResultAreas() {
@@ -910,14 +957,29 @@ function computeResultAreas() {
 
 function renderAreas() {
   const el = document.getElementById('areaList');
-  if (!el || !areaData || !areaData._resultAreas) { if (el) el.innerHTML = ''; return; }
+  if (!el) return;
+  if (!areaData) {
+    el.innerHTML = '<span style="font-size:11px;color:var(--sidebar-muted)">Aluetietoja ei saatavilla. Palvele tiedostot HTTP-palvelimelta tai <a href="#" onclick="return false" style="color:var(--accent);text-decoration:underline" id="areaDropHint">pudota <code>clubs_with_districts.json</code> tähän</a>.</span>';
+    return;
+  }
+  if (!areaData._resultAreas || !areaData._resultAreas.length) {
+    el.innerHTML = '<span style="font-size:11px;color:var(--sidebar-muted)">Tämän tapahtuman seuroilla ei ole aluekartoitusta.</span>';
+    return;
+  }
   el.innerHTML = '';
   const areas = areaData._resultAreas;
   // Show all-areas chip
   const all = document.createElement('span');
-  all.className = 'chip' + (areaSel === null ? ' on' : '');
+  all.className = 'chip' + (areaSel === null || (areaSel && areaSel.size === areas.length) ? ' on' : '');
   all.textContent = 'Kaikki';
-  all.onclick = () => { areaSel = null; renderAreas(); render(); };
+  all.onclick = () => {
+    if (areaSel === null || areaSel.size === areas.length) {
+      areaSel = new Set(); // deselect all
+    } else {
+      areaSel = null; // select all
+    }
+    renderAreas(); render();
+  };
   el.appendChild(all);
   for (const a of areas) {
     const ch = document.createElement('span');
@@ -926,7 +988,7 @@ function renderAreas() {
     ch.onclick = () => {
       if (areaSel === null) areaSel = new Set(areas);
       areaSel.has(a) ? areaSel.delete(a) : areaSel.add(a);
-      if (areaSel.size === 0 || areaSel.size === areas.length) areaSel = null;
+      if (areaSel.size === areas.length) areaSel = null;
       renderAreas(); render();
     };
     el.appendChild(ch);
@@ -1194,6 +1256,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
   const p = new URLSearchParams(location.search);
   const u = p.get('url') || p.get('event') || p.get('slug');
   if (u) { document.getElementById('urlIn').value = u; setTimeout(doFetch, 250); }
+  setupAreaDrop();
 })();
 </script>
 </body>
