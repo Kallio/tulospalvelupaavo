@@ -402,7 +402,7 @@ const GROUPS = [
   { l:'Naiset',   r:/^(D\d|Wom\d|N\d|W\d)/i },
   { l:'E-luokat', r:/E$/ },
   { l:'A-luokat', r:/A$/ },
-  { l:'Nuoret',   r:/\d{1,2}$/ },
+  { l:'Nuoret',   r:/(?:8RR|10(?:RR)?|1[02468](?:TR)?|20)$/ },
 ];
 
 /* ============================================================
@@ -815,7 +815,10 @@ function renderChips() {
     ch.textContent = g.l;
     ch.onclick = () => {
       const on = ch.classList.toggle('on');
-      D.classes.forEach(c => { if (g.r.test(c.name)) on ? sel.add(c.name) : sel.delete(c.name); });
+      D.classes.forEach(c => {
+        const norm = c.name.replace(/[\s_-]+/g, '');
+        if (g.r.test(norm)) on ? sel.add(c.name) : sel.delete(c.name);
+      });
       renderCls(); render();
     };
     el.appendChild(ch);
