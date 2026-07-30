@@ -334,6 +334,10 @@
       </div>
       <div class="cls-list" id="clubList"></div>
     </div>
+    <div class="sb-sec" id="sbArea" style="display:none">
+      <div class="sb-lbl">Alueet</div>
+      <div class="quick-chips" id="areaList"></div>
+    </div>
     <div class="sb-sec" id="sbOpts" style="display:none">
       <div class="sb-lbl">Asetukset</div>
       <div class="opt-row"><label>Sijanumerot</label><label class="toggle"><input type="checkbox" id="oPos" checked onchange="syncOpts()"><span class="sl"></span></label></div>
@@ -395,6 +399,9 @@ let sel = new Set();
 let clubSel = null;     // null = kaikki seurat; Set = valitut seurat
 let allClubs = [];      // uniikit seurat aakkosjärjestyksessä
 let O = { pos:true, cnt:true, dist:true, dns:true, dnf:true, mp:true, max:0, top:true, topN:3 };
+let areaSel = null;     // null = kaikki alueet; Set = valitut alueiden nimet
+let areaData = null;    // clubs_with_districts.json
+let clubToArea = {};    // club name (lowercase) → area name
 
 // Pikaryhmät
 const GROUPS = [
@@ -670,6 +677,7 @@ function loadFromApi(arr) {
   sel = new Set(classes.map(c => c.name));
   allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
   clubSel = null;
+  loadAreaData();
   showSB(); renderEv(); renderChips(); renderCls(); renderClubs(); render();
 }
 
@@ -787,6 +795,7 @@ function loadFromJson(raw) {
   sel = new Set(classes.map(c => c.name));
   allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
   clubSel = null;
+  loadAreaData();
   showSB(); renderEv(); renderChips(); renderCls(); renderClubs(); render();
 }
 
@@ -795,7 +804,7 @@ function loadFromJson(raw) {
    ============================================================ */
 function showSB() {
   document.getElementById('sidebar').classList.add('open');
-  ['sbEv', 'sbChips', 'sbCls', 'sbClubs', 'sbOpts', 'sbActs'].forEach(id =>
+  ['sbEv', 'sbChips', 'sbCls', 'sbClubs', 'sbArea', 'sbOpts', 'sbActs'].forEach(id =>
     document.getElementById(id).style.display = ''
   );
 }
@@ -865,6 +874,65 @@ function renderClubs() {
 function selAllClubs()   { clubSel = null; renderClubs(); render(); }
 function deselAllClubs() { clubSel = new Set(); renderClubs(); render(); }
 
+function selAllAreas()   { areaSel = null; renderAreas(); render(); }
+function deselAllAreas() { areaSel = new Set(); renderAreas(); render(); }
+
+/* ----------------------------------------------------------
+   Alueiden lataus ja renderöinti
+   ---------------------------------------------------------- */
+function loadAreaData() {
+  fetch('clubs_with_districts.json')
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(data => {
+      areaData = data;
+      clubToArea = {};
+      for (const [name, info] of Object.entries(data.clubMap)) {
+        if (info.areaName) clubToArea[name.toLowerCase()] = info.areaName;
+      }
+      computeResultAreas();
+      renderAreas();
+      render();
+    })
+    .catch(() => { areaData = null; clubToArea = {}; areaSel = null; });
+}
+
+function computeResultAreas() {
+  if (!D) return;
+  const names = new Set();
+  for (const c of D.classes) {
+    for (const comp of c.competitors) {
+      const a = clubToArea[comp.club.toLowerCase()];
+      if (a) names.add(a);
+    }
+  }
+  areaData._resultAreas = [...names].sort((a, b) => a.localeCompare(b, 'fi'));
+}
+
+function renderAreas() {
+  const el = document.getElementById('areaList');
+  if (!el || !areaData || !areaData._resultAreas) { if (el) el.innerHTML = ''; return; }
+  el.innerHTML = '';
+  const areas = areaData._resultAreas;
+  // Show all-areas chip
+  const all = document.createElement('span');
+  all.className = 'chip' + (areaSel === null ? ' on' : '');
+  all.textContent = 'Kaikki';
+  all.onclick = () => { areaSel = null; renderAreas(); render(); };
+  el.appendChild(all);
+  for (const a of areas) {
+    const ch = document.createElement('span');
+    ch.className = 'chip' + (areaSel === null || areaSel.has(a) ? ' on' : '');
+    ch.textContent = a;
+    ch.onclick = () => {
+      if (areaSel === null) areaSel = new Set(areas);
+      areaSel.has(a) ? areaSel.delete(a) : areaSel.add(a);
+      if (areaSel.size === 0 || areaSel.size === areas.length) areaSel = null;
+      renderAreas(); render();
+    };
+    el.appendChild(ch);
+  }
+}
+
 function syncOpts() {
   O.pos  = document.getElementById('oPos').checked;
   O.cnt  = document.getElementById('oCnt').checked;
@@ -881,6 +949,12 @@ function syncOpts() {
 /* ----------------------------------------------------------
    Apufunktiot suodatukseen
    ---------------------------------------------------------- */
+function competitorInArea(x) {
+  if (areaSel === null) return true;
+  const a = clubToArea[x.club.toLowerCase()];
+  return a && areaSel.has(a);
+}
+
 function getTopPlusClub(competitors) {
   // Top N from all OK finishers
   const top = competitors
@@ -890,6 +964,7 @@ function getTopPlusClub(competitors) {
   const topSet = new Set(top);
   // Club members excluding those already in top
   let club = competitors.filter(x => clubSel.has(x.club) && !topSet.has(x));
+  if (areaSel !== null) club = club.filter(x => competitorInArea(x));
   if (!O.dns) club = club.filter(x => x.status !== 'DNS');
   if (!O.dnf) club = club.filter(x => x.status !== 'DNF');
   if (!O.mp)  club = club.filter(x => x.status !== 'MP' && x.status !== 'DSQ' && x.status !== 'OTL');
@@ -900,7 +975,8 @@ function filteredCompetitors(c) {
   const clubView = clubSel !== null && O.top && O.topN > 0;
   if (clubView) return getTopPlusClub(c.competitors);
   let list = [...c.competitors];
-  if (clubSel !== null) list = list.filter(x => clubSel.has(x.club));
+  if (areaSel !== null)    list = list.filter(x => competitorInArea(x));
+  if (clubSel !== null)    list = list.filter(x => clubSel.has(x.club));
   if (!O.dns) list = list.filter(x => x.status !== 'DNS');
   if (!O.dnf) list = list.filter(x => x.status !== 'DNF');
   if (!O.mp)  list = list.filter(x => x.status !== 'MP' && x.status !== 'DSQ' && x.status !== 'OTL');
@@ -909,8 +985,10 @@ function filteredCompetitors(c) {
 }
 
 function classHasClubMembers(c) {
-  if (clubSel === null) return true;
-  return c.competitors.some(x => clubSel.has(x.club));
+  if (clubSel === null && areaSel === null) return true;
+  if (areaSel === null) return c.competitors.some(x => clubSel.has(x.club));
+  if (clubSel === null) return c.competitors.some(x => competitorInArea(x));
+  return c.competitors.some(x => clubSel.has(x.club) && competitorInArea(x));
 }
 
 /* ============================================================
@@ -925,7 +1003,7 @@ function render() {
   paper.style.display = ''; empty.style.display = 'none';
 
   let picked = D.classes.filter(c => sel.has(c.name));
-  if (clubSel !== null) picked = picked.filter(c => classHasClubMembers(c));
+  if (clubSel !== null || areaSel !== null) picked = picked.filter(c => classHasClubMembers(c));
   let h = '';
 
   // Tapahtumaotsikko
@@ -988,7 +1066,7 @@ function render() {
 function plainText() {
   if (!D) return '';
   let picked = D.classes.filter(c => sel.has(c.name));
-  if (clubSel !== null) picked = picked.filter(c => classHasClubMembers(c));
+  if (clubSel !== null || areaSel !== null) picked = picked.filter(c => classHasClubMembers(c));
   if (!picked.length) return 'Ei valittuja sarjoja.';
 
   let t = (D.name || '').toUpperCase() + '\n';
