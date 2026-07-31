@@ -882,14 +882,22 @@ function deselAllAreas() { areaSel = new Set(); renderAreas(); render(); }
 /* ----------------------------------------------------------
    Alueiden lataus ja renderöinti
    ---------------------------------------------------------- */
+const AREA_DATA_FALLBACK_URL = 'https://raw.githubusercontent.com/Kallio/tulospalvelupaavo/refs/heads/main/clubs_with_districts.json';
+
 function loadAreaData() {
   fetch('clubs_with_districts.json')
     .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(data => processAreaData(data))
     .catch(err => {
-      console.error('Alueaineiston lataus epäonnistui:', err);
-      areaData = null; clubToArea = {}; areaSel = null;
-      renderAreas();
+      console.warn('Alueaineistoa ei löytynyt paikallisesta polusta, yritetään GitHubista:', err);
+      fetch(AREA_DATA_FALLBACK_URL)
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(data => processAreaData(data))
+        .catch(err2 => {
+          console.error('Alueaineiston lataus epäonnistui myös GitHubista:', err2);
+          areaData = null; clubToArea = {}; areaSel = null;
+          renderAreas();
+        });
     });
 }
 
@@ -967,6 +975,17 @@ function renderAreas() {
     return;
   }
   el.innerHTML = '';
+  if (areaData.updated) {
+    let upd = areaData.updated;
+    try {
+      const d = new Date(upd);
+      if (!isNaN(d)) upd = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' }) + ' ' + d.toLocaleTimeString('fi-FI', { hour:'2-digit', minute:'2-digit' });
+    } catch {}
+    const info = document.createElement('div');
+    info.style.cssText = 'width:100%;font-size:10.5px;color:var(--sidebar-muted);margin-bottom:6px';
+    info.innerHTML = '<i class="fas fa-clock" style="margin-right:4px"></i>Aluetiedot päivitetty ' + esc(upd);
+    el.appendChild(info);
+  }
   const areas = areaData._resultAreas;
   // Show all-areas chip
   const all = document.createElement('span');
