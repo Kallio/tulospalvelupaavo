@@ -216,31 +216,6 @@
   .no-sel { text-align: center; padding: 52px 20px; color: var(--muted); font-size: 13.5px; }
   .no-sel i { font-size: 28px; display: block; margin-bottom: 10px; opacity: 0.35; }
 
-  /* Modal */
-  .modal-bg {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100;
-    display: grid; place-items: center; padding: 24px;
-    opacity: 0; visibility: hidden; transition: all 0.2s; backdrop-filter: blur(3px);
-  }
-  .modal-bg.show { opacity: 1; visibility: visible; }
-  .modal {
-    background: var(--card); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-    width: 100%; max-width: 600px; max-height: 78vh;
-    display: flex; flex-direction: column; transform: translateY(10px); transition: transform 0.2s;
-  }
-  .modal-bg.show .modal { transform: translateY(0); }
-  .modal-hd { padding: 18px 22px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-  .modal-hd h3 { font-size: 15px; font-weight: 700; }
-  .modal-bd { padding: 18px 22px; overflow-y: auto; flex: 1; }
-  .modal-bd textarea {
-    width: 100%; min-height: 240px; padding: 12px; border: 1.5px solid var(--border);
-    border-radius: var(--radius); font-family: 'Source Code Pro', monospace; font-size: 11.5px;
-    resize: vertical; outline: none; background: var(--bg); color: var(--fg); line-height: 1.5;
-  }
-  .modal-bd textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
-  .modal-bd .hint { font-size: 11.5px; color: var(--muted); margin-top: 7px; line-height: 1.5; }
-  .modal-ft { padding: 14px 22px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); }
-
   /* Toast */
   .toast-wrap { position: fixed; top: 14px; right: 14px; z-index: 200; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
   .toast {
@@ -255,6 +230,27 @@
   .toast-success i { color: #16a34a; }
   @keyframes tIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
   @keyframes tOut { to { opacity: 0; transform: translateX(16px); } }
+
+  /* Aluetiedot-tooltip */
+  .area-help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px;
+    background: var(--primary-dark); border: 1px solid var(--accent); border-radius: 50%;
+    font-size: 9px; color: var(--accent); cursor: help;
+    position: relative; flex-shrink: 0;
+  }
+  .area-help .area-tip {
+    display: none;
+    position: absolute; top: 20px; left: 0;
+    background: var(--sidebar-bg); border: 1px solid var(--accent); border-radius: 6px;
+    padding: 11px 13px; width: 260px;
+    font-size: 11px; color: var(--sidebar-fg); line-height: 1.55;
+    z-index: 200; white-space: normal; font-weight: 400; text-transform: none; letter-spacing: normal;
+  }
+  .area-help:hover .area-tip,
+  .area-help:focus .area-tip { display: block; }
+  .area-tip a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .area-tip .a-upd { color: var(--sidebar-muted); font-size: 10px; margin-top: 8px; }
 
   /* Error detail - näytetään hakuongelman yhteydessä */
   .error-detail {
@@ -273,7 +269,7 @@
   }
   @media print {
     body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .app-header, .url-bar, .sidebar, .toast-wrap, .modal-bg { display: none !important; }
+    .app-header, .url-bar, .sidebar, .toast-wrap { display: none !important; }
     .app-layout { display: block !important; }
     .main-content { padding: 0 !important; }
     .paper { box-shadow: none !important; border: none !important; border-radius: 0 !important; padding: 16px 28px !important; max-width: 100% !important; }
@@ -300,13 +296,13 @@
     <button class="btn btn-accent btn-hdr" onclick="doPrint()"><i class="fas fa-print"></i> Tulosta</button>
     <button class="btn btn-hdr btn-hdr-sec" onclick="doCopy()"><i class="fas fa-copy"></i> Kopioi teksti</button>
     <button class="btn btn-hdr btn-hdr-sec" onclick="doDownload()"><i class="fas fa-file-arrow-down"></i> Lataa .txt</button>
+    <button class="btn btn-hdr btn-hdr-sec" onclick="doShare()"><i class="fas fa-share-nodes"></i> Jaa linkki</button>
   </div>
 </header>
 
 <div class="url-bar">
-  <input type="text" id="urlIn" placeholder="Navisport URL, esim. https://navisport.com/events/jukola-2026">
+  <input type="text" id="urlIn" placeholder="Navisport URL, esim. https://navisport.com/events/jukola-2028">
   <button class="btn btn-primary" id="fetchBtn" onclick="doFetch()"><i class="fas fa-download"></i> Hae</button>
-  <button class="btn btn-outline" onclick="openModal()"><i class="fas fa-paste"></i> Liitä JSON</button>
 </div>
 
 <div class="app-layout">
@@ -322,26 +318,31 @@
     </div>
     <div class="sb-sec" id="sbCls" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div class="sb-lbl" style="margin-bottom:0">Sarjat</div>
-        <div style="display:flex;gap:3px">
-          <button class="btn-ghost btn-sm" onclick="selAll()" title="Valitse kaikki"><i class="fas fa-check-double"></i></button>
-          <button class="btn-ghost btn-sm" onclick="deselAll()" title="Poista valinnat"><i class="fas fa-times"></i></button>
+        <div style="display:flex;gap:5px">
+          <span class="chip" onclick="selAll()" title="Valitse kaikki"><i class="fas fa-check-double"></i></span>
+          <span class="chip" onclick="deselAll()" title="Poista valinnat"><i class="fas fa-times"></i></span>
         </div>
+        <div class="sb-lbl" style="margin-bottom:0">Sarjat</div>
       </div>
       <div class="cls-list" id="clsList"></div>
     </div>
     <div class="sb-sec" id="sbClubs" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div class="sb-lbl" style="margin-bottom:0">Seurat</div>
-        <div style="display:flex;gap:3px">
-          <button class="btn-ghost btn-sm" onclick="selAllClubs()" title="Valitse kaikki"><i class="fas fa-check-double"></i></button>
-          <button class="btn-ghost btn-sm" onclick="deselAllClubs()" title="Poista valinnat"><i class="fas fa-times"></i></button>
+        <div style="display:flex;gap:5px">
+          <span class="chip" onclick="selAllClubs()" title="Valitse kaikki"><i class="fas fa-check-double"></i></span>
+          <span class="chip" onclick="deselAllClubs()" title="Poista valinnat"><i class="fas fa-times"></i></span>
         </div>
+        <div class="sb-lbl" style="margin-bottom:0">Seurat</div>
       </div>
       <div class="cls-list" id="clubList"></div>
     </div>
     <div class="sb-sec" id="sbArea" style="display:none">
-      <div class="sb-lbl">Alueet</div>
+      <div class="sb-lbl" style="display:flex;align-items:center;gap:5px">
+        <span>Alueet</span>
+        <span class="area-help" tabindex="0">ⓘ
+          <span class="area-tip" id="areaTip">Aluetiedot ei vielä ladattu.</span>
+        </span>
+      </div>
       <div class="quick-chips" id="areaList"></div>
     </div>
     <div class="sb-sec" id="sbOpts" style="display:none">
@@ -365,30 +366,13 @@
       <h2>Luo lehdistötulokset</h2>
       <p>Generoi tulostettava lehdistömuotoilu Navisport-tuloksista.</p>
       <div class="steps">
-        <div class="step"><span class="step-n">1</span><span class="step-t">Liitä Navisport-tulosten URL osoitepalkkiin</span></div>
+        <div class="step"><span class="step-n">1</span><span class="step-t">Liitä Navisport-tulosten URL osoitepalkkiin (löydät tapahtumat <a href="https://navisport.com/events/" target="_blank" rel="noopener" style="color:var(--primary-light);font-weight:600">navisport.com/events</a>)</span></div>
         <div class="step"><span class="step-n">2</span><span class="step-t">Valitse sarjat sivupaneelista</span></div>
         <div class="step"><span class="step-n">3</span><span class="step-t">Säädä asetukset ja tulosta tai kopioi</span></div>
       </div>
     </div>
     <div class="paper" id="paper" style="display:none"><div id="paperBody"></div></div>
   </main>
-</div>
-
-<div class="modal-bg" id="modal">
-  <div class="modal">
-    <div class="modal-hd">
-      <h3><i class="fas fa-paste" style="margin-right:7px;color:var(--accent)"></i>Liitä JSON-data</h3>
-      <button class="btn-ghost" onclick="closeModal()"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-bd">
-      <textarea id="jsonIn" placeholder='Liitä Navisport JSON-data tähän...&#10;&#10;Voi kopioida selaimen DevTools → Network -välilehdeltä&#10;lataamalla tapahtumasivun https://navisport.com/events/{slug}'></textarea>
-      <p class="hint"><i class="fas fa-info-circle" style="margin-right:3px"></i>Odotettu muoto: EventDetail-objekti jossa <code>results</code>, <code>courseClasses</code> ja <code>courses</code>. Kopioi DevTools → Network-välilehdeltä <code>events/{uuid}</code>-pyynnön vastaus.</p>
-    </div>
-    <div class="modal-ft">
-      <button class="btn btn-outline" onclick="closeModal()">Peruuta</button>
-      <button class="btn btn-primary" onclick="doPaste()"><i class="fas fa-check"></i> Tulkinta</button>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -403,15 +387,34 @@ let O = { pos:true, cnt:true, dist:true, dns:true, dnf:true, mp:true, max:0, top
 let areaSel = null;     // null = kaikki alueet; Set = valitut alueiden nimet
 let areaData = null;    // clubs_with_districts.json
 let clubToArea = {};    // club name (lowercase) → area name
+let lastEventInput = ''; // viimeksi haetun tapahtuman raaka URL/slug (jaettavaa linkkiä varten)
+let activeGroups = new Set(); // aktiiviset pikavalintaryhmät (GROUPS.l)
 
-// Pikaryhmät
+// Ikäluokka 1-20 (nuoret), esim. H14, D16E, H9RR, D10TR, H20 - myös yhdistetty
+// ikähaarukka kuten "H17-20", joka päättyy väliviivalla erotettuun ikään.
+function isNuoretClass(rawName) {
+  const name = rawName || '';
+  if (/-(?:[1-9]|1[0-9]|20)$/.test(name)) return true;
+  const norm = name.replace(/[\s_-]+/g, '');
+  return /(?:^|[A-Za-z])(?:[1-9]|1[0-9]|20)(?:RR|TR|E)?$/.test(norm);
+}
+
+// Pikaryhmät. cat:'gender' (Miehet/Naiset) ja cat:'type' (E-/A-luokat, Nuoret)
+// yhdistetään AND-logiikalla (esim. Miehet+Nuoret = vain poikien nuortenluokat),
+// kun taas saman kategorian sisällä useampi aktiivinen ryhmä yhdistetään OR-logiikalla.
 const GROUPS = [
-  { l:'Miehet',   r:/^(H\d|Men\d|M\d)/i },
-  { l:'Naiset',   r:/^(D\d|Wom\d)/i },
-  { l:'E-luokat', r:/E$/ },
-  { l:'A-luokat', r:/A$/ },
-  { l:'Nuoret',   r:/(?:8RR|1[0-9](?:TR|RR)?|20)$/ },
+  { l:'Miehet',   cat:'gender', r:/^(H\d|Men\d|M\d)/i },
+  { l:'Naiset',   cat:'gender', r:/^(D\d|Wom\d)/i },
+  { l:'E-luokat', cat:'type',   r:/E$/ },
+  { l:'A-luokat', cat:'type',   r:/A$/ },
+  { l:'Nuoret',   cat:'type',   test: isNuoretClass },
 ];
+
+function classMatchesGroup(name, g) {
+  if (g.test) return g.test(name);
+  const norm = name.replace(/[\s_-]+/g, '');
+  return g.r.test(norm);
+}
 
 /* ============================================================
    APUFUNKTIOT
@@ -524,6 +527,8 @@ async function doFetch() {
 
     const flat = eventToFlatArray(eventData);
     loadFromApi(flat);
+    lastEventInput = url;
+    updateAddressBar(url);
     toast('Tulokset ladattu! (' + flat.length + ' riviä, ' + (eventData.courseClasses||[]).length + ' sarjaa)', 'success');
 
   } catch (err) {
@@ -629,9 +634,7 @@ function eventToFlatArray(event) {
 }
 
 /* ============================================================
-   Datan lataus – kaksi polkua:
-   1) API-haku → loadFromApi(data)  [taulukko kilpailijoita]
-   2) Manuaalinen liitos → loadFromJson(data)  [JSON mistä muodosta tahansa]
+   Datan lataus – API-haku → loadFromApi(data)  [taulukko kilpailijoita]
    ============================================================ */
 
 // Polku 1: Bibgenerator-muotoinen data
@@ -676,6 +679,7 @@ function loadFromApi(arr) {
 
   D = { name: evName, date: evDate, place: evPlace, classes };
   sel = new Set(classes.map(c => c.name));
+  activeGroups = new Set();
   allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
   clubSel = null;
   loadAreaData();
@@ -740,66 +744,6 @@ function assignPositions(classes) {
   }
 }
 
-// Polku 2: Yleisempi JSON (manuaalinen liitos)
-// Tukee myös sarjoittain jaettua rakennetta
-function loadFromJson(raw) {
-  if (Array.isArray(raw)) {
-    // Taulukko – oletetaan bibgenerator-muoto jos ensimmäisellä rivillä on className/firstName
-    if (raw.length > 0 && (raw[0].className || raw[0].firstName || raw[0].club)) {
-      loadFromApi(raw);
-      return;
-    }
-    // Muuten yritetään löytää sarjoja
-    raw = { results: raw };
-  }
-
-  let name = '', date = '', place = '', rcs = [];
-  const comp = raw.competition || raw.event || raw.tapahtuma || raw;
-  name  = comp.name || comp.nimi || comp.eventName || comp.title || '';
-
-  // Tukee myös EventDetail-kenttinimiä (begin, address)
-  let rawDate = comp.date || comp.pvm || comp.startDate || comp.begin || '';
-  if (rawDate && rawDate.length > 10) rawDate = rawDate.substring(0, 10);
-  date = rawDate;
-  if (date) { try { const d = new Date(date); if (!isNaN(d)) date = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' }); } catch {} }
-
-  place = comp.place || comp.paikka || comp.location || comp.city || comp.address || '';
-
-  rcs = raw.classes || raw.sarjat || raw.categories || comp.classes || comp.sarjat || [];
-  if (!rcs.length && (raw.results || raw.competitors || raw.tulokset)) {
-    rcs = [{ name: name || 'Tulokset', competitors: raw.results || raw.competitors || raw.tulokset }];
-  }
-  if (!rcs.length) {
-    for (const k of Object.keys(raw)) {
-      const v = raw[k];
-      if (Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object') {
-        if (v[0].name || v[0].nimi || v[0].className) { if (!rcs.length) rcs = v; }
-        else if (v[0].firstName || v[0].etunimi || v[0].club || v[0].time) {
-          rcs = [{ name: k, competitors: v }]; break;
-        }
-      }
-    }
-  }
-
-  const classes = rcs.map(c => {
-    const cn = c.name || c.nimi || c.className || c.title || '?';
-    const dist = fmtDist(c.distance || c.matka || c.length || '');
-    const climb = c.climb || c.nousu || '';
-    const ctrl = c.controls || c.rastit || '';
-    const rc = c.competitors || c.results || c.tulokset || c.participants || [];
-    const competitors = rc.map(x => parseCompetitor(x));
-    return { name: cn, dist, climb, ctrl, competitors };
-  });
-
-  assignPositions(classes);
-  D = { name, date, place, classes };
-  sel = new Set(classes.map(c => c.name));
-  allClubs = [...new Set(classes.flatMap(c => c.competitors.map(x => x.club).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'fi'));
-  clubSel = null;
-  loadAreaData();
-  showSB(); renderEv(); renderChips(); renderCls(); renderClubs(); render();
-}
-
 /* ============================================================
    KÄYTTÖLIITTYMÄN PÄIVITYS
    ============================================================ */
@@ -817,20 +761,38 @@ function renderEv() {
   document.getElementById('sbMeta').textContent = parts.join(', ') || '';
 }
 
+// Laskee sarjavalinnan (sel) aktiivisten pikaryhmien perusteella.
+// Ei aktiivisia ryhmiä → kaikki sarjat valittuna (oletustila).
+// Sukupuoli (Miehet/Naiset) ja tyyppi (E-/A-luokat, Nuoret) yhdistetään AND:lla,
+// esim. Miehet+Nuoret = vain poikien nuortenluokat, Naiset+Nuoret = vain tyttöjen.
+function applyGroupFilter() {
+  if (!activeGroups.size) {
+    sel = new Set(D.classes.map(c => c.name));
+    renderCls(); render();
+    return;
+  }
+  const activeGenders = GROUPS.filter(g => g.cat === 'gender' && activeGroups.has(g.l));
+  const activeTypes   = GROUPS.filter(g => g.cat === 'type'   && activeGroups.has(g.l));
+  sel = new Set();
+  D.classes.forEach(c => {
+    const genderOK = !activeGenders.length || activeGenders.some(g => classMatchesGroup(c.name, g));
+    const typeOK   = !activeTypes.length   || activeTypes.some(g => classMatchesGroup(c.name, g));
+    if (genderOK && typeOK) sel.add(c.name);
+  });
+  renderCls(); render();
+}
+
 function renderChips() {
   const el = document.getElementById('chips');
   el.innerHTML = '';
   GROUPS.forEach(g => {
     const ch = document.createElement('span');
-    ch.className = 'chip';
+    ch.className = 'chip' + (activeGroups.has(g.l) ? ' on' : '');
     ch.textContent = g.l;
     ch.onclick = () => {
       const on = ch.classList.toggle('on');
-      D.classes.forEach(c => {
-        const norm = c.name.replace(/[\s_-]+/g, '');
-        if (g.r.test(norm)) on ? sel.add(c.name) : sel.delete(c.name);
-      });
-      renderCls(); render();
+      on ? activeGroups.add(g.l) : activeGroups.delete(g.l);
+      applyGroupFilter();
     };
     el.appendChild(ch);
   });
@@ -852,8 +814,8 @@ function renderCls() {
   });
 }
 
-function selAll()   { D.classes.forEach(c => sel.add(c.name));    renderCls(); render(); }
-function deselAll() { sel.clear(); renderCls(); render(); }
+function selAll()   { activeGroups = new Set(); D.classes.forEach(c => sel.add(c.name)); renderChips(); renderCls(); render(); }
+function deselAll() { activeGroups = new Set(); sel.clear(); renderChips(); renderCls(); render(); }
 
 function renderClubs() {
   const el = document.getElementById('clubList');
@@ -876,21 +838,31 @@ function renderClubs() {
 function selAllClubs()   { clubSel = null; renderClubs(); render(); }
 function deselAllClubs() { clubSel = new Set(); renderClubs(); render(); }
 
-function selAllAreas()   { areaSel = null; renderAreas(); render(); }
-function deselAllAreas() { areaSel = new Set(); renderAreas(); render(); }
+function selAllAreas()   { areaSel = null; syncClubSelFromAreas(); renderAreas(); renderClubs(); render(); }
+function deselAllAreas() { areaSel = new Set(); syncClubSelFromAreas(); renderAreas(); renderClubs(); render(); }
+
+// Pitää seuravalinnan (clubSel) synkassa aluevalinnan (areaSel) kanssa,
+// jotta "Seurat"-listasta näkyy mitkä seurat valittu alue sisältää.
+function syncClubSelFromAreas() {
+  if (areaSel === null) { clubSel = null; return; }
+  if (areaSel.size === 0) { clubSel = new Set(); return; }
+  clubSel = new Set(allClubs.filter(c => areaSel.has(clubToArea[c.toLowerCase()])));
+}
 
 /* ----------------------------------------------------------
    Alueiden lataus ja renderöinti
    ---------------------------------------------------------- */
 const AREA_DATA_FALLBACK_URL = 'https://raw.githubusercontent.com/Kallio/tulospalvelupaavo/refs/heads/main/clubs_with_districts.json';
+const AREA_DATA_SCRIPT_URL = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs_with_districts.py';
 
-function loadAreaData() {
-  fetch('clubs_with_districts.json')
+function loadAreaData(force) {
+  const opts = force ? { cache: 'no-store' } : {};
+  fetch('clubs_with_districts.json', opts)
     .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(data => processAreaData(data))
     .catch(err => {
       console.warn('Alueaineistoa ei löytynyt paikallisesta polusta, yritetään GitHubista:', err);
-      fetch(AREA_DATA_FALLBACK_URL)
+      fetch(AREA_DATA_FALLBACK_URL, opts)
         .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
         .then(data => processAreaData(data))
         .catch(err2 => {
@@ -963,11 +935,35 @@ function computeResultAreas() {
   areaData._resultAreas = [...names].sort((a, b) => a.localeCompare(b, 'fi'));
 }
 
+function renderAreaTip() {
+  const tip = document.getElementById('areaTip');
+  if (!tip) return;
+  if (!areaData) {
+    tip.innerHTML = 'Aluetietoja ei saatavilla. Palvele tiedostot HTTP-palvelimelta tai '
+      + '<a href="#" onclick="return false" id="areaDropHint">pudota <code>clubs_with_districts.json</code> tähän</a>, '
+      + 'tai <a onclick="loadAreaData(true)">yritä ladata uudelleen</a>.'
+      + '<div class="a-upd">Aineisto generoidaan skriptillä <a href="' + esc(AREA_DATA_SCRIPT_URL) + '" target="_blank" rel="noopener">fetch_irma_clubs_with_districts.py</a>.</div>';
+    return;
+  }
+  let upd = areaData.updated || '';
+  if (upd) {
+    try {
+      const d = new Date(upd);
+      if (!isNaN(d)) upd = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' }) + ' klo ' + d.toLocaleTimeString('fi-FI', { hour:'2-digit', minute:'2-digit' });
+    } catch {}
+  }
+  tip.innerHTML = (areaData.disclaimer ? esc(areaData.disclaimer) + '<br>' : '')
+    + (upd ? 'Aineisto päivitetty: <strong>' + esc(upd) + '</strong><br>' : '')
+    + '<a onclick="loadAreaData(true); toast(\'Ladataan aluetietoja uudelleen…\', \'success\')"><i class="fas fa-rotate" style="margin-right:3px"></i>Lataa aluetiedot uudelleen</a>'
+    + '<div class="a-upd">Aineisto generoidaan skriptillä <a href="' + esc(AREA_DATA_SCRIPT_URL) + '" target="_blank" rel="noopener">fetch_irma_clubs_with_districts.py</a>.</div>';
+}
+
 function renderAreas() {
+  renderAreaTip();
   const el = document.getElementById('areaList');
   if (!el) return;
   if (!areaData) {
-    el.innerHTML = '<span style="font-size:11px;color:var(--sidebar-muted)">Aluetietoja ei saatavilla. Palvele tiedostot HTTP-palvelimelta tai <a href="#" onclick="return false" style="color:var(--accent);text-decoration:underline" id="areaDropHint">pudota <code>clubs_with_districts.json</code> tähän</a>.</span>';
+    el.innerHTML = '<span style="font-size:11px;color:var(--sidebar-muted)">Aluetietoja ei saatavilla — katso ⓘ.</span>';
     return;
   }
   if (!areaData._resultAreas || !areaData._resultAreas.length) {
@@ -975,17 +971,6 @@ function renderAreas() {
     return;
   }
   el.innerHTML = '';
-  if (areaData.updated) {
-    let upd = areaData.updated;
-    try {
-      const d = new Date(upd);
-      if (!isNaN(d)) upd = d.toLocaleDateString('fi-FI', { day:'numeric', month:'numeric', year:'numeric' }) + ' ' + d.toLocaleTimeString('fi-FI', { hour:'2-digit', minute:'2-digit' });
-    } catch {}
-    const info = document.createElement('div');
-    info.style.cssText = 'width:100%;font-size:10.5px;color:var(--sidebar-muted);margin-bottom:6px';
-    info.innerHTML = '<i class="fas fa-clock" style="margin-right:4px"></i>Aluetiedot päivitetty ' + esc(upd);
-    el.appendChild(info);
-  }
   const areas = areaData._resultAreas;
   // Show all-areas chip
   const all = document.createElement('span');
@@ -997,7 +982,8 @@ function renderAreas() {
     } else {
       areaSel = null; // select all
     }
-    renderAreas(); render();
+    syncClubSelFromAreas();
+    renderAreas(); renderClubs(); render();
   };
   el.appendChild(all);
   for (const a of areas) {
@@ -1008,7 +994,8 @@ function renderAreas() {
       if (areaSel === null) areaSel = new Set(areas);
       areaSel.has(a) ? areaSel.delete(a) : areaSel.add(a);
       if (areaSel.size === areas.length) areaSel = null;
-      renderAreas(); render();
+      syncClubSelFromAreas();
+      renderAreas(); renderClubs(); render();
     };
     el.appendChild(ch);
   }
@@ -1219,34 +1206,31 @@ function doDownload() {
   toast('Tiedosto ladattu.', 'success');
 }
 
-function openModal()  { document.getElementById('modal').classList.add('show'); document.getElementById('jsonIn').focus(); }
-function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
-function doPaste() {
-  const txt = document.getElementById('jsonIn').value.trim();
-  if (!txt) { toast('Liitä JSON-data kenttään.', 'error'); return; }
+// Päivittää osoitepalkin ?url=-parametrin, jotta sivun voi kirjanmerkitä
+// tai kopioida osoitepalkista suoraan latautuneena tapahtumana.
+function updateAddressBar(url) {
+  if (!window.history || !history.replaceState) return;
   try {
-    const d = JSON.parse(txt);
-    if (!d) { toast('Data ei näytä tuloksilta.', 'error'); return; }
-
-    // EventDetail-objekti (courseClasses + results)
-    if (!Array.isArray(d) && d.courseClasses && d.results) {
-      const flat = eventToFlatArray(d);
-      loadFromApi(flat);
-      closeModal();
-      toast('JSON tulkittu! (' + flat.length + ' riviä, ' + d.courseClasses.length + ' sarjaa)', 'success');
-      return;
-    }
-
-    if (typeof d === 'object' && !Array.isArray(d) && !d.classes && !d.sarjat && !d.results && !d.competitors && !d.competition) {
-      toast('Data ei näytä tuloksilta.', 'error'); return;
-    }
-    loadFromJson(d);
-    closeModal();
-    toast('JSON tulkittu!', 'success');
+    const base = location.href.split(/[?#]/)[0];
+    const link = base + '?url=' + encodeURIComponent(url);
+    history.replaceState(null, '', link);
   } catch (e) {
-    toast('JSON-parsinta epäonnistui: ' + e.message, 'error');
+    console.warn('Osoitepalkin päivitys epäonnistui:', e);
   }
+}
+
+async function doShare() {
+  if (!lastEventInput) { toast('Jaettavaa linkkiä ei voi luoda: tuloksia ei haettu Navisport-URL:sta.', 'error'); return; }
+  const base = location.href.split(/[?#]/)[0];
+  const link = base + '?url=' + encodeURIComponent(lastEventInput);
+  try { await navigator.clipboard.writeText(link); }
+  catch {
+    const a = document.createElement('textarea');
+    a.value = link; a.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(a); a.select(); document.execCommand('copy');
+    document.body.removeChild(a);
+  }
+  toast('Jaettava linkki kopioitu leikepöydälle.', 'success');
 }
 
 /* ============================================================
@@ -1267,8 +1251,6 @@ function toast(msg, type = 'error') {
    NÄPPÄIMISTÖ & INIT
    ============================================================ */
 document.getElementById('urlIn').addEventListener('keydown', e => { if (e.key === 'Enter') doFetch(); });
-document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ?url=... automaattihaku
 (function () {
