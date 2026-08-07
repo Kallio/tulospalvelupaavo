@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rastilippu → Navisport (rinnakkaisosuudet / alaosuudet)</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps:last-child { margin-top: auto; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+textarea, input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bp { background: #e94560; color: #fff; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; }
+.chk input { width: auto; }
+
+.profile-block {
+  background: #0a2a50; border-radius: 6px; padding: 8px; margin-bottom: 8px;
+  border: 1px solid #224; position: relative;
+}
+.profile-block .del { position: absolute; top: 6px; right: 6px; }
+.profile-block .p-name { font-weight: bold; width: 60%; }
+.profile-block .p-legs, .profile-block .p-sarjat { margin-top: 6px; }
+
+#main { padding: 16px; margin-left: 386px; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+#summary { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+#summary .ok  { color: #27ae60; font-weight: bold; }
+#summary .err { color: #e94560; font-weight: bold; }
+#summary .warn { color: #e67e22; font-weight: bold; }
+#report { margin-top: 8px; }
+
+table.preview { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; font-size: 12px; }
+.preview th { background: #16213e; color: #7ec8e3; padding: 5px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+.preview td { padding: 4px 8px; border-bottom: 1px solid #e5e5e5; }
+tr.team-hdr td {
+  background: #eef3fb; font-weight: bold; border-top: 2px solid #7ec8e3;
+  color: #1a2a4a; padding: 6px 8px;
+}
+tr.team-hdr .badge { font-size: 10px; font-weight: normal; padding: 1px 6px; border-radius: 9px; margin-left: 6px; }
+.badge.err { background: #e94560; color: #fff; }
+.badge.warn { background: #e67e22; color: #fff; }
+tr.team-hdr .meta { font-weight: normal; color: #667; margin-left: 8px; }
+td.ph { color: #bbb; font-style: italic; }
+td.osuus { font-family: ui-monospace, Menlo, Consolas, monospace; text-align: center; }
+.warn-msg { color: #e67e22; }
+.err-msg { color: #e94560; }
+
+#saveWrap { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+#saveStatus { font-size: 12px; color: #667; }
+
+.csv-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px;
+  background: #0f3460; border: 1px solid #7ec8e3; border-radius: 50%;
+  font-size: 9px; color: #7ec8e3; cursor: help;
+  flex-shrink: 0; vertical-align: middle; margin-left: 5px;
+}
+.csv-help .csv-tip {
+  display: none;
+  position: absolute; top: 24px; left: 0; right: 0;
+  background: #0a1628; border: 1px solid #7ec8e3; border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 10.5px; color: #ccc; line-height: 1.55;
+  z-index: 200; white-space: normal; text-transform: none;
+}
+.csv-help:hover .csv-tip,
+.csv-help:focus .csv-tip { display: block; }
+.csv-help.tip-closed .csv-tip { display: none; }
+.csv-tip code { background: #1a3a60; border-radius: 3px; padding: 0 3px; font-size: 10px; color: #7ec8e3; }
+.csv-tip a { color: #7ec8e3; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps" style="position:relative;">
+    <h3>1. Rastilippu-ilmoittautumisdata
+      <span class="csv-help" tabindex="0" onmouseleave="this.classList.remove('tip-closed')">ⓘ
+        <span class="csv-tip">
+          <strong style="color:#7ec8e3;">Mistä data</strong><br>
+          Ilmoittautumisdata viedään Rastilippu-ilmoittautumisjärjestelmästä CSV-tiedostona (erotin <code>;</code>).
+          Otsikkorivillä tarvitaan <code>Sarja</code>, <code>Joukkueen nimi</code>, <code>Seura</code> ja vähintään yksi <code>Osuuden N juoksija</code>.<br><br>
+          <strong style="color:#7ec8e3;">Näin käytät</strong><br>
+          1. Liitä tai lataa CSV &nbsp;·&nbsp; 2. Tarkista osuusprofiilit (oikea profiili valitaan automaattisesti sarjan mukaan) &nbsp;·&nbsp; 3. Paina <em>Muunna ja tarkista</em> &nbsp;·&nbsp; 4. Tallenna CSV.<br>
+          Halutessasi sisällytä tyhjät juoksijapalkit puuttuville juoksijoille (rasti kohdassa 2).<br>
+          Kilpailunumerot: jokaiselle profiilille oma numerosarja (tyhjä = ei numeroita). Päällekkäiset numerot estävät tallennuksen.<br><br>
+          <strong style="color:#7ec8e3;">Esimerkkitiedostot</strong><br>
+          Napsauta esimerkkiä, se ladataan kenttään (nimet arvotaan satunnaisesti):<br>
+          &nbsp;<a onclick="pickExample('kompassi', this)">Kompassi-viesti</a> &nbsp;·&nbsp; <a onclick="pickExample('halikko', this)">Halikko-viesti</a>
+        </span>
+      </span>
+    </h3>
+    <div style="font-size:11px;color:#9aa;margin-bottom:6px;">Liitä tai lataa Rastilippu-ilmoittautumisdata (CSV, erotin <code>;</code>).</div>
+    <textarea id="src" rows="4" placeholder="Sarja;Joukkueen nimi;Seura;Osuuden 1 juoksija;Osuuden 2 juoksija;..."></textarea>
+    <div class="row">
+      <label style="margin:0;color:#7ec8e3;flex:1;"><input type="file" id="srcFile" accept=".csv,.txt" style="width:auto;"> Lataa tiedosto</label>
+    </div>
+    <div id="encInfo" style="font-size:11px;color:#9aa;margin-top:5px;min-height:14px;"></div>
+  </div>
+
+  <div class="ps">
+    <h3>2. Osuusprofiilit (osuus;juoksijoita;[tieto])</h3>
+    <div id="profiles"></div>
+    <div class="row">
+      <button class="bg btn-sm" onclick="addProfileBlock()">+ Lisää profiili</button>
+      <button class="bs btn-sm" onclick="loadPreset('kompassi')">Aseta Kompassi-viesti</button>
+      <button class="bs btn-sm" onclick="loadPreset('halikko')">Aseta Halikko-viesti</button>
+      <label style="margin:0 0 0 auto;color:#7ec8e3;display:flex;align-items:center;gap:4px;font-size:11px;">
+        Oletusprofiili
+        <select id="defaultProfile" style="width:auto;min-width:140px;"></select>
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <label style="margin:0;color:#7ec8e3;display:flex;align-items:center;gap:5px;font-size:12px;">
+        <input type="checkbox" id="fillEmpty" style="width:auto;">
+        Sisällytä tyhjät juoksijapalkit puuttuville juoksijoille
+      </label>
+    </div>
+  </div>
+
+  <div class="ps">
+    <h3>3. Muunna &amp; tarkista</h3>
+    <button class="bp" style="width:100%;" onclick="convert()">Muunna ja tarkista</button>
+    <div id="saveWrap" style="margin-top:10px;display:block;">
+      <button class="bs" id="saveBtn" style="width:100%;" disabled onclick="download()">Tallenna CSV</button>
+      <div id="saveStatus" style="font-size:11px;color:#9aa;margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="summary" style="display:none;"></div>
+  <div id="previewWrap"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CSV parsing (generic tokenizer, quote-aware)
+// ═══════════════════════════════════════════
+function parseCSV(text, delim) {
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (c === '"') {
+      if (inQ && n === '"') { field += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === delim && !inQ) {
+      row.push(field); field = '';
+    } else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && n === '\n') i++;
+      row.push(field);
+      if (row.some(f => f.trim() !== '')) rows.push(row);
+      row = []; field = '';
+    } else field += c;
+  }
+  if (field || row.length) { row.push(field); if (row.some(f => f.trim() !== '')) rows.push(row); }
+  return rows;
+}
+
+function decodeBuffer(buf) {
+  let text = null, enc = null;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    enc = 'UTF-8';
+  } catch (e) {
+    text = new TextDecoder('latin1').decode(buf);
+    enc = 'latin-1 (ISO-8859-1)';
+  }
+  if (text.charCodeAt(0) === 0xFEFF) { text = text.slice(1); }
+  return { text, enc };
+}
+
+// ═══════════════════════════════════════════
+// Rastilippu input → teams
+// ═══════════════════════════════════════════
+function parseRastilippu(rows) {
+  if (!rows.length) return { error: 'Data on tyhjä.' };
+  const header = rows[0].map(h => h.trim());
+  const idxSarja = header.findIndex(h => h === 'Sarja');
+  const idxJoukkue = header.findIndex(h => h === 'Joukkueen nimi');
+  const idxSeura = header.findIndex(h => h === 'Seura');
+  const osuudet = [];
+  header.forEach((h, i) => {
+    const m = /^Osuuden\s+(\d+)\s+juoksija$/i.exec(h);
+    if (m) osuudet.push({ idx: i, num: parseInt(m[1], 10) });
+  });
+  osuudet.sort((a, b) => a.num - b.num);
+  if (idxSarja < 0 || idxJoukkue < 0 || !osuudet.length) {
+    return { error: 'Otsikkoriviltä ei löytynyt vaadittuja sarakkeita: "Sarja", "Joukkueen nimi" ja vähintään yksi "Osuuden N juoksija".' };
+  }
+  const teams = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const sarja = (r[idxSarja] || '').trim();
+    const joukkue = (r[idxJoukkue] || '').trim();
+    if (!sarja && !joukkue) continue;
+    const seura = idxSeura >= 0 ? (r[idxSeura] || '').trim() : '';
+    const slots = osuudet.map(o => (r[o.idx] || '').trim());
+    teams.push({ sarja, joukkue, seura, slots, runners: slots.filter(n => n !== '') });
+  }
+  if (!teams.length) return { error: 'Ei löytynyt yhtään joukkuetta datasta.' };
+  return { header, osuudet, teams, idxSeura };
+}
+
+// ═══════════════════════════════════════════
+// Profiles
+// ═══════════════════════════════════════════
+let profiles = [];
+
+function defaultProfiles() {
+  return [
+    { name: 'Kilpa (Kompassi-viesti)', legs: [
+        { osuus: 1, lkm: 1, tieto: '' }, { osuus: 2, lkm: 3, tieto: '' }, { osuus: 3, lkm: 1, tieto: '' }],
+      sarjat: ['D14','H14','D12','H12','D10RR','H10RR','D8RR','H8RR'],
+      nums: '100-999' },
+    { name: 'Avoin (Kompassi-viesti)', legs: [
+        { osuus: 1, lkm: 1, tieto: '' }, { osuus: 2, lkm: 1, tieto: '' }, { osuus: 3, lkm: 1, tieto: '' }],
+      sarjat: ['Avoin Oranssi','Avoin Keltainen/valkoinen','Avoin Vihreä (RR)','Avoin Vihreä'],
+      nums: '1000-1099' },
+    { name: 'Halikko-viesti', legs: [
+        { osuus: 1,  lkm: 1, tieto: 'violetti 4,5 km' },
+        { osuus: 2,  lkm: 3, tieto: 'violetti 4,5 km' },
+        { osuus: 3,  lkm: 3, tieto: 'oranssi 3,0 km' },
+        { osuus: 4,  lkm: 3, tieto: 'violetti 3,7 km' },
+        { osuus: 5,  lkm: 3, tieto: 'violetti 5,5 km' },
+        { osuus: 14, lkm: 1, tieto: 'musta 6,5 km' },
+        { osuus: 15, lkm: 1, tieto: 'musta 5,3 km' }],
+      sarjat: ['Kilpasarja', 'Avoin'],
+      nums: '2000-2099' },
+  ];
+}
+
+function legsToText(legs) {
+  return legs.map(l => `${l.osuus};${l.lkm}${l.tieto ? ';' + l.tieto : ''}`).join('\n');
+}
+
+function parseProfileText(text) {
+  const legs = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split(';').map(s => s.trim());
+    const osuus = parseInt(parts[0], 10);
+    const lkm = parseInt(parts[1], 10);
+    if (!Number.isInteger(osuus) || osuus <= 0 || !Number.isInteger(lkm) || lkm <= 0) {
+      return { error: `Virheellinen profiilirivi: "${line}" (odotus: osuus;juoksijoita;[tieto])` };
+    }
+    legs.push({ osuus, lkm, tieto: parts[2] || '' });
+  }
+  if (!legs.length) return { error: 'Profiilissa ei ole yhtään osuutta.' };
+  return { legs };
+}
+
+function parseSarjat(text) {
+  return String(text).split(/[,;]/).map(s => s.trim()).filter(Boolean);
+}
+
+function parseNumSpec(text) {
+  const nums = [];
+  const parts = String(text).split(',').map(s => s.trim()).filter(Boolean);
+  for (const p of parts) {
+    const m = /^(\d+)\s*[-–]\s*(\d+)$/.exec(p);
+    if (m) {
+      const a = +m[1], b = +m[2];
+      if (a > b) return { error: `Virheellinen kilpailunumeroväli: "${p}" (alku on suurempi kuin loppu)` };
+      for (let n = a; n <= b; n++) nums.push(n);
+    } else if (/^\d+$/.test(p)) {
+      nums.push(+p);
+    } else {
+      return { error: `Virheellinen kilpailunumero: "${p}" (odotus: numero tai väli esim. 1001-1050)` };
+    }
+  }
+  return { nums };
+}
+
+// ═══════════════════════════════════════════
+// Editor rendering
+// ═══════════════════════════════════════════
+function addProfileBlock(profile) {
+  const wrap = document.getElementById('profiles');
+  const el = document.createElement('div');
+  el.className = 'profile-block';
+  el.innerHTML =
+    '<button class="bp btn-sm del" onclick="this.parentElement.remove();syncDefaultSelect()">✕</button>' +
+    '<input class="p-name" type="text" value="">' +
+    '<textarea class="p-legs" rows="4" placeholder="1;1&#10;2;3&#10;3;1"></textarea>' +
+    '<label style="font-size:10px;color:#9aa;display:block;margin-top:4px;">Sarjat joihin profiili pätee (pilkulla eroteltuna)</label>' +
+    '<input class="p-sarjat" type="text" placeholder="D14, H14, H12, ...">' +
+    '<label style="font-size:10px;color:#9aa;display:block;margin-top:6px;">Kilpailunumerot (tyhjä = ei numeroita, numerot jaetaan joukkuelle)</label>' +
+    '<input class="p-nums" type="text" placeholder="esim. 1-500 tai 1001-1050">';
+  wrap.appendChild(el);
+  if (profile) {
+    el.querySelector('.p-name').value = profile.name || '';
+    el.querySelector('.p-legs').value = legsToText(profile.legs);
+    el.querySelector('.p-sarjat').value = (profile.sarjat || []).join(', ');
+    el.querySelector('.p-nums').value = profile.nums || '';
+  }
+  syncDefaultSelect();
+}
+
+function readProfilesFromDOM() {
+  const list = [];
+  let errors = [];
+  document.querySelectorAll('.profile-block').forEach((el, i) => {
+    const name = el.querySelector('.p-name').value.trim() || `Profiili ${i + 1}`;
+    const parsed = parseProfileText(el.querySelector('.p-legs').value);
+    if (parsed.error) { errors.push(`${name}: ${parsed.error}`); return; }
+    const numText = el.querySelector('.p-nums').value.trim();
+    const numParsed = parseNumSpec(numText);
+    if (numParsed.error) { errors.push(`${name}: ${numParsed.error}`); return; }
+    list.push({
+      name,
+      legs: parsed.legs,
+      sarjat: parseSarjat(el.querySelector('.p-sarjat').value),
+      numText,
+      nums: numParsed.nums,
+    });
+  });
+  if (list.length && !errors.length) profiles = list;
+  return { profiles: list, errors };
+}
+
+function syncDefaultSelect() {
+  const sel = document.getElementById('defaultProfile');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  document.querySelectorAll('.profile-block').forEach((el, i) => {
+    const name = el.querySelector('.p-name').value.trim() || `Profiili ${i + 1}`;
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  else sel.selectedIndex = 0;
+}
+
+function loadPreset(kind) {
+  document.getElementById('profiles').innerHTML = '';
+  if (kind === 'kompassi') {
+    const p = defaultProfiles();
+    addProfileBlock(p[0]);
+    addProfileBlock(p[1]);
+  } else {
+    const p = defaultProfiles();
+    addProfileBlock(p[2]);
+  }
+  syncDefaultSelect();
+}
+
+// ═══════════════════════════════════════════
+// Example data generation (randomised names)
+// ═══════════════════════════════════════════
+const NAME_POOLS = {
+  boys: [
+    'Aapo','Aleksi','Antti','Arto','Eino','Esa','Esko','Jari','Jouni','Jukka',
+    'Juha','Juhani','Kaapo','Kalle','Kimmo','Lauri','Mikko','Niilo','Olli','Paavo',
+    'Pasi','Pekka','Petri','Risto','Sami','Seppo','Taavi','Teemu','Timo','Veli',
+    'Vesa','Ville','Ville-Pekka'],
+  girls: [
+    'Aino','Anni','Annika','Elina','Emilia','Emma','Hanna','Heidi','Iida','Jenna',
+    'Kaisa','Karoliina','Katariina','Katja','Kerttu','Lotta','Maija','Marja','Marjaana','Minna',
+    'Niina','Outi','Pauliina','Pirjo','Päivi','Riikka','Sanna','Satu','Sini','Sonja',
+    'Suvi','Tuuli','Venla','Viivi'],
+  surnames: [
+    'Aaltonen','Aho','Ahonen','Hakala','Helenius','Heikkinen','Heinonen','Hämäläinen',
+    'Järvinen','Kivelä','Korhonen','Koskela','Koskinen','Laakso','Laine','Laitinen',
+    'Lampinen','Lehtonen','Lehto','Lindholm','Miettinen','Mikkonen','Mäkelä','Mäkinen',
+    'Nieminen','Nummi','Nurmi','Pesonen','Ranta','Rantanen','Räsänen','Saarinen',
+    'Salmi','Salminen','Sipilä','Toivonen','Tuominen','Virtanen','Väisänen'],
+};
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+function genderFor(sarja) {
+  if (/^H/.test(sarja)) return 'boy';
+  if (/^D/.test(sarja)) return 'girl';
+  return null;
+}
+
+function randomName(rng, gender) {
+  const first = gender === 'boy' ? pick(rng, NAME_POOLS.boys)
+    : gender === 'girl' ? pick(rng, NAME_POOLS.girls)
+    : (rng() < 0.5 ? pick(rng, NAME_POOLS.girls) : pick(rng, NAME_POOLS.boys));
+  return pick(rng, NAME_POOLS.surnames) + ' ' + first;
+}
+
+const CLUB_POOL = [
+  'Angelniemen Ankkuri','Espoon Suunta','Helsingin Suunnistajat','IF Brahe',
+  'Ikaalisten Nouseva-Voima','Jämsän Retki-Veikot','Kalevan Rasti','Kokkolan Suunnistajat',
+  'MS Parma','Paimion Rasti','Punkalaitumen Kunto','Rastikarhut','SK Pohjantähti',
+  'Solf IK','Turun Metsänkävijät','Vaasan Suunnistajat',
+];
+
+function buildRandomExample(kind, teamCount, rng) {
+  const maxCols = kind === 'kompassi' ? 5 : 15;
+  const cols = ['Sarja','Joukkueen nimi','Seura'];
+  for (let i = 1; i <= maxCols; i++) cols.push(`Osuuden ${i} juoksija`);
+  const def = defaultProfiles();
+  const kindProfiles = kind === 'kompassi' ? def.slice(0, 2) : def.slice(2);
+  const slotsOf = sarja => {
+    const p = kindProfiles.find(q => q.sarjat.includes(sarja)) || kindProfiles[0];
+    return p.legs.reduce((s, l) => s + l.lkm, 0);
+  };
+  const rows = [];
+  for (let i = 0; i < teamCount; i++) {
+    const sarja = pick(rng, kindProfiles.flatMap(p => p.sarjat));
+    const club = pick(rng, CLUB_POOL);
+    const slots = slotsOf(sarja);
+    const roster = rng() < 0.5 ? slots : 1 + Math.floor(rng() * slots);
+    const names = Array.from({ length: maxCols }, (_, c) =>
+      c < roster ? randomName(rng, genderFor(sarja)) : '');
+    rows.push([sarja, `${club} ${i + 1}`, club, ...names].join(';'));
+  }
+  return cols.join(';') + '\n' + rows.join('\n');
+}
+
+function loadExample(kind, opts) {
+  opts = opts || {};
+  const rng = opts.seed != null ? mulberry32(opts.seed) : mulberry32((Math.random() * 0x7fffffff) >>> 0);
+  let text;
+  if (opts.teams) {
+    text = buildRandomExample(kind, opts.teams, rng);
+  } else if (kind === 'kompassi') {
+    const team = (sarja, joukkue, names) =>
+      [sarja, joukkue, 'Espoon Suunta', ...names].join(';');
+    text =
+`Sarja;Joukkueen nimi;Seura;Osuuden 1 juoksija;Osuuden 2 juoksija;Osuuden 3 juoksija;Osuuden 4 juoksija;Osuuden 5 juoksija
+${team('H14', 'Parhaat', [1, 1, 1, 1, 1].map(() => randomName(rng, 'boy')))}
+${team('H14', 'Parhaat 3', [1, 1, 1, 1].map(() => randomName(rng, 'boy')).concat(''))}
+${team('D12', 'Parhaat 2', [1, 1, 1, 1].map(() => randomName(rng, 'girl')).concat(''))}
+${team('H14', 'Parhaat 4', [1, 1, 1].map(() => randomName(rng, 'boy')).concat('', ''))}
+${team('Avoin Oranssi', 'Pikku Parhaat', [1, 1, 1].map(() => randomName(rng, null)).concat('', ''))}`;
+  } else {
+    const cols = ['Sarja','Joukkueen nimi','Seura'];
+    for (let i = 1; i <= 15; i++) cols.push(`Osuuden ${i} juoksija`);
+    const row = (sarja, joukkue, names) =>
+      [sarja, joukkue, 'Espoon Suunta', ...names.concat(Array(15 - names.length).fill(''))].join(';');
+    text =
+      cols.join(';') + '\n' +
+      row('Kilpasarja', 'Halikon Häjy 1', Array.from({ length: 15 }, () => randomName(rng, null))) + '\n' +
+      row('Kilpasarja', 'Halikon Häjy 2', [1, 1, 0, 1, 1, 1].map(n => n ? randomName(rng, null) : '')) + '\n' +
+      row('Avoin', 'Halikon Hölkkä 1', Array.from({ length: 7 }, () => randomName(rng, null)));
+  }
+  document.getElementById('src').value = text;
+  document.getElementById('encInfo').textContent = '';
+}
+
+function pickExample(kind, el) {
+  loadExample(kind);
+  const help = el.closest('.csv-help');
+  if (help) { help.classList.add('tip-closed'); help.blur(); }
+}
+
+// ═══════════════════════════════════════════
+// Assignment (left-fill by profile)
+// ═══════════════════════════════════════════
+function buildAssignment(team, profile) {
+  const warnings = [];
+  const K = team.runners.length;
+  const T = profile.legs.reduce((s, l) => s + l.lkm, 0);
+  if (K > T) {
+    return { error: `Joukkueella on ${K} juoksijaa, mutta profiililla "${profile.name}" on vain ${T} paikkaa.` };
+  }
+  const filled = [];
+  team.slots.forEach((n, i) => { if (n) filled.push(i); });
+  const hole = filled.some((idx, i) => i > 0 && idx - filled[i - 1] > 1);
+  if (hole) warnings.push('Joukkuelistassa on tyhjä juoksija-aukko (nimi puuttuu keskeltä).');
+  const dupes = new Set();
+  const set = new Set();
+  for (const n of team.runners) {
+    if (set.has(n)) dupes.add(n);
+    set.add(n);
+  }
+  if (dupes.size) warnings.push(`Sama nimi toistuu joukkueessa: ${[...dupes].join(', ')}.`);
+  if (K < profile.legs.length) {
+    warnings.push(`Vain ${K} juoksijaa, profiilissa ${profile.legs.length} osuutta — ${profile.legs.length - K} osuutta jää tyhjäksi.`);
+  }
+  const L = profile.legs.length;
+  const namesByLeg = new Array(L).fill(0).map(() => []);
+  if (L === 1) {
+    namesByLeg[0] = team.runners.slice();
+  } else {
+    if (K >= 1) { namesByLeg[0] = [team.runners[0]]; }
+    if (K >= 2) { namesByLeg[L - 1] = [team.runners[K - 1]]; }
+    const mid = team.runners.slice(1, Math.max(1, K - 1));
+    let r = 0;
+    for (let li = 1; li < L - 1 && r < mid.length; li++) {
+      const take = Math.min(profile.legs[li].lkm, mid.length - r);
+      namesByLeg[li] = mid.slice(r, r + take);
+      r += take;
+    }
+    if (r < mid.length) {
+      const li = Math.max(1, L - 2);
+      namesByLeg[li] = namesByLeg[li].concat(mid.slice(r));
+      warnings.push('Profiilin keskiosuuksien kapasiteetti ei riitä kaikille juoksijoille.');
+    }
+  }
+  const full = [];
+  for (let li = 0; li < L; li++) {
+    const leg = profile.legs[li];
+    const names = namesByLeg[li];
+    const c = names.length;
+    for (let j = 0; j < leg.lkm; j++) {
+      full.push({
+        nimi: j < c ? names[j] : '',
+        osuus: String(leg.osuus),
+        alaosuus: c >= 2 ? String(j + 1) : '',
+        tieto: leg.tieto,
+      });
+    }
+  }
+  return { full, used: full.filter(b => b.nimi !== ''), warnings, error: null, profileName: profile.name, total: T };
+}
+
+// ═══════════════════════════════════════════
+// Output CSV (Navisport format)
+// ═══════════════════════════════════════════
+function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+
+function generateCSV(assignments, fillEmpty) {
+  const maxBlocks = assignments.reduce((m, a) => Math.max(m, a.error ? 0 : a.total), 0);
+  const base = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'];
+  const header = base.map(q);
+  for (let b = 1; b <= maxBlocks; b++) {
+    header.push(q(' '.repeat(b)));
+    header.push(q(`Nimi-${b}`), q(`Kilpailukortti-${b}`), q(`Lainakortti-${b}`),
+      q(`Osuus-${b}`), q(`Alaosuus-${b}`), q(`Rata-${b}`), q(`Lähtöaika-${b}`));
+  }
+  const lines = [header.join(',')];
+  for (const a of assignments) {
+    if (a.error) continue;
+    const blocks = (fillEmpty ? a.full : a.used).slice();
+    while (blocks.length < maxBlocks) blocks.push({ nimi: '', osuus: '', alaosuus: '' });
+    const cells = [a.kilpailunumero, a.team.sarja, a.team.joukkue, '', a.team.seura].map(q);
+    for (let b = 0; b < blocks.length; b++) {
+      const blk = blocks[b];
+      cells.push(q(' '.repeat(b + 1)));
+      cells.push(q(blk.nimi), q(''), q(''), q(blk.osuus), q(blk.alaosuus), q(''), q(''));
+    }
+    lines.push(cells.join(','));
+  }
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
+}
+
+function verifyOutput(csv) {
+  const rows = parseCSV(csv, ',');
+  if (!rows.length) return { ok: false, msg: 'Tulostettu CSV on tyhjä.' };
+  const header = rows[0].map(h => h.trim());
+  const base = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'];
+  if (!base.every((f, i) => header[i] === f)) return { ok: false, msg: 'Tulostetun CSV:n otsikkorivi ei täsmää.' };
+  const teamRows = rows.slice(1).filter(r => (r[1] || '').trim());
+  if (!teamRows.length) return { ok: false, msg: 'Tulostetusta CSV:stä ei löytynyt joukkuerivejä.' };
+  let checked = 0, missing = 0;
+  for (const r of teamRows) {
+    for (let b = 0; ; b++) {
+      const baseIdx = 6 + b * 8;
+      const nimi = (r[baseIdx] || '').trim();
+      if (!nimi) break;
+      const osuus = (r[baseIdx + 3] || '').trim();
+      if (!osuus) missing++;
+      checked++;
+    }
+  }
+  const msg = `${teamRows.length} joukkueriviä, ${checked} juoksijaa.`;
+  return missing === 0
+    ? { ok: true, msg: msg + ' CSV:n rakenne OK (tarkistettu uudelleen).' }
+    : { ok: false, msg: msg + ` ${missing} juoksijalta puuttuu osuus!` };
+}
+
+// ═══════════════════════════════════════════
+// Convert + verify + preview
+// ═══════════════════════════════════════════
+let lastResult = null;
+
+function convert() {
+  const srcText = document.getElementById('src').value;
+  const fillEmpty = document.getElementById('fillEmpty').checked;
+  document.getElementById('saveBtn').disabled = true;
+
+  const { profiles: pr, errors: profErrors } = readProfilesFromDOM();
+  if (profErrors.length) {
+    renderSummary({ ok: false, msgs: profErrors, teams: 0, runners: 0, enc: '' });
+    return;
+  }
+  if (!pr.length) {
+    renderSummary({ ok: false, msgs: ['Ei yhtään osuusprofiilia.'], teams: 0, runners: 0, enc: '' });
+    return;
+  }
+  profiles = pr;
+
+  let rows;
+  try { rows = parseCSV(srcText, ';'); }
+  catch (e) { renderSummary({ ok: false, msgs: ['CSV:n lukeminen epäonnistui: ' + e.message], teams: 0, runners: 0, enc: '' }); return; }
+
+  const parsed = parseRastilippu(rows);
+  if (parsed.error) {
+    renderSummary({ ok: false, msgs: [parsed.error], teams: 0, runners: 0, enc: document.getElementById('encInfo').textContent });
+    return;
+  }
+
+  const defaultIdx = parseInt(document.getElementById('defaultProfile').value, 10) || 0;
+  const usedProfiles = new Set();
+  const assign = [];
+  const globalWarnings = [];
+  const sarjaProfileMap = new Map();
+  const numPool = new Map();
+  const exhaustedProfiles = new Set();
+  for (const p of profiles) numPool.set(p, { nums: p.nums || [], idx: 0 });
+
+  parsed.teams.forEach((team, i) => {
+    let profile = null;
+    for (const p of profiles) {
+      if (p.sarjat.some(s => s.toLowerCase() === team.sarja.toLowerCase())) { profile = p; break; }
+    }
+    if (!profile) {
+      profile = profiles[defaultIdx] || profiles[0];
+      if (!sarjaProfileMap.has(team.sarja)) {
+        globalWarnings.push(`Sarja "${team.sarja}" ei ole missään profiilissa — käytettiin oletusprofiilia "${profile.name}".`);
+        sarjaProfileMap.set(team.sarja, true);
+      }
+    }
+    const a = buildAssignment(team, profile);
+    a.team = team;
+    const pool = numPool.get(profile);
+    if (pool.nums.length) {
+      if (pool.idx < pool.nums.length) {
+        a.kilpailunumero = pool.nums[pool.idx++];
+      } else {
+        a.kilpailunumero = '';
+        if (!exhaustedProfiles.has(profile.name)) {
+          exhaustedProfiles.add(profile.name);
+          globalWarnings.push(`Profiilin "${profile.name}" kilpailunumerot loppuivat kesken — loput joukkuelista jäävät ilman kilpailunumeroa.`);        }
+      }
+    } else {
+      a.kilpailunumero = '';
+    }
+    usedProfiles.add(profile.name);
+    assign.push(a);
+  });
+
+  const numSeen = new Map();
+  const numConflicts = [];
+  for (const a of assign) {
+    if (a.error || a.kilpailunumero === '') continue;
+    if (numSeen.has(a.kilpailunumero)) {
+      numConflicts.push(`${a.kilpailunumero} (${numSeen.get(a.kilpailunumero)} ja ${a.team.joukkue})`);
+    } else {
+      numSeen.set(a.kilpailunumero, a.team.joukkue);
+    }
+  }
+  const numErrors = numConflicts.length
+    ? [`Kilpailunumerot menevät päällekkäin: ${numConflicts.join('; ')}. Anna eri profiileille erilliset numerosarjat.`]
+    : [];
+
+  const fill = fillEmpty;
+  const csv = generateCSV(assign, fill);
+  const rtc = verifyOutput(csv);
+
+  const hasErrors = assign.some(a => a.error) || !rtc.ok || numErrors.length > 0;
+  let warnCount = globalWarnings.length + assign.reduce((s, a) => s + (a.warnings ? a.warnings.length : 0), 0);
+
+  lastResult = { csv, fillEmpty, hasErrors, warnCount };
+  document.getElementById('saveBtn').disabled = hasErrors;
+
+  renderPreview(assign, fill, usedProfiles);
+  renderSummary({
+    ok: !hasErrors,
+    msgs: numErrors,
+    warnings: globalWarnings,
+    teams: assign.length,
+    runners: assign.reduce((s, a) => s + (a.used ? a.used.length : 0), 0),
+    enc: document.getElementById('encInfo').textContent,
+    profileNames: [...usedProfiles],
+    rtc,
+  });
+  document.getElementById('saveStatus').textContent = hasErrors
+    ? 'Korjaa virheet ennen tallennusta.'
+    : (fill ? `Valmis: ${assign.length} joukkuetta, täysi profiilirakenne.` : `Valmis: ${assign.length} joukkuetta.`);
+}
+
+function renderSummary(s) {
+  const el = document.getElementById('summary');
+  el.style.display = 'block';
+  const parts = [];
+  if (s.enc) parts.push(`Koodaus: <b>${s.enc}</b>`);
+  if (s.teams) parts.push(`${s.teams} joukkuetta`);
+  if (s.runners) parts.push(`${s.runners} juoksijaa`);
+  if (s.profileNames && s.profileNames.length) parts.push(`Profiilit: ${s.profileNames.join(', ')}`);
+  let html = '';
+  if (s.rtc) {
+    html += `<span class="${s.rtc.ok ? 'ok' : 'err'}">${s.rtc.msg}</span>`;
+  }
+  if (parts.length) html += `<div style="margin-top:6px;">${parts.join(' · ')}</div>`;
+  for (const m of (s.warnings || [])) html += `<div class="warn">⚠ ${m}</div>`;
+  for (const m of (s.msgs || [])) html += `<div class="err">✖ ${m}</div>`;
+  el.innerHTML = html;
+  if (!s.msgs.length && !s.warnings.length && s.rtc && s.rtc.ok) {
+    el.innerHTML = `<span class="ok">✔ ${s.rtc.msg}</span>` + (parts.length ? `<div style="margin-top:6px;">${parts.join(' · ')}</div>` : '');
+  }
+}
+
+function esc(v) {
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderPreview(assign, fill, usedProfiles) {
+  const wrap = document.getElementById('previewWrap');
+  if (!assign.length) { wrap.innerHTML = ''; return; }
+  let html = '<table class="preview"><thead><tr>' +
+    '<th>Osuus</th><th>Alaosuus</th><th>Juoksija</th><th>Selite</th>' +
+    '</tr></thead><tbody>';
+  for (const a of assign) {
+    const blocks = fill ? a.full : a.used;
+    const badges = [];
+    if (a.error) badges.push(`<span class="badge err">${esc(a.error)}</span>`);
+    if (a.warnings && a.warnings.length) badges.push(`<span class="badge warn">${a.warnings.length} huomiota</span>`);
+    html += `<tr class="team-hdr"><td colspan="4">` +
+      `<span class="tnum">#${a.kilpailunumero}</span> · ${esc(a.team.sarja)} · ${esc(a.team.joukkue)}` +
+      (a.team.seura ? ` <span class="meta">${esc(a.team.seura)}</span>` : '') +
+      ` <span class="meta">(${a.profileName})</span>` +
+      badges.join('') + '</td></tr>';
+    if (a.error) {
+      html += `<tr><td colspan="4" class="err-msg">${esc(a.error)}</td></tr>`;
+      continue;
+    }
+    for (const blk of blocks) {
+      const ph = !blk.nimi;
+      html += `<tr><td class="osuus">${esc(blk.osuus)}</td>` +
+        `<td class="osuus">${esc(blk.alaosuus)}</td>` +
+        `<td${ph ? ' class="ph"' : ''}>${ph ? '— (tyhjä)' : esc(blk.nimi)}</td>` +
+        `<td class="meta">${esc(blk.tieto)}</td></tr>`;
+    }
+    for (const w of (a.warnings || [])) {
+      html += `<tr><td colspan="4" class="warn-msg">⚠ ${esc(w)}</td></tr>`;
+    }
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function download() {
+  if (!lastResult) return;
+  const blob = new Blob([lastResult.csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rastilippu_navisport_alaosuudet.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════
+// File input + init
+// ═══════════════════════════════════════════
+document.getElementById('srcFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    const { text, enc } = decodeBuffer(e.target.result);
+    document.getElementById('src').value = text;
+    document.getElementById('encInfo').textContent = 'Tunnistettu koodaus: ' + enc;
+  };
+  rd.readAsArrayBuffer(f);
+  this.value = '';
+});
+
+(function init() {
+  loadPreset('kompassi');
+  if (typeof location !== 'undefined' && typeof URLSearchParams !== 'undefined') {
+    const qs = new URLSearchParams(location.search);
+    const teams = parseInt(qs.get('teams'), 10);
+    const kind = qs.get('ex') === 'halikko' ? 'halikko' : 'kompassi';
+    const seed = qs.get('seed') != null ? parseInt(qs.get('seed'), 10) : undefined;
+    if (teams && teams > 0) {
+      loadPreset(kind);
+      loadExample(kind, { teams, seed });
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -22,6 +22,23 @@ competitor cards with barcodes, sponsor logos, colour-coded classes, and fully
 drag-and-drop configurable layout (A5 landscape). Supports relay legs,
 multi-stage events, and sticker sheets.
 
+### [`rastilippu_parallel_legs_to_navisport.html`](rastilippu_parallel_legs_to_navisport.html)
+Converts a Rastilippu relay-registration CSV into a Navisport start-list CSV
+with per-leg `Osuus`/`Alaosuus` columns. Teams are mapped onto configurable leg
+profiles (e.g. Kompassi-viesti 3-leg, Halikko-viesti 7-leg): first runner → leg 1,
+last runner → final leg, middle runners fill left-to-right. Avoimet sarjat allow
+only 3 names. Per-profile competition number ranges are supported (tyhjä = no
+numbers); overlapping numbers across profiles block saving.
+
+**Hidden URL parameters (advanced users):**
+- `?teams=N` — generates a randomised example with N teams and loads it on open
+  (example names are drawn from built-in pools, surname-first).
+- `?ex=halikko` — use the Halikko-viesti profile/preset instead of the default
+  Kompassi one (with `?teams=`, applies the preset).
+- `?seed=123` — fixed random seed so a generated example is reproducible.
+
+Example: `rastilippu_parallel_legs_to_navisport.html?teams=40&ex=halikko&seed=123`
+
 ### [`fetch_irma_clubs.bash`](fetch_irma_clubs.bash)
 Downloads the public club registry from the Finnish Orienteering Federation's
 IRMA system (`irma.suunnistusliitto.fi`). Outputs the full club list as JSON.
