@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>25-manna joukkuesuunnittelija</title>
+<title>Halikko-viesti joukkuesuunnittelija</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
@@ -124,13 +124,13 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa&#10;D16:Ojapalo Venla:1&#10;H50:Nurmi Mikko"></textarea>
     <div class="row">
       <button class="bs" onclick="readPool()">Lue pooli</button>
-      <button class="bg btn-sm" onclick="loadExamplePool(55)">Esimerkkipooli (55)</button>
-      <button class="bg btn-sm" onclick="loadExamplePool(80)">(80)</button>
-      <button class="bg btn-sm" onclick="loadExamplePool(105)">(105)</button>
+      <button class="bg btn-sm" onclick="loadExamplePool(45)">Esimerkkipooli (45)</button>
+      <button class="bg btn-sm" onclick="loadExamplePool(60)">(60)</button>
+      <button class="bg btn-sm" onclick="loadExamplePool(75)">(75)</button>
       <label class="chk"><input type="file" id="poolFile" accept=".csv,.txt" style="width:auto;"> Tiedosto</label>
     </div>
     <label>Seura</label>
-    <input id="klubi" type="text" value="Espoon Suunta">
+    <input id="klubi" type="text" value="Angelniemen Ankkuri">
     <label>Ensimmäinen kilpailunumero</label>
     <input id="firstNum" type="number" value="1" min="1">
   </div>
@@ -143,6 +143,7 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     </div>
     <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet ensin (muuten vahvuus ensin)</label>
     <label>Vahvuuskerroin nopeudelle: <input id="wSpeed" type="number" min="0" max="1" step="0.1" value="0.7"></label>
+    <label style="font-size:11px;color:#7ec8e3;">Kilpasarja muodostetaan ensin, avoimet lopuista (avoin: vain 1. osuuden vaatimus D / -H16 / H50-).</label>
   </div>
   <div class="ps" id="statusPanel"></div>
   <div class="ps">
@@ -164,9 +165,10 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
   <div class="card no-print" id="poolWrap"></div>
   <div class="card no-print" id="chipsWrap"></div>
   <div class="card" id="teamsCard">
-    <h3 style="margin-bottom:2px;">Joukkuelistat (25 osuutta, rinnakkaiset alaosuuksina)
+    <h3 style="margin-bottom:2px;">Joukkuelistat (15 osuutta, rinnakkaiset alaosuuksina)
       <label class="chk" style="float:right;font-weight:normal;font-size:11px;"><input type="checkbox" id="showRules" style="width:auto;" checked onchange="toggleRules()"> Osuussäännöt</label>
     </h3>
+    <div class="no-print" id="rulesLegend" style="font-size:11px;color:#667;line-height:1.5;margin-bottom:8px;"></div>
     <div id="teamsWrap"></div>
   </div>
   <div class="card no-print" id="csvWrap" style="display:none;">
@@ -176,32 +178,35 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 </div>
 
 <script>
-const PROFILE = [[1,1],[2,1],[3,4],[7,4],[11,4],[15,4],[19,4],[23,1],[24,1],[25,1]];
+// ── Halikko-viesti 2026 -säännöt (helposti päivitettävissä vuosikohtaisesti) ──
+const PROFILE = [[1,1],[2,3],[3,3],[4,3],[5,3],[14,1],[15,1]];
 const RATA = {
-  1:'Sininen', 2:'Sininen 7,2 km', 3:'Oranssi 4,7 km', 7:'Valkoinen 2,5 km',
-  11:'Sininen 6,3 km', 15:'Violetti 4,4 km', 19:'Violetti 5,6 km',
-  23:'Oranssi 4,2 km', 24:'Sininen 6,1 km (uusintalähtö 4,5 km)', 25:'Sininen 8,1 km (uusintalähtö 6,3 km)'
+  1:'violetti 4,5 km', 2:'violetti 4,5 km', 3:'oranssi 3,0 km',
+  4:'violetti 3,7 km', 5:'violetti 5,5 km',
+  14:'musta 6,5 km', 15:'musta 5,3 km'
 };
-const LEG_INFO = {
-  1:'Nainen', 2:'Kaikki', 3:'Mies H≤16/H≥50 tai nainen', 7:'Mies H≤14/H≥60 tai nainen D≤18/D≥45',
-  11:'Kaikki', 15:'Nainen', 19:'Kaikki', 23:'Mies H≤16/H≥55 tai nainen D≤20/D≥40',
-  24:'Nainen', 25:'Kaikki'
-};
-const DISP_OSUUS = { 1:1, 2:2, 3:3, 7:4, 11:5, 15:6, 19:7, 23:8, 24:9, 25:10 };
+const KILPA_INFO = { 1:'D / -H16 / H50-', 14:'vapaa', 15:'D-sarjalainen' };
+const AVOIN_INFO = { 1:'D / -H16 / H50-' };
 const TEAM_COLORS = ['#0f3460', '#7a1f1f', '#1f6f4a', '#5b3a8b'];
-function dispLeg(s) {
-  const o = DISP_OSUUS[SLOTS[s].osuus] || SLOTS[s].osuus;
-  return SLOTS[s].alaosuus ? `${o}.${SLOTS[s].alaosuus}` : String(o);
+
+function legInfo(osuus, mode) {
+  return (mode === 'kilpa' ? KILPA_INFO : AVOIN_INFO)[osuus] || '';
 }
+
+function dispLeg(s) {
+  const slot = SLOTS[s];
+  return slot.alaosuus ? `${slot.osuus}.${slot.alaosuus}` : String(slot.osuus);
+}
+
 function grpTint(s) {
-  const grp = [1,2,3,7,11,15,19,23,24,25].indexOf(SLOTS[s].osuus);
+  const grp = [1,2,3,4,5,14,15].indexOf(SLOTS[s].osuus);
   return 'grp' + (grp % 4);
 }
 
 function buildSlots() {
   const slots = [];
   for (const [osuus, lkm] of PROFILE) {
-    for (let j = 0; j < lkm; j++) slots.push({ osuus, alaosuus: lkm > 1 ? String(j + 1) : '', rata: RATA[osuus], info: LEG_INFO[osuus] });
+    for (let j = 0; j < lkm; j++) slots.push({ osuus, alaosuus: lkm > 1 ? String(j + 1) : '', rata: RATA[osuus] });
   }
   return slots;
 }
@@ -233,43 +238,52 @@ function parsePool(text) {
   return out;
 }
 
-function legEligible(r, osuus) {
+// Per-slot kelpoisuus. Osuudet 2–5 ja 14: kaikki kelpaavat (osuuksien 2–5 vaatimukset
+// ovat joukkuetasoisia). Kilpasarjassa 15. osuus vain nainen; avoimessa vain 1. osuus.
+function legEligible(r, osuus, mode) {
   const g = r.gender, n = r.num;
-  if (osuus === 1 || osuus === 15 || osuus === 16 || osuus === 17 || osuus === 18 || osuus === 24) return g === 'N';
-  if (osuus === 2 || osuus === 11 || osuus === 12 || osuus === 13 || osuus === 14 ||
-      osuus === 19 || osuus === 20 || osuus === 21 || osuus === 22 || osuus === 25) return true;
-  if (osuus === 3 || osuus === 4 || osuus === 5 || osuus === 6) return g === 'N' || (g === 'M' && (n <= 16 || n >= 50));
-  if (osuus === 7 || osuus === 8 || osuus === 9 || osuus === 10) return g === 'N' ? (n <= 18 || n >= 45) : (g === 'M' && (n <= 14 || n >= 60));
-  if (osuus === 23) return g === 'N' ? (n <= 20 || n >= 40) : (g === 'M' && (n <= 16 || n >= 55));
-  return false;
+  if (osuus === 1) return g === 'N' || (g === 'M' && n !== null && (n <= 16 || n >= 50));
+  if (mode !== 'kilpa') return true;
+  if (osuus === 15) return g === 'N';
+  return true;
 }
 
-function isYoungM(r) { return r.gender === 'M' && r.num !== null && r.num <= 16; }
-function isYoungW(r) { return r.gender === 'N' && r.num !== null && r.num <= 16; }
-function isH21(r) { return r.gender === 'M' && r.num === 21; }
+// Osuuksien 2–5 joukkuetason sarjaluokat (2026):
+//   2 kpl D-sarjalainen, 2 kpl -H18/H45-/D, 3 kpl -H15/H55-/-D18/D40-, 2 kpl -H13/H65-/-D15/D50-
+function catB(r) { return r.gender === 'N'; }                                                      // D-sarjalainen
+function catC(r) { return r.gender === 'N' || (r.gender === 'M' && r.num !== null && (r.num <= 18 || r.num >= 45)); }
+function catD(r) { return (r.gender === 'M' && r.num !== null && (r.num <= 15 || r.num >= 55)) || (r.gender === 'N' && r.num !== null && (r.num <= 18 || r.num >= 40)); }
+function catE(r) { return (r.gender === 'M' && r.num !== null && (r.num <= 13 || r.num >= 65)) || (r.gender === 'N' && r.num !== null && (r.num <= 15 || r.num >= 50)); }
 
-function teamRequirements(assigned) {
+function teamRequirements(assigned, mode) {
   const problems = [];
-  const men = assigned.filter(r => r.gender === 'M');
-  const women = assigned.filter(r => r.gender === 'N');
-  if (men.length < 9) problems.push(`miehiä ${men.length}/9`);
-  else if (!men.some(isYoungM)) problems.push('ei H16 tai nuorempaa miestä');
-  if (women.length < 9) problems.push(`naisia ${women.length}/9`);
-  else if (!women.some(isYoungW)) problems.push('ei D16 tai nuorempaa naista');
-  const h21 = assigned.filter(isH21).length;
-  if (h21 > 8) problems.push(`H21-sarjalaisia ${h21}/8`);
+  if (mode !== 'kilpa') return problems;
+  const women = assigned.filter(r => r.gender === 'N').length;
+  if (women < 5) problems.push(`naisia ${women}/5`);
+  const legs25 = assigned.slice(1, 13);
+  let b = 0, c = 0, d = 0, e = 0;
+  for (const r of legs25) {
+    if (catB(r)) b++;
+    if (catC(r)) c++;
+    if (catD(r)) d++;
+    if (catE(r)) e++;
+  }
+  if (b < 2) problems.push(`osuudet 2-5: D-sarjalaisia ${b}/2`);
+  if (c < 2) problems.push(`osuudet 2-5: -H18/H45-/D ${c}/2`);
+  if (d < 3) problems.push(`osuudet 2-5: -H15/H55-/-D18/D40- ${d}/3`);
+  if (e < 2) problems.push(`osuudet 2-5: -H13/H65-/-D15/D50- ${e}/2`);
   return problems;
 }
 
-function validateTeam(team, slots) {
+function validateTeam(team, slots, mode) {
   const assigned = team.filter(Boolean);
-  if (assigned.length !== 25) return [`keskeneräinen (${assigned.length}/25)`];
+  if (assigned.length !== 15) return [`keskeneräinen (${assigned.length}/15)`];
   const problems = [];
   for (let i = 0; i < slots.length; i++) {
     const r = team[i];
-    if (r && !legEligible(r, slots[i].osuus)) problems.push(`osuus ${slots[i].osuus}${slots[i].alaosuus ? '.' + slots[i].alaosuus : ''}: ${r.nimi} (${r.sarja}) ei kelpaa`);
+    if (r && !legEligible(r, slots[i].osuus, mode)) problems.push(`osuus ${slots[i].osuus}${slots[i].alaosuus ? '.' + slots[i].alaosuus : ''}: ${r.nimi} (${r.sarja}) ei kelpaa`);
   }
-  return problems.concat(teamRequirements(assigned));
+  return problems.concat(teamRequirements(assigned, mode));
 }
 
 function strengthOf(r) {
@@ -277,66 +291,87 @@ function strengthOf(r) {
   return (S.wSpeed || 0.7) * (r.nopeus || 0) + (1 - (S.wSpeed || 0.7)) * (r.luotettavuus || 0);
 }
 
-// Solves all N teams jointly: slot types are processed in ascending candidate
-// order across every team, so scarce restricted-class runners (e.g. legs 7–10)
-// are shared fairly instead of being squandered by the first team.
-function solveAllTeams(pool, N) {
-  const cands = SLOTS.map(s => pool.filter(r => !r.kipea && legEligible(r, s.osuus)));
+// Ratkaisee N joukkuetta yhdessä: slotit käsitellään ehdokkaiden määrän mukaan
+// kaikkien joukkeiden yli, joten niukat sarjaluokat jakautuvat tasan.
+function solveAllTeams(pool, N, mode) {
+  const cands = SLOTS.map(s => pool.filter(r => !r.kipea && legEligible(r, s.osuus, mode)));
   const order = SLOTS.map((s, i) => i).sort((a, b) => cands[a].length - cands[b].length);
-  const teams = Array.from({ length: N }, () => new Array(25).fill(null));
-  const cnt = Array.from({ length: N }, () => ({ men: 0, women: 0, youngM: 0, youngW: 0, h21: 0 }));
+  const teams = Array.from({ length: N }, () => new Array(15).fill(null));
+  const cnt = Array.from({ length: N }, () => ({ women: 0, b: 0, c: 0, d: 0, e: 0 }));
   const plan = [];
   for (const s of order) for (let t = 0; t < N; t++) plan.push([t, s]);
   const used = new Set();
   let nodes = 0;
+  const kilpa = mode === 'kilpa';
 
-  function feasible(k) {
-    const sets = [];
-    for (let t = 0; t < N; t++) sets.push({ w: new Set(), m: new Set(), ym: new Set(), yw: new Set() });
-    for (let x = k; x < plan.length; x++) {
-      const [t, s] = plan[x];
-      const arr = cands[s];
-      for (let i = 0; i < arr.length; i++) {
-        const r = arr[i];
-        if (used.has(r)) continue;
-        const st = sets[t];
-        if (r.gender === 'N') st.w.add(r); else st.m.add(r);
-        if (isYoungM(r)) st.ym.add(r);
-        if (isYoungW(r)) st.yw.add(r);
-      }
+  // Halpa välttämätön ehto: käyttämättömien juoksijoiden lukumäärät kunkin
+  // sarjaluokan osalta ovat yläraja sille, mitä joukkue voi vielä saada.
+  function feasible() {
+    if (!kilpa) return true;
+    let uw = 0, ub = 0, uc = 0, ud = 0, ue = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const r = pool[i];
+      if (used.has(r)) continue;
+      if (r.gender === 'N') uw++;
+      if (catB(r)) ub++;
+      if (catC(r)) uc++;
+      if (catD(r)) ud++;
+      if (catE(r)) ue++;
     }
     for (let t = 0; t < N; t++) {
-      if (cnt[t].h21 > 8) return false;
-      const st = sets[t];
-      if (cnt[t].women + st.w.size < 9) return false;
-      if (cnt[t].men + st.m.size < 9) return false;
-      if (cnt[t].youngM + st.ym.size < 1) return false;
-      if (cnt[t].youngW + st.yw.size < 1) return false;
+      const c = cnt[t];
+      if (c.women + uw < 5) return false;
+      if (c.b + ub < 2) return false;
+      if (c.c + uc < 2) return false;
+      if (c.d + ud < 3) return false;
+      if (c.e + ue < 2) return false;
     }
     return true;
   }
 
+  // Suositaan ehdokkaita, jotka täyttävät joukkeen vielä vajaana olevia
+  // sarjaluokkia; näin niukat luokat jakautuvat heti oikeille joukkueille.
+  function backScore(r, t, s) {
+    const c = cnt[t];
+    let score = (r.toive === t + 1) ? 1 : 0;
+    if (c.women < 5 && r.gender === 'N') score += 2;
+    if (kilpa && SLOTS[s].osuus >= 2 && SLOTS[s].osuus <= 5) {
+      if (c.b < 2 && catB(r)) score += 2;
+      if (c.c < 2 && catC(r)) score += 2;
+      if (c.d < 3 && catD(r)) score += 2;
+      if (c.e < 2 && catE(r)) score += 2;
+    }
+    return score;
+  }
+
   function backtrack(k) {
     if (k === plan.length) return true;
-    if (++nodes > 300000) return false;
+    if (++nodes > 600000) return false;
     const [t, s] = plan[k];
     const list = cands[s].filter(r => !used.has(r))
-      .sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
+      .sort((a, b) => backScore(b, t, s) - backScore(a, t, s) || strengthOf(b) - strengthOf(a));
     for (const r of list) {
       teams[t][s] = r;
       used.add(r);
       const c = cnt[t];
-      if (r.gender === 'N') c.women++; else c.men++;
-      if (isYoungM(r)) c.youngM++;
-      if (isYoungW(r)) c.youngW++;
-      if (isH21(r)) c.h21++;
-      if (feasible(k + 1) && backtrack(k + 1)) return true;
+      const is25 = SLOTS[s].osuus >= 2 && SLOTS[s].osuus <= 5;
+      if (r.gender === 'N') c.women++;
+      if (kilpa && is25) {
+        if (catB(r)) c.b++;
+        if (catC(r)) c.c++;
+        if (catD(r)) c.d++;
+        if (catE(r)) c.e++;
+      }
+      if (feasible() && backtrack(k + 1)) return true;
       teams[t][s] = null;
       used.delete(r);
-      if (r.gender === 'N') c.women--; else c.men--;
-      if (isYoungM(r)) c.youngM--;
-      if (isYoungW(r)) c.youngW--;
-      if (isH21(r)) c.h21--;
+      if (r.gender === 'N') c.women--;
+      if (kilpa && is25) {
+        if (catB(r)) c.b--;
+        if (catC(r)) c.c--;
+        if (catD(r)) c.d--;
+        if (catE(r)) c.e--;
+      }
     }
     return false;
   }
@@ -344,37 +379,41 @@ function solveAllTeams(pool, N) {
   return backtrack(0) ? teams : null;
 }
 
-// Cheap necessary conditions to reject an impossible team count before search.
-function quickFeasible(pool, n) {
-  if (pool.length < n * 25) return false;
-  let women = 0, men = 0, youngM = 0, youngW = 0, h21 = 0, leg710 = 0, leg23 = 0;
+// Halvat välttämättömät ehdot mahdottoman joukkuemäärän hylkäämiseksi.
+function quickFeasible(pool, n, mode) {
+  if (pool.length < n * 15) return false;
+  let leg1 = 0;
+  for (const r of pool) if (legEligible(r, 1, mode)) leg1++;
+  if (leg1 < n) return false;
+  if (mode !== 'kilpa') return true;
+  let women = 0, b = 0, c = 0, d = 0, e = 0;
   for (const r of pool) {
-    if (r.gender === 'N') women++; else men++;
-    if (isYoungM(r)) youngM++;
-    if (isYoungW(r)) youngW++;
-    if (isH21(r)) h21++;
-    if (legEligible(r, 7)) leg710++;
-    if (legEligible(r, 23)) leg23++;
+    if (r.gender === 'N') women++;
+    if (catB(r)) b++;
+    if (catC(r)) c++;
+    if (catD(r)) d++;
+    if (catE(r)) e++;
   }
-  if (women < n * 6) return false; // 6 women-only slots per team
-  if (women < n * 9 || men < n * 9) return false;
-  if (youngM < n || youngW < n) return false;
-  if (h21 > n * 8) return false;
-  if (leg710 < n * 4) return false; // 4 slots of osuus 7–10 per team
-  if (leg23 < n) return false;      // 1 slot of osuus 23 per team
+  if (women < n * 5) return false;
+  if (b < n * 2) return false;
+  if (c < n * 2) return false;
+  if (d < n * 3) return false;
+  if (e < n * 2) return false;
   return true;
 }
 
-function generateTeams(runners, N) {
+function generateTeams(runners, N, mode) {
   for (let n = N; n >= 1; n--) {
     const remaining = runners.filter(r => !r.kipea);
-    if (!quickFeasible(remaining, n)) continue;
-    const teams = solveAllTeams(remaining, n);
+    if (!quickFeasible(remaining, n, mode)) continue;
+    const teams = solveAllTeams(remaining, n, mode);
     if (!teams) continue;
     const usedSet = new Set(teams.flat().filter(Boolean));
     return { teams, leftovers: remaining.filter(r => !usedSet.has(r)), count: n };
   }
-  return { error: 'Joukkuetta ei voitu muodostaa. Tarkista pooli: jokaisessa joukkuussa on oltava vähintään 9 miestä (väh. yksi H≤16), vähintään 9 naista (väh. yksi D≤16), enintään 8 H21-sarjalaista ja osuus 1 nainen. Aikuismiehet (H17–H49) mahtuvat vain kaikki-osuuksille (10 paikkaa).' };
+  return { error: mode === 'avoin'
+    ? 'Avoimen sarjan joukkuetta ei voitu muodostaa. Jokaisessa joukkuussa on oltava 1. osuudelle kelvollinen (D / -H16 / H50-).'
+    : 'Kilpasarjan joukkuetta ei voitu muodostaa. Tarkista pooli: joukkuussa on oltava vähintään 5 naista, osuuksille 2-5 riittävästi D-sarjalaisia ja -H18/H45-/D, -H15/H55-/-D18/D40- ja -H13/H65-/-D15/D50- suunnistajia, 1. osuudelle D / -H16 / H50- ja 15. osuudelle D-sarjalainen.' };
 }
 
 function scoreState() {
@@ -387,6 +426,10 @@ function scoreState() {
   return pref * prefW + balance;
 }
 
+function teamMode(t) {
+  return t < S.kilpaCount ? 'kilpa' : 'avoin';
+}
+
 function swapSlots(aT, aS, bT, bS) {
   const A = S.teams[aT], B = S.teams[bT];
   const ra = A[aS], rb = B[bS];
@@ -394,8 +437,8 @@ function swapSlots(aT, aS, bT, bS) {
   if ((ra && ra.kipea) || (rb && rb.kipea)) return false;
   A[aS] = rb; B[bS] = ra;
   const ok = aT === bT
-    ? validateTeam(A, SLOTS).length === 0
-    : validateTeam(A, SLOTS).length === 0 && validateTeam(B, SLOTS).length === 0;
+    ? validateTeam(A, SLOTS, teamMode(aT)).length === 0
+    : validateTeam(A, SLOTS, teamMode(aT)).length === 0 && validateTeam(B, SLOTS, teamMode(bT)).length === 0;
   if (!ok) { A[aS] = ra; B[bS] = rb; }
   return ok;
 }
@@ -406,24 +449,22 @@ function optimizePasses() {
     let improved = false;
     const before = scoreState();
 
-    // 1) fill empty slots from pool, keeping the team valid
     for (let t = 0; t < S.teams.length; t++) {
-      for (let s = 0; s < 25; s++) {
+      for (let s = 0; s < 15; s++) {
         if (S.teams[t][s]) continue;
-        const cands = unassignedRunners().filter(r => !r.kipea && legEligible(r, SLOTS[s].osuus));
+        const cands = unassignedRunners().filter(r => !r.kipea && legEligible(r, SLOTS[s].osuus, teamMode(t)));
         if (!cands.length) continue;
         cands.sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
         S.teams[t][s] = cands[0];
-        if (validateTeam(S.teams[t], SLOTS).length === 0) improved = true;
+        if (validateTeam(S.teams[t], SLOTS, teamMode(t)).length === 0) improved = true;
         else S.teams[t][s] = null;
       }
     }
 
-    // 2) pair swaps between teams that improve the score and stay valid
     for (let i = 0; i < S.teams.length; i++) {
       for (let j = i + 1; j < S.teams.length; j++) {
-        for (let a = 0; a < 25; a++) {
-          for (let b = 0; b < 25; b++) {
+        for (let a = 0; a < 15; a++) {
+          for (let b = 0; b < 15; b++) {
             const A = S.teams[i][a], B = S.teams[j][b];
             if (!A || !B || A === B) continue;
             if (swapSlots(i, a, j, b)) {
@@ -435,17 +476,16 @@ function optimizePasses() {
       }
     }
 
-    // 3) pool <-> team swaps (only when the runner is not already assigned)
     const poolNow = unassignedRunners();
     for (let i = 0; i < S.teams.length; i++) {
-      for (let s = 0; s < 25; s++) {
+      for (let s = 0; s < 15; s++) {
         const r = S.teams[i][s];
         if (!r) continue;
         for (let p = 0; p < poolNow.length; p++) {
           const pr = poolNow[p];
           if (pr.kipea || pr === r || findLocation(pr).kind === 'team') continue;
           S.teams[i][s] = pr;
-          if (validateTeam(S.teams[i], SLOTS).length === 0 && scoreState() > before) {
+          if (validateTeam(S.teams[i], SLOTS, teamMode(i)).length === 0 && scoreState() > before) {
             updatePoolFromTeams();
             improved = true;
             continue;
@@ -469,7 +509,7 @@ function optimize() {
 }
 
 function readInputs() {
-  S.klubi = getEl('klubi').value.trim() || 'Espoon Suunta';
+  S.klubi = getEl('klubi').value.trim() || 'Angelniemen Ankkuri';
   S.firstNum = parseInt(getEl('firstNum').value, 10);
   if (!Number.isInteger(S.firstNum) || S.firstNum < 1) S.firstNum = 1;
   S.wSpeed = parseFloat(getEl('wSpeed').value);
@@ -478,8 +518,8 @@ function readInputs() {
   S.poolText = getEl('poolText').value;
 }
 
-// Carry over per-runner settings (kipea, nopeus, luotettavuus, toive, locked)
-// onto freshly parsed runners, keyed by sarja:nimi.
+// Siirtää juoksijakohtaiset asetukset (kipea, nopeus, luotettavuus, toive, locked)
+// tuoreisiin juoksijoihin avaimella sarja:nimi.
 function mergePoolState(parsed) {
   const prev = new Map();
   for (const r of S.runners) prev.set(r.sarja + ':' + r.nimi, r);
@@ -512,11 +552,42 @@ function generateAll() {
   if (!parsed.length) { showError('Poolissa ei ollut yhtään juoksijaa.'); return; }
   mergePoolState(parsed);
   S.runners = parsed;
-  const N = Math.floor(S.runners.length / 25);
-  if (N < 1) { showError('Tarvitaan vähintään 25 juoksijaa.'); return; }
-  const res = generateTeams(S.runners, N);
-  if (res.error) { showError(res.error); S.teams = []; renderAll(); return; }
-  S.teams = res.teams;
+  const maxN = Math.floor(S.runners.length / 15);
+  if (maxN < 1) { showError('Tarvitaan vähintään 15 juoksijaa.'); return; }
+
+  // 1) Maksimoi kilpasarjan joukkeiden määrä (vahvimmat ensin).
+  let kilpaTeams = [], kilpaCount = 0;
+  for (let n = maxN; n >= 1; n--) {
+    const res = generateTeams(S.runners, n, 'kilpa');
+    if (!res.error) { kilpaTeams = res.teams; kilpaCount = res.count; break; }
+  }
+
+  // 2) Lopuista muodostetaan avoimen sarjan joukkeet (vain 1. osuuden rajoitus).
+  let teams = [];
+  if (kilpaCount > 0) {
+    teams = kilpaTeams.slice();
+    const used = new Set(kilpaTeams.flat().filter(Boolean));
+    const rest = S.runners.filter(r => !used.has(r));
+    const maxA = Math.floor(rest.length / 15);
+    for (let n = maxA; n >= 1; n--) {
+      const res = generateTeams(rest, n, 'avoin');
+      if (!res.error) { teams = teams.concat(res.teams); break; }
+    }
+  } else {
+    const maxA = Math.floor(S.runners.length / 15);
+    for (let n = maxA; n >= 1; n--) {
+      const res = generateTeams(S.runners, n, 'avoin');
+      if (!res.error) { teams = res.teams; break; }
+    }
+  }
+
+  S.teams = teams;
+  S.kilpaCount = kilpaCount;
+  if (!S.teams.length) {
+    renderAll();
+    showError('Joukkuetta ei voitu muodostaa. Kilpasarja tarvitsee vähintään 5 naista, kelvollisen 1. ja 15. osuuden juoksijan sekä osuuksille 2-5 riittävästi D-sarjalaisia ja nuoria/ikääntyneitä; avoin sarja vain 1. osuudelle kelvollisen (D / -H16 / H50-).');
+    return;
+  }
   updatePoolFromTeams();
   optimizePasses();
   renderAll();
@@ -531,7 +602,7 @@ function unassignedRunners() {
 function updatePoolFromTeams() {
   for (let t = 0; t < S.teams.length; t++) {
     const seen = new Set();
-    for (let s = 0; s < 25; s++) {
+    for (let s = 0; s < 15; s++) {
       if (S.teams[t][s] && seen.has(S.teams[t][s])) S.teams[t][s] = null;
       if (S.teams[t][s]) seen.add(S.teams[t][s]);
     }
@@ -548,30 +619,32 @@ function findLocation(r) {
 
 function fillSlot(teamIdx, slotIdx) {
   const t = S.teams[teamIdx];
+  const mode = teamMode(teamIdx);
   if (t[slotIdx]) return true;
   const osuus = SLOTS[slotIdx].osuus;
   const poolNow = unassignedRunners();
-  const cands = poolNow.filter(r => !r.kipea && legEligible(r, osuus));
+  const cands = poolNow.filter(r => !r.kipea && legEligible(r, osuus, mode));
   if (cands.length) {
     cands.sort((a, b) => (b.toive === teamIdx + 1) - (a.toive === teamIdx + 1) || strengthOf(b) - strengthOf(a));
     t[slotIdx] = cands[0];
-    return validateTeam(t, SLOTS).length === 0;
+    return validateTeam(t, SLOTS, mode).length === 0;
   }
   const backup = cloneTeams();
   for (let j = teamIdx + 1; j < S.teams.length; j++) {
     const tj = S.teams[j];
-    for (let s = 0; s < 25; s++) {
+    const modeJ = teamMode(j);
+    for (let s = 0; s < 15; s++) {
       const r = tj[s];
-      if (!r || r.kipea || !legEligible(r, osuus)) continue;
+      if (!r || r.kipea || !legEligible(r, osuus, mode)) continue;
       tj[s] = null;
       t[slotIdx] = r;
-      if (validateTeam(t, SLOTS).length === 0) {
+      if (validateTeam(t, SLOTS, mode).length === 0) {
         const pNow = unassignedRunners();
-        const pc = pNow.filter(p => !p.kipea && legEligible(p, SLOTS[s].osuus));
+        const pc = pNow.filter(p => !p.kipea && legEligible(p, SLOTS[s].osuus, modeJ));
         if (pc.length) {
           pc.sort((a, b) => strengthOf(b) - strengthOf(a));
           tj[s] = pc[0];
-          if (validateTeam(tj, SLOTS).length === 0) return true;
+          if (validateTeam(tj, SLOTS, modeJ).length === 0) return true;
         }
       }
       tj[s] = r;
@@ -590,7 +663,7 @@ function performMove(runnerIdx, teamIdx, slotIdx) {
   if (!r || r.kipea) return;
   const loc = findLocation(r);
   if (loc.kind === 'team' && loc.t === teamIdx && loc.s === slotIdx) return;
-  if (!legEligible(r, SLOTS[slotIdx].osuus)) { showWarn('Siirto estetty: ei kelvollinen tälle osuudelle.'); return; }
+  if (!legEligible(r, SLOTS[slotIdx].osuus, teamMode(teamIdx))) { showWarn('Siirto estetty: ei kelvollinen tälle osuudelle.'); return; }
   const backup = cloneTeams();
   if (loc.kind === 'team') S.teams[loc.t][loc.s] = null;
   S.teams[teamIdx][slotIdx] = r;
@@ -598,8 +671,8 @@ function performMove(runnerIdx, teamIdx, slotIdx) {
   const affected = new Set([teamIdx]);
   if (loc.kind === 'team') affected.add(loc.t);
   for (const t of affected) {
-    if (S.teams[t].filter(Boolean).length < 25) continue;
-    if (validateTeam(S.teams[t], SLOTS).length) { ok = false; break; }
+    if (S.teams[t].filter(Boolean).length < 15) continue;
+    if (validateTeam(S.teams[t], SLOTS, teamMode(t)).length) { ok = false; break; }
   }
   if (!ok) {
     restoreTeams(backup);
@@ -620,19 +693,19 @@ function removeFromTeam(teamIdx, slotIdx) {
   autosave();
 }
 
-// Fills empty slots in all teams, earlier teams first. Prefers varamiehet
-// (pool); when the pool has no eligible runner, steals one from a later team
-// only when that team's slot can be refilled from the pool (so no team is left
-// with a new gap). Finally incomplete teams are repacked first-legs-first.
+// Täyttää aukot kaikissa joukkeissa, aikaisemmat ensin. Suosii varamiehiä (pool);
+// jos poolista ei löydy kelvollista, lainaa myöhemmästä joukkeesta vain silloin,
+// kun tämän aukko voidaan täyttää poolista (eikä toista joukkuetta jätetä vajaaksi).
+// Lopuksi vajaiden joukkeiden juoksijat pakataan ensimmäisiltä osuuksilta alkaen.
 function fillGaps() {
   if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
   const N = S.teams.length;
   let filled = 0;
 
   for (let t = 0; t < N; t++) {
-    for (let s = 0; s < 25; s++) {
+    for (let s = 0; s < 15; s++) {
       if (S.teams[t][s]) continue;
-      const cands = unassignedRunners().filter(r => !r.kipea && legEligible(r, SLOTS[s].osuus));
+      const cands = unassignedRunners().filter(r => !r.kipea && legEligible(r, SLOTS[s].osuus, teamMode(t)));
       if (!cands.length) continue;
       cands.sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
       S.teams[t][s] = cands[0];
@@ -642,22 +715,24 @@ function fillGaps() {
   updatePoolFromTeams();
 
   for (let t = 0; t < N; t++) {
-    for (let s = 0; s < 25; s++) {
+    for (let s = 0; s < 15; s++) {
       if (S.teams[t][s]) continue;
       const osuus = SLOTS[s].osuus;
       for (let j = t + 1; j < N && !S.teams[t][s]; j++) {
         const tj = S.teams[j];
-        for (let sj = 0; sj < 25; sj++) {
+        const modeJ = teamMode(j);
+        for (let sj = 0; sj < 15; sj++) {
           const r = tj[sj];
-          if (!r || r.kipea || !legEligible(r, osuus)) continue;
+          if (!r || r.kipea || !legEligible(r, osuus, teamMode(t))) continue;
           tj[sj] = null;
           S.teams[t][s] = r;
-          if (validateTeam(S.teams[t], SLOTS).length === 0) {
-            const pc = unassignedRunners().filter(p => !p.kipea && legEligible(p, SLOTS[sj].osuus));
+          if (validateTeam(S.teams[t], SLOTS, teamMode(t)).length === 0) {
+            const pNow = unassignedRunners();
+            const pc = pNow.filter(p => !p.kipea && legEligible(p, SLOTS[sj].osuus, modeJ));
             if (pc.length) {
               pc.sort((a, b) => (b.toive === j + 1) - (a.toive === j + 1) || strengthOf(b) - strengthOf(a));
               tj[sj] = pc[0];
-              if (validateTeam(tj, SLOTS).length === 0) { filled++; break; }
+              if (validateTeam(tj, SLOTS, modeJ).length === 0) { filled++; break; }
             }
           }
           tj[sj] = r;
@@ -676,30 +751,44 @@ function fillGaps() {
     : `Kaikki aukot täytetty (${filled} juoksijaa).`);
 }
 
-function eligibleCount(r) {
-  let n = 0;
-  for (let s = 0; s < 25; s++) if (legEligible(r, SLOTS[s].osuus)) n++;
-  return n;
-}
-
-// Repacks an incomplete team so its runners sit on the earliest legal legs
-// (holes end up only at the tail). Most-constrained runners first; if a runner
-// cannot be placed the team is left unchanged.
+// Pakkaa vajaiden joukkeiden juoksijat ensimmäisille osuuksille (aukkkoja jää vain
+// lopusta). Kilpasarjassa varataan 15. osuus naiselle ja 1. osuus kelvolliselle;
+// avoimessa vain 1. osuus. Jos kaikkia juoksijoita ei saa sijoitettua lainmukaisesti,
+// joukkuu jätetään ennalleen.
 function packTeam(t) {
   const team = S.teams[t];
   const runners = team.filter(Boolean);
-  if (runners.length === 25) return;
-  const rest = runners.slice().sort((a, b) => eligibleCount(a) - eligibleCount(b));
-  const placed = new Array(25).fill(null);
-  for (const r of rest) {
-    let at = -1;
-    for (let s = 0; s < 25; s++) {
-      if (!placed[s] && legEligible(r, SLOTS[s].osuus)) { at = s; break; }
-    }
-    if (at === -1) return;
-    placed[at] = r;
+  if (runners.length === 15) return;
+  const mode = teamMode(t);
+  const slots = new Array(15).fill(null);
+  const rest = runners.slice();
+  const take = (pred) => {
+    const i = rest.findIndex(pred);
+    if (i === -1) return null;
+    return rest.splice(i, 1)[0];
+  };
+  let r;
+  if (mode === 'kilpa') {
+    r = take(r => legEligible(r, 15, mode));
+    if (r) slots[14] = r;
   }
-  S.teams[t] = placed;
+  r = take(r => legEligible(r, 1, mode));
+  if (r) slots[0] = r;
+  for (let s = 1; s < 14; s++) {
+    const i = rest.findIndex(r => legEligible(r, SLOTS[s].osuus, mode));
+    if (i === -1) continue;
+    slots[s] = rest.splice(i, 1)[0];
+  }
+  if (rest.length) {
+    for (let s = 14; s >= 0 && rest.length; s--) {
+      if (slots[s]) continue;
+      const i = rest.findIndex(r => legEligible(r, SLOTS[s].osuus, mode));
+      if (i === -1) continue;
+      slots[s] = rest.splice(i, 1)[0];
+    }
+  }
+  if (rest.length) return;
+  S.teams[t] = slots;
 }
 
 function packIncompleteTeams() {
@@ -737,7 +826,7 @@ function setToive(idx, value) {
   autosave();
 }
 
-const S = { runners: [], teams: [], klubi: 'Espoon Suunta', firstNum: 1, wSpeed: 0.7, toiveFirst: true, poolText: '', showPool: true, poolSort: 'order', poolDir: 1, showRules: true };
+const S = { runners: [], teams: [], kilpaCount: 0, klubi: 'Angelniemen Ankkuri', firstNum: 1, wSpeed: 0.7, toiveFirst: true, poolText: '', showPool: true, poolSort: 'order', poolDir: 1, showRules: true };
 
 function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
 
@@ -745,15 +834,16 @@ function toCSV() {
   if (!S.teams.length) return '';
   const base = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'];
   const header = base.map(q);
-  for (let b = 1; b <= 25; b++) {
+  for (let b = 1; b <= 15; b++) {
     header.push(q(' '.repeat(b)));
     header.push(q(`Nimi-${b}`), q(`Kilpailukortti-${b}`), q(`Lainakortti-${b}`),
       q(`Osuus-${b}`), q(`Alaosuus-${b}`), q(`Rata-${b}`), q(`Lähtöaika-${b}`));
   }
   const lines = [header.join(',')];
   S.teams.forEach((team, ti) => {
-    const cells = [q(String(S.firstNum + ti)), q('25-manna'), q(`${S.klubi} ${ti + 1}`), q('FIN'), q(S.klubi)];
-    for (let s = 0; s < 25; s++) {
+    const sarja = teamMode(ti) === 'kilpa' ? 'Kilpasarja' : 'Avoin';
+    const cells = [q(String(S.firstNum + ti)), q(sarja), q(`${S.klubi} ${ti + 1}`), q('FIN'), q(S.klubi)];
+    for (let s = 0; s < 15; s++) {
       const r = team[s];
       cells.push(q(' '.repeat(s + 1)));
       cells.push(q(r ? r.nimi : ''), q(''), q(''), q(String(SLOTS[s].osuus)), q(SLOTS[s].alaosuus), q(SLOTS[s].rata), q(''));
@@ -766,7 +856,7 @@ function toCSV() {
 function exportCSV() {
   const csv = toCSV();
   if (!csv) { showWarn('Ei joukkuelistoja — generoi ensin.'); return; }
-  download('25manna_navisport.csv', csv);
+  download('halikkoviesti_navisport.csv', csv);
   getEl('csvOut').value = csv;
   getEl('csvWrap').style.display = 'block';
 }
@@ -784,6 +874,7 @@ function serializeState() {
   return {
     v: 1,
     klubi: S.klubi, firstNum: S.firstNum, wSpeed: S.wSpeed, toiveFirst: S.toiveFirst, poolText: S.poolText,
+    kilpaCount: S.kilpaCount,
     showPool: S.showPool, poolSort: S.poolSort, poolDir: S.poolDir, showRules: S.showRules,
     runners: S.runners.map(r => ({ nimi: r.nimi, sarja: r.sarja, gender: r.gender, num: r.num, toive: r.toive, nopeus: r.nopeus, luotettavuus: r.luotettavuus, kipea: r.kipea, locked: r.locked })),
     teams: S.teams.map(t => t.map(r => r ? S.runners.indexOf(r) : null)),
@@ -792,11 +883,12 @@ function serializeState() {
 
 function restoreState(data) {
   if (!data || data.v !== 1) return false;
-  S.klubi = data.klubi || 'Espoon Suunta';
+  S.klubi = data.klubi || 'Angelniemen Ankkuri';
   S.firstNum = data.firstNum || 1;
   S.wSpeed = data.wSpeed != null ? data.wSpeed : 0.7;
   S.toiveFirst = data.toiveFirst !== false;
   S.poolText = data.poolText || '';
+  S.kilpaCount = data.kilpaCount || 0;
   S.showPool = data.showPool !== false;
   S.poolSort = data.poolSort || 'order';
   S.poolDir = data.poolDir || 1;
@@ -820,19 +912,19 @@ function restoreState(data) {
 }
 
 function saveState() {
-  download('25manna_suunnitelma.json', JSON.stringify(serializeState(), null, 2));
+  download('halikkoviesti_suunnitelma.json', JSON.stringify(serializeState(), null, 2));
 }
 
 function autosave() {
   if (typeof localStorage === 'undefined') return;
-  try { localStorage.setItem('25manna_state_v1', JSON.stringify(serializeState())); } catch (e) {}
+  try { localStorage.setItem('halikkoviesti_state_v1', JSON.stringify(serializeState())); } catch (e) {}
 }
 
 function resetAll() {
-  S.runners = []; S.teams = []; S.poolText = '';
+  S.runners = []; S.teams = []; S.kilpaCount = 0; S.poolText = '';
   S.showPool = true; S.poolSort = 'order'; S.poolDir = 1; S.showRules = true;
   getEl('poolText').value = '';
-  if (typeof localStorage !== 'undefined') { try { localStorage.removeItem('25manna_state_v1'); } catch (e) {} }
+  if (typeof localStorage !== 'undefined') { try { localStorage.removeItem('halikkoviesti_state_v1'); } catch (e) {} }
   renderAll();
 }
 
@@ -841,6 +933,10 @@ function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 function genderLabel(r) {
   if (!r.gender) return '?';
   return r.gender === 'M' ? 'Mies' : 'Nainen';
+}
+
+function teamLabel(t) {
+  return t < S.kilpaCount ? 'Kilpa ' + (t + 1) : 'Avoin ' + (t - S.kilpaCount + 1);
 }
 
 function renderStatus() {
@@ -852,7 +948,9 @@ function renderStatus() {
   }
   lines.push(`<b>${S.runners.length}</b> juoksijaa`);
   if (S.teams.length) {
-    lines.push(`<b>${S.teams.length}</b> joukkuetta`);
+    const k = S.kilpaCount;
+    const a = S.teams.length - k;
+    lines.push(`<b>${S.teams.length}</b> joukkuetta (${k} kilpa · ${a} avoin)`);
     const un = unassignedRunners();
     lines.push(`<b>${un.length}</b> vapaana`);
     const men = S.runners.filter(r => r.gender === 'M').length;
@@ -863,8 +961,8 @@ function renderStatus() {
   if (S.teams.length) {
     let allOk = true;
     for (let t = 0; t < S.teams.length; t++) {
-      const probs = validateTeam(S.teams[t], SLOTS);
-      if (probs.length) { allOk = false; html += `<div class="line err">Joukkue ${t + 1}: ${esc(probs.join('; '))}</div>`; }
+      const probs = validateTeam(S.teams[t], SLOTS, teamMode(t));
+      if (probs.length) { allOk = false; html += `<div class="line err">${esc(teamLabel(t))}: ${esc(probs.join('; '))}</div>`; }
     }
     if (allOk) html += `<div class="line ok">Kaikki joukkuelistat kelvollisia.</div>`;
   }
@@ -877,8 +975,8 @@ function renderPanel() {
   const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
   let html = '<h3>Joukkuiden vahvuudet</h3>';
   for (let t = 0; t < S.teams.length; t++) {
-    const probs = validateTeam(S.teams[t], SLOTS);
-    html += `<div class="row" style="justify-content:space-between;"><span style="color:${TEAM_COLORS[t % TEAM_COLORS.length]};">● Joukkue ${t + 1}</span><span>${sums[t].toFixed(1)} <span class="${probs.length ? 'err-msg' : 'ok'}">${probs.length ? '✖' : '✔'}</span></span></div>`;
+    const probs = validateTeam(S.teams[t], SLOTS, teamMode(t));
+    html += `<div class="row" style="justify-content:space-between;"><span style="color:${TEAM_COLORS[t % TEAM_COLORS.length]};">● ${esc(teamLabel(t))}</span><span>${sums[t].toFixed(1)} <span class="${probs.length ? 'err-msg' : 'ok'}">${probs.length ? '✖' : '✔'}</span></span></div>`;
   }
   el.innerHTML = html;
 }
@@ -938,13 +1036,13 @@ function renderPoolTable() {
   poolRows().forEach(({ r, idx, loc }) => {
     const inTeam = loc.kind === 'team';
     const til = inTeam
-      ? `<span style="color:${TEAM_COLORS[loc.t % TEAM_COLORS.length]};">● Joukkue ${loc.t + 1} · osuus ${SLOTS[loc.s].osuus}${SLOTS[loc.s].alaosuus ? '.' + SLOTS[loc.s].alaosuus : ''}</span>`
+      ? `<span style="color:${TEAM_COLORS[loc.t % TEAM_COLORS.length]};">● ${esc(teamLabel(loc.t))} · osuus ${esc(dispLeg(loc.s))}</span>`
       : (r.kipea ? 'kipeä' : 'varamies');
     const cls = r.kipea ? 'sick' : (inTeam ? '' : 'varamies');
     html += `<tr class="${cls}">` +
       `<td>${esc(r.nimi)}</td>` +
       `<td>${esc(r.sarja)} (${genderLabel(r)})</td>` +
-      `<td><select onchange="setToive(${idx}, this.value)">${[null,1,2,3,4,5].map(n => `<option value="${n || ''}" ${r.toive === n ? 'selected' : ''}>${n ? 'Joukkue ' + n : '—'}</option>`).join('')}</select></td>` +
+      `<td><select onchange="setToive(${idx}, this.value)">${[null,1,2,3,4,5,6].map(n => `<option value="${n || ''}" ${r.toive === n ? 'selected' : ''}>${n ? 'Joukkue ' + n : '—'}</option>`).join('')}</select></td>` +
       `<td><input type="number" min="0" max="10" value="${r.nopeus}" onchange="setScore(${idx}, 'nopeus', this.value)"></td>` +
       `<td><input type="number" min="0" max="10" value="${r.luotettavuus}" onchange="setScore(${idx}, 'luotettavuus', this.value)"></td>` +
       `<td>${strengthOf(r).toFixed(1)}</td>` +
@@ -968,6 +1066,19 @@ function toggleRules() {
   autosave();
 }
 
+function renderLegend() {
+  const el = getEl('rulesLegend');
+  if (!el) return;
+  if (!S.teams.length) { el.innerHTML = ''; return; }
+  const hasKilpa = S.kilpaCount > 0;
+  const hasAvoin = S.teams.length > S.kilpaCount;
+  let h = '';
+  if (hasKilpa) h += 'Kilpasarja: ≥5 naista · 1. osuus D / -H16 / H50- · 15. osuus D-sarjalainen · osuudet 2–5: 2 D · 2 (-H18/H45-/D) · 3 (-H15/H55-/-D18/D40-) · 2 (-H13/H65-/-D15/D50-)';
+  if (hasKilpa && hasAvoin) h += '<br>';
+  if (hasAvoin) h += 'Avoin sarja: vain 1. osuuden vaatimus (D / -H16 / H50-).';
+  el.innerHTML = h;
+}
+
 function renderChips() {
   const wrap = getEl('chipsWrap');
   const un = S.runners.length ? unassignedRunners() : [];
@@ -984,28 +1095,29 @@ function renderChips() {
 
 function renderTeams() {
   const wrap = getEl('teamsWrap');
-  if (!S.teams.length) { wrap.innerHTML = '<div style="color:#667;">Generoi joukkuelistat poolista (vähintään 25 juoksijaa).</div>'; return; }
+  if (!S.teams.length) { wrap.innerHTML = '<div style="color:#667;">Generoi joukkuelistat poolista (vähintään 15 juoksijaa).</div>'; return; }
   let html = '';
   S.teams.forEach((team, t) => {
-    const probs = validateTeam(team, SLOTS);
+    const mode = teamMode(t);
+    const probs = validateTeam(team, SLOTS, mode);
     const sum = team.reduce((s, r) => s + strengthOf(r), 0);
     const col = TEAM_COLORS[t % TEAM_COLORS.length];
     html += `<div class="team-col">` +
-      `<div class="team-hdr" style="background:${col}"><div class="tname">Joukkue ${t + 1} <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
-      `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/25</div>` +
+      `<div class="team-hdr" style="background:${col}"><div class="tname">${esc(teamLabel(t))} <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
+      `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/15</div>` +
       (probs.length ? `<div class="problems">${probs.map(esc).join('<br>')}</div>` : '') +
       `</div>`;
-    for (let s = 0; s < 25; s++) {
+    for (let s = 0; s < 15; s++) {
       const r = team[s];
-      const valid = !r || legEligible(r, SLOTS[s].osuus);
+      const valid = !r || legEligible(r, SLOTS[s].osuus, mode);
       const tint = grpTint(s);
       html += `<div class="slot-row ${tint} ${r && !valid ? 'invalid' : ''}" data-team="${t}" data-slot="${s}" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropSlot(event, ${t}, ${s})">` +
         `<span class="slot-idx">${s + 1}</span>` +
-        `<span class="slot-lab">${dispLeg(s)}</span>` +
-        `<span class="slot-eh">${SLOTS[s].info}</span>` +
+        `<span class="slot-lab">${esc(dispLeg(s))}</span>` +
+        `<span class="slot-eh">${esc(legInfo(SLOTS[s].osuus, mode))}</span>` +
         (r
           ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})">${esc(r.nimi)}<span class="str">${strengthOf(r).toFixed(0)}${r.toive === t + 1 ? ' ★' : ''}</span></span>` +
-            `<button class="rm-btn" title="Poista joukkuesta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
+            `<button class="rm-btn" title="Poista joukkeusta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
           : `<span class="slot-empty" ondragover="event.preventDefault()" ondrop="dropSlot(event, ${t}, ${s})">— tyhjä —</span>`) +
         `</div>`;
     }
@@ -1049,6 +1161,7 @@ function renderAll() {
   renderPoolTable();
   renderChips();
   renderTeams();
+  renderLegend();
 }
 
 function showError(msg) {
@@ -1090,30 +1203,32 @@ getEl('loadFile').addEventListener('change', function() {
   rd.onload = () => {
     try {
       if (restoreState(JSON.parse(rd.result))) { renderAll(); applyViewState(); }
-      else showError('Tiedosto ei ole kelvollinen 25-manna-suunnitelma.');
+      else showError('Tiedosto ei ole kelvollinen Halikko-viesti-suunnitelma.');
     } catch (e) { showError('JSON:n lukeminen epäonnistui: ' + e.message); }
   };
   rd.readAsText(f);
   this.value = '';
 });
 
+// Esimerkkipooli: kiinteät sarjaluokkapalikat, jotka takaavat toimivia
+// kilpasarja- ja avoimen sarjan joukkueita.
 function loadExamplePool(count) {
-  const n = count && count > 0 ? count : 55;
+  const n = count > 0 ? count : 45;
+  const kilpaBlock = ['H16','D21','D21','D21','D21','D16','D14','H13','H65','H55','H14','H21','H35','H18','H21'];
+  const avoinBlock = ['H16','D21','H21','H21','H21','H21','H35','H35','H35','H40','H40','H45','H45','H18','H18'];
+  const blocks = Math.max(1, Math.floor(n / 15));
+  const kilpaBlocks = Math.max(1, blocks - Math.ceil(blocks / 3));
+  const avoinBlocks = Math.max(0, blocks - kilpaBlocks);
   const classes = [];
-  const add = (k, c) => { for (let i = 0; i < k; i++) classes.push(c); };
-  const teams = Math.max(1, Math.floor(n / 25));
-  add(2 * teams, 'H21'); add(2 * teams, 'D21');
-  add(1 * teams, 'H16'); add(1 * teams, 'H14'); add(1 * teams, 'D16'); add(1 * teams, 'D18');
-  add(1 * teams, 'H50'); add(1 * teams, 'H60'); add(1 * teams, 'D40'); add(1 * teams, 'H18');
-  add(1 * teams, 'D20'); add(1 * teams, 'H55'); add(1 * teams, 'H35'); add(1 * teams, 'D35');
-  add(1 * teams, 'H45'); add(1 * teams, 'D45'); add(1 * teams, 'H20');
+  for (let i = 0; i < kilpaBlocks; i++) classes.push(...kilpaBlock);
+  for (let i = 0; i < avoinBlocks; i++) classes.push(...avoinBlock);
   while (classes.length < n) classes.push(Math.random() < 0.5 ? 'H21' : 'D21');
   const boys = ['Aapo','Aleksi','Antti','Eino','Esa','Jari','Jouni','Jukka','Juha','Kaapo','Kalle','Lauri','Mikko','Niilo','Olli','Paavo','Pasi','Pekka','Petri','Sami','Seppo','Teemu','Vesa','Ville'];
   const girls = ['Aino','Anni','Elina','Emma','Hanna','Heidi','Iida','Kaisa','Karoliina','Katariina','Katja','Lotta','Maija','Marja','Minna','Outi','Pauliina','Päivi','Riikka','Sanna','Satu','Suvi','Tuuli','Venla'];
   const surnames = ['Aaltonen','Aho','Hakala','Helenius','Heikkinen','Heinonen','Järvinen','Kivelä','Korhonen','Koskela','Laine','Lehtonen','Miettinen','Mäkelä','Nieminen','Nurmi','Pesonen','Ranta','Räsänen','Salmi','Salminen','Sipilä','Toivonen','Virtanen'];
   const names = new Set();
   const pool = [];
-  classes.forEach((c, i) => {
+  classes.slice(0, n).forEach((c, i) => {
     const g = c[0] === 'H' ? boys : girls;
     let nm;
     do { nm = surnames[Math.floor(Math.random() * surnames.length)] + ' ' + g[Math.floor(Math.random() * g.length)]; } while (names.has(nm));
@@ -1131,7 +1246,7 @@ function loadExamplePool(count) {
   }
   if (typeof localStorage !== 'undefined') {
     try {
-      const raw = localStorage.getItem('25manna_state_v1');
+      const raw = localStorage.getItem('halikkoviesti_state_v1');
       if (raw) { if (restoreState(JSON.parse(raw))) { renderAll(); applyViewState(); return; } }
     } catch (e) {}
   }

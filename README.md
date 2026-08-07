@@ -51,6 +51,20 @@ via the browser, and JSON save/load with `localStorage` autosave. 25-manna
 eligibility rules (women-only legs, restricted age/gender legs 3–10/23, ≥9 men
 with ≥1 H≤16, ≥9 women with ≥1 D≤16, ≤8 H21) are built in.
 
+### [`halikkoviesti_joukkuesuunnittelija.html`](halikkoviesti_joukkuesuunnittelija.html)
+Halikko-viesti team planner. Reads a runner pool (`Sarja:Nimi`, optional team
+wish as a third field) and automatically splits the runners into as many valid
+**Kilpasarja** teams as possible, forming **Avoin** teams from the rest. Halikko-viesti
+2026 rules are built in: 15 runners per team (leg 1 single, legs 2–5 triple,
+legs 14–15 single), Kilpasarja requires ≥5 women, a leg-1 runner
+(D / -H16 / H50-), a leg-15 D-sarjalainen, and legs 2–5 quotas (2 D, 2
+(-H18/H45-/D), 3 (-H15/H55-/-D18/D40-), 2 (-H13/H65-/-D15/D50-)); Avoin has
+only the leg-1 restriction. Supports drag-and-drop adjustment, sick-runner
+auto-replacement, per-runner scores and team wishes, Navisport start-list CSV
+export (15 blocks with `Osuus`/`Alaosuus`, matching the Rastilippu Halikko
+profile), JSON save/load and `localStorage` autosave, plus built-in example
+pools of 45/60/75 runners.
+
 ### [`fetch_irma_clubs.bash`](fetch_irma_clubs.bash)
 Downloads the public club registry from the Finnish Orienteering Federation's
 IRMA system (`irma.suunnistusliitto.fi`). Outputs the full club list as JSON.

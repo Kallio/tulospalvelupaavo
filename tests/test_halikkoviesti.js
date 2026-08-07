@@ -1,0 +1,344 @@
+const fs = require('fs');
+const html = fs.readFileSync('/tulospalvelupaavo/halikkoviesti_joukkuesuunnittelija.html', 'utf8');
+const m = html.match(/<script>([\s\S]*?)<\/script>/);
+if (!m) throw new Error('no inline script');
+let code = m[1];
+code = code.replace(/\(function init\(\)[\s\S]*$/, '');
+
+function makeEl(tag) {
+  return {
+    tag, value: '', textContent: '', className: '', options: [], selectedIndex: -1,
+    children: [], _html: '', checked: false, disabled: false, style: {}, files: [],
+    _cls: [],
+    classList: {
+      add(c) { if (!this._cls.includes(c)) this._cls.push(c); },
+      remove(c) { this._cls = this._cls.filter(x => x !== c); },
+      toggle(c, on) { if (on === undefined ? !this._cls.includes(c) : on) this.add(c); else this.remove(c); },
+      contains(c) { return this._cls.includes(c); },
+    },
+    appendChild(el) { this.children.push(el); return el; },
+    addEventListener() {}, remove() {},
+    querySelector() { return makeEl(); },
+    querySelectorAll() { return []; },
+    set innerHTML(v) { this._html = v; if (v === '') this.children = []; },
+    get innerHTML() { return this._html; },
+  };
+}
+const store = {};
+function getEl(id) { if (!store[id]) store[id] = makeEl('#' + id); return store[id]; }
+global.document = {
+  getElementById: getEl,
+  querySelectorAll() { return []; },
+  createElement: tag => makeEl(tag),
+  addEventListener() {},
+};
+
+let threw = null;
+try {
+  eval(code + '; global.__S = () => S; global.__SLOTS = () => SLOTS;');
+} catch (e) { threw = e; }
+if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
+
+let pass = 0, fail = 0;
+function assert(name, cond, extra) {
+  if (cond) { pass++; console.log('  ok  ' + name); }
+  else { fail++; console.log('  FAIL ' + name + (extra ? ' — ' + extra : '')); }
+}
+
+function parseCSV(text, sep) {
+  const rows = []; let row = [], cur = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === sep) { row.push(cur); cur = ''; }
+    else if (c === '\n') { row.push(cur); cur = ''; rows.push(row); row = []; }
+    else if (c === '\r') {}
+    else cur += c;
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+let poolCounter = 0;
+function buildPool(classes, prefix) {
+  const L = [];
+  const add = (c, n) => { for (let i = 0; i < n; i++) L.push(`${c}:${c}-${prefix ? prefix + '-' : ''}${poolCounter++}`); };
+  classes.forEach(([c, n]) => add(c, n));
+  return L.join('\n');
+}
+
+const KILPA_BLOCK = [
+  ['H16',1], ['D21',4], ['D16',1], ['D14',1], ['H13',1], ['H65',1], ['H55',1], ['H14',1], ['H21',2], ['H35',1], ['H18',1],
+];
+const AVOIN_BLOCK = [
+  ['H16',1], ['D21',1], ['H21',4], ['H35',3], ['H40',2], ['H45',2], ['H18',2],
+];
+function kilpaPool(nBlocks) {
+  const classes = [];
+  for (let i = 0; i < nBlocks; i++) classes.push(...KILPA_BLOCK.map(([c, n]) => [c, n]));
+  return buildPool(classes, 'k');
+}
+function avoinPool(nBlocks) {
+  const classes = [];
+  for (let i = 0; i < nBlocks; i++) classes.push(...AVOIN_BLOCK.map(([c, n]) => [c, n]));
+  return buildPool(classes, 'a');
+}
+function mixedPool(k, a) {
+  const classes = [];
+  for (let i = 0; i < k; i++) classes.push(...KILPA_BLOCK.map(([c, n]) => [c, n]));
+  for (let i = 0; i < a; i++) classes.push(...AVOIN_BLOCK.map(([c, n]) => [c, n]));
+  return buildPool(classes, 'm');
+}
+
+// ── parseSarja ──
+assert('parseSarja: H21 → M/21', JSON.stringify(parseSarja('H21')) === '{"gender":"M","num":21}');
+assert('parseSarja: D16 → N/16', JSON.stringify(parseSarja('D16')) === '{"gender":"N","num":16}');
+assert('parseSarja: H-50 → M/50', JSON.stringify(parseSarja('H-50')) === '{"gender":"M","num":50}');
+assert('parseSarja: junk → null/null', JSON.stringify(parseSarja('Foo')) === '{"gender":null,"num":null}');
+
+// ── SLOTS structure ──
+const slots = __SLOTS();
+assert('SLOTS: 15 slots', slots.length === 15, String(slots.length));
+assert('SLOTS: osuus seq 1,2,2,2,3,3,3,4,4,4,5,5,5,14,15',
+  JSON.stringify(slots.map(s => s.osuus)) === JSON.stringify([1,2,2,2,3,3,3,4,4,4,5,5,5,14,15]));
+assert('SLOTS: alaosuudet 2.1..5.3, 14/15 empty',
+  slots[1].alaosuus === '1' && slots[3].alaosuus === '3' && slots[4].alaosuus === '1' &&
+  slots[12].alaosuus === '3' && slots[13].alaosuus === '' && slots[14].alaosuus === '');
+assert('SLOTS: ratas', slots[0].rata.includes('violetti') && slots[4].rata.includes('oranssi') && slots[13].rata.includes('musta'));
+
+// ── legEligible (kilpa) ──
+const M21 = parsePool('H21:X')[0], M16 = parsePool('H16:X')[0], M14 = parsePool('H14:X')[0],
+      M50 = parsePool('H50:X')[0], M35 = parsePool('H35:X')[0], M55 = parsePool('H55:X')[0];
+const W21 = parsePool('D21:X')[0], W16 = parsePool('D16:X')[0], W14 = parsePool('D14:X')[0],
+      W40 = parsePool('D40:X')[0], W50 = parsePool('D50:X')[0];
+assert('leg kilpa: 1 = D/-H16/H50-', legEligible(W21, 1, 'kilpa') && legEligible(M16, 1, 'kilpa') && legEligible(M50, 1, 'kilpa') && !legEligible(M21, 1, 'kilpa') && !legEligible(M35, 1, 'kilpa'));
+assert('leg kilpa: 15 = nainen', legEligible(W21, 15, 'kilpa') && !legEligible(M21, 15, 'kilpa'));
+assert('leg kilpa: 2-5 ja 14 = kaikki', [2,3,4,5,14].every(o => legEligible(M21, o, 'kilpa') && legEligible(W21, o, 'kilpa')));
+assert('leg avoin: vain 1 rajoitettu', !legEligible(M21, 1, 'avoin') && legEligible(W21, 1, 'avoin') && legEligible(M16, 1, 'avoin') && legEligible(M21, 15, 'avoin') && legEligible(M21, 2, 'avoin') && legEligible(M21, 14, 'avoin'));
+
+// ── sarjaluokat ──
+assert('cat: D-sarjalainen = nainen', catB(W21) && catB(W50) && !catB(M21));
+assert('catC: -H18/H45-/D', catC(M18 = parsePool('H18:X')[0]) && catC(M45 = parsePool('H45:X')[0]) && catC(W21) && !catC(M21) && !catC(M35));
+assert('catD: -H15/H55-/-D18/D40-', catD(M14) && catD(M55) && catD(W16) && catD(W40) && !catD(M16) && !catD(W21) && !catD(M21));
+assert('catE: -H13/H65-/-D15/D50-', catE(parsePool('H13:X')[0]) && catE(parsePool('H65:X')[0]) && catE(W14) && catE(W50) && !catE(M14) && !catE(W16) && !catE(M55));
+
+// ── teamRequirements ──
+const mkTeam = (arr, mode) => validateTeam(arr, slots, mode || 'kilpa');
+function fullTeam(lines) {
+  const arr = new Array(15).fill(null);
+  parsePool(lines.join('\n')).slice(0, 15).forEach((r, i) => { arr[i] = r; });
+  return arr;
+}
+// leg1 nainen, legit 2-13: 5 naista + H16/H13/H65/H55/H14/H21/H35, leg15 nainen → OK
+const okTeam = fullTeam(['D21:A','D21:B','D21:C','D21:D','H16:E','D16:F','D14:G','H13:H','H65:I','H55:J','H14:K','H21:L','H35:M','H18:N','D21:O']);
+// 4 naista yhteensä (leg1 H16, leg15 D21) → 'naisia 4/5'
+const w4 = fullTeam(['H16:A','D21:B','D21:C','D21:D','H13:E','H65:F','H55:G','H14:H','H21:I','H35:J','H18:K','H21:L','H21:M','H21:N','D21:O']);
+// catD = H13+D14 = 2/3 (leg1 D21, legit2-13: D21,D21,D21,H16,H13,D14,H21,H35,H18,H45,H21, leg15 D21)
+const d2 = fullTeam(['D21:A','D21:B','D21:C','D21:D','H16:E','H13:F','D14:G','H21:H','H35:I','H18:J','H45:K','H21:L','H21:M','H21:N','D21:O']);
+// catE = H65 only = 1/2 (leg1 D21, legit2-13: D21,D21,D21,H16,H65,H21,H35,H18,H45,H55,H14, leg15 D21)
+const e1 = fullTeam(['D21:A','D21:B','D21:C','D21:D','H16:E','H65:F','H21:G','H35:H','H18:I','H45:J','H55:K','H14:L','H21:M','H21:N','D21:O']);
+assert('req kilpa: valid team ok', mkTeam(okTeam).length === 0, mkTeam(okTeam).join(';'));
+assert('req kilpa: 4 women flagged', mkTeam(w4).some(p => p.includes('naisia 4/5')));
+assert('req kilpa: catE 1/2 flagged', mkTeam(e1).some(p => p.includes('-H13/H65-/-D15/D50-')));
+assert('req kilpa: catD 2/3 flagged', mkTeam(d2).some(p => p.includes('-H15/H55-/-D18/D40-')));
+assert('req avoin: no team constraints', validateTeam(fullTeam(['H16:A','H21:B','H21:C','H21:D','H21:E','H21:F','H21:G','H21:H','H21:I','H21:J','H21:K','H21:L','H21:M','H21:N','H21:O']), slots, 'avoin').length === 0, validateTeam(fullTeam(['H16:A','H21:B','H21:C','H21:D','H21:E','H21:F','H21:G','H21:H','H21:I','H21:J','H21:K','H21:L','H21:M','H21:N','H21:O']), slots, 'avoin').join(';'));
+assert('req: incomplete flagged', mkTeam(new Array(15).fill(null)).some(p => p.includes('keskeneräinen')));
+
+// ── generation: 1 kilpa team from minimal 15 pool ──
+const pool15 = kilpaPool(1);
+const g1 = generateTeams(parsePool(pool15), 1, 'kilpa');
+assert('gen 15: 1 team', g1.count === 1 && g1.teams.length === 1, JSON.stringify(g1));
+assert('gen 15: valid', validateTeam(g1.teams[0], slots, 'kilpa').length === 0, validateTeam(g1.teams[0], slots, 'kilpa').join(';'));
+assert('gen 15: no leftovers', g1.leftovers.length === 0, String(g1.leftovers.length));
+
+// ── generation: 2 kilpa teams from 30 pool ──
+const g2 = generateTeams(parsePool(kilpaPool(2)), 2, 'kilpa');
+assert('gen 30: 2 teams', g2.count === 2 && g2.teams.length === 2, JSON.stringify({ count: g2.count, err: g2.error }));
+assert('gen 30: both valid', g2.teams.every(t => validateTeam(t, slots, 'kilpa').length === 0));
+assert('gen 30: no duplicate runners', new Set(g2.teams.flat().map(r => r.nimi)).size === 30);
+
+// ── generation: avoin team from men-only pool (leg1 = H16) ──
+const menOnly = ['H16:X1','H50:X2','H21:X3','H21:X4','H21:X5','H21:X6','H21:X7','H21:X8','H21:X9','H21:X10','H21:X11','H21:X12','H21:X13','H21:X14','H21:X15'].join('\n');
+const ga = generateTeams(parsePool(menOnly), 1, 'avoin');
+assert('gen avoin: 1 team without women', ga.count === 1 && ga.teams.length === 1, JSON.stringify(ga));
+assert('gen avoin: valid', validateTeam(ga.teams[0], slots, 'avoin').length === 0, validateTeam(ga.teams[0], slots, 'avoin').join(';'));
+assert('gen kilpa: men-only pool infeasible', !!generateTeams(parsePool(menOnly), 1, 'kilpa').error);
+
+// ── generateAll: mixed pool → kilpa first, then avoin ──
+getEl('poolText').value = mixedPool(2, 1);
+getEl('toiveFirst').checked = true;
+getEl('wSpeed').value = '0.7';
+generateAll();
+const S = __S();
+assert('DOM gen: 2 kilpa + 1 avoin', S.teams.length === 3 && S.kilpaCount === 2, JSON.stringify({ n: S.teams.length, k: S.kilpaCount }));
+assert('DOM gen: all valid', S.teams.every((t, i) => validateTeam(t, slots, i < S.kilpaCount ? 'kilpa' : 'avoin').length === 0));
+assert('DOM gen: statusBar has kilpa/avoin', getEl('statusBar').innerHTML.includes('2 kilpa') && getEl('statusBar').innerHTML.includes('1 avoin'), getEl('statusBar').innerHTML.slice(0, 200));
+assert('DOM gen: teams rendered with badges', getEl('teamsWrap').innerHTML.includes('Kilpa 1') && getEl('teamsWrap').innerHTML.includes('Avoin 1'));
+assert('DOM gen: legend present', getEl('rulesLegend').innerHTML.includes('Kilpasarja'));
+
+// ── generateAll: no kilpa possible → avoin only ──
+getEl('poolText').value = menOnly;
+generateAll();
+const S2 = __S();
+assert('DOM avoin-only: kilpaCount 0, 1 avoin', S2.teams.length === 1 && S2.kilpaCount === 0, JSON.stringify({ n: S2.teams.length, k: S2.kilpaCount }));
+assert('DOM avoin-only: valid avoin team', validateTeam(S2.teams[0], slots, 'avoin').length === 0);
+
+// ── sick replacement (kilpa team) ──
+getEl('poolText').value = mixedPool(2, 1);
+generateAll();
+const S3 = __S();
+const extra = { nimi: 'Extra Nainen', sarja: 'D21', gender: 'N', num: 21, toive: 1, nopeus: 8, luotettavuus: 8, kipea: false, locked: false };
+S3.runners.push(extra);
+const victim = S3.teams[0][0];
+setSick(S3.runners.indexOf(victim), true);
+assert('sick: victim flagged', victim.kipea === true);
+assert('sick: victim removed from teams', !S3.teams.some(t => t.includes(victim)));
+assert('sick: slot0 refilled', S3.teams[0][0] && S3.teams[0][0] !== victim, S3.teams[0][0] && S3.teams[0][0].nimi);
+assert('sick: team0 still valid', validateTeam(S3.teams[0], slots, 'kilpa').length === 0, validateTeam(S3.teams[0], slots, 'kilpa').join(';'));
+assert('sick: kilpa/avoin split intact', S3.teams.length === 3 && S3.kilpaCount === 2);
+
+// ── performMove: invalid move rejected (man → leg15 of kilpa team) ──
+const mover = { nimi: 'Move Man', sarja: 'H21', gender: 'M', num: 21, toive: null, nopeus: 5, luotettavuus: 5, kipea: false, locked: false };
+S3.runners.push(mover);
+const slot14Before = S3.teams[0][14];
+performMove(S3.runners.indexOf(mover), 0, 14);
+assert('move: man to kilpa leg15 rejected', S3.teams[0][14] === slot14Before && !S3.teams[0].includes(mover));
+assert('move: rejection warned', getEl('statusBar').innerHTML.includes('estetty'), getEl('statusBar').innerHTML.slice(0, 160));
+
+// ── performMove: valid pool → avoin team free slot ──
+const slot13Before = S3.teams[2][13];
+performMove(S3.runners.indexOf(mover), 2, 13);
+assert('move: mover into avoin leg14', S3.teams[2][13] === mover, S3.teams[2][13] && S3.teams[2][13].nimi);
+assert('move: previous occupant to pool', unassignedRunners().some(r => r === slot13Before));
+assert('move: avoin team still valid', validateTeam(S3.teams[2], slots, 'avoin').length === 0, validateTeam(S3.teams[2], slots, 'avoin').join(';'));
+
+// ── removeFromTeam + fillGaps ──
+removeFromTeam(0, 3);
+assert('remove: slot empty', S3.teams[0][3] === null);
+assert('remove: team incomplete', validateTeam(S3.teams[0], slots, 'kilpa')[0].startsWith('keskeneräinen'));
+fillGaps();
+assert('fillGaps: gap refilled', S3.teams[0][3] !== null && S3.teams.every(t => t.filter(Boolean).length === 15));
+assert('fillGaps: teams valid after fill', S3.teams.every((t, i) => validateTeam(t, slots, i < S3.kilpaCount ? 'kilpa' : 'avoin').length === 0));
+assert('fillGaps: feedback', /Täytettiin|täytetty/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+
+// ── CSV ──
+const csv = toCSV();
+assert('csv: BOM', csv.charCodeAt(0) === 0xFEFF);
+const rows = parseCSV(csv, ',');
+assert('csv: rows = teams + 1', rows.length === S3.teams.length + 1, String(rows.length));
+assert('csv: 15 blocks only', rows[0].includes('Nimi-15') && rows[0].includes('Osuus-15') && !rows[0].includes('Nimi-16'));
+assert('csv: data row width 125', rows[1].length === 125, String(rows[1].length));
+const r = rows[1];
+assert('csv: base cells', r[0] === '1' && r[1] === 'Kilpasarja' && r[2].includes(' 1') && r[4] === S.klubi, JSON.stringify(r.slice(0, 5)));
+assert('csv: slot0 Nimi + osuus 1', r[6] === S3.teams[0][0].nimi && r[9] === '1' && r[10] === '');
+assert('csv: slot1 osuus2 ala1 rata violetti', r[5 + 1 * 8 + 4] === '2' && r[5 + 1 * 8 + 5] === '1' && r[5 + 1 * 8 + 6].includes('violetti'));
+assert('csv: slot13 osuus14, slot14 osuus15', r[5 + 13 * 8 + 4] === '14' && r[5 + 14 * 8 + 4] === '15');
+assert('csv: avoin row sarja', rows[3][1] === 'Avoin', rows[3][1]);
+
+// ── serialize/restore round-trip ──
+const snap = serializeState();
+const orig0 = S3.teams[0][0];
+S3.teams = [];
+assert('serialize: teams as indices', Number.isInteger(snap.teams[0][0]));
+assert('serialize: kilpaCount saved', snap.kilpaCount === 2, String(snap.kilpaCount));
+assert('restore: returns true', restoreState(JSON.parse(JSON.stringify(snap))) === true);
+assert('restore: teams rebuilt', S3.teams.length === 3 && S3.teams[0][0] && S3.teams[0][0].nimi === orig0.nimi, S3.teams[0][0] && S3.teams[0][0].nimi);
+assert('restore: kilpaCount restored', S3.kilpaCount === 2, String(S3.kilpaCount));
+assert('restore: avoin team mode preserved', validateTeam(S3.teams[2], slots, 'avoin').length === 0);
+
+// ── packTeam: first-legs-first repacking (kilpa) ──
+// front-packing check: no empty slot before a filled one, excluding os15 (slot 14,
+// joka on naiselle varattu ja voi jäädä täytetyksi vaikka os14 olisi tyhjä).
+function frontPacked(t) {
+  let gap = false;
+  for (let s = 0; s < 14; s++) { if (!t[s]) gap = true; else if (gap) return false; }
+  return true;
+}
+S3.teams = [okTeam.slice()]; S3.kilpaCount = 1;
+S3.teams[0][0] = null; S3.teams[0][4] = null;
+packTeam(0);
+const pk = S3.teams[0];
+assert('packTeam kilpa: no empty slot before filled', frontPacked(pk), pk.map(x => x ? 1 : 0).join(''));
+assert('packTeam kilpa: all 13 runners kept', pk.filter(Boolean).length === 13, String(pk.filter(Boolean).length));
+assert('packTeam kilpa: os15 woman', pk[14] && legEligible(pk[14], 15, 'kilpa'), pk[14] && pk[14].nimi);
+assert('packTeam kilpa: os1 eligible', pk[0] && legEligible(pk[0], 1, 'kilpa'), pk[0] && pk[0].nimi);
+
+// ── packTeam: first-legs-first repacking (avoin) ──
+const avTeam = new Array(15).fill(null);
+parsePool('H16:A\nH21:B\nH21:C\nH21:D\nH21:E\nH21:F\nH21:G\nH21:H\nH21:I\nH21:J\nH21:K\nH21:L\nH21:M\nH21:N\nH21:O').forEach((r, i) => { avTeam[i] = r; });
+S3.teams = [avTeam]; S3.kilpaCount = 0;
+avTeam[5] = null; avTeam[7] = null;
+packTeam(0);
+const packedAvoin = S3.teams[0];
+assert('packTeam avoin: no empty slot before filled', frontPacked(packedAvoin), packedAvoin.map(x => x ? 1 : 0).join(''));
+assert('packTeam avoin: os1 eligible', packedAvoin[0] && legEligible(packedAvoin[0], 1, 'avoin'), packedAvoin[0] && packedAvoin[0].nimi);
+assert('packTeam avoin: all 13 runners kept', packedAvoin.filter(Boolean).length === 13, String(packedAvoin.filter(Boolean).length));
+
+// ── regression: fillGaps must not drain the Avoin team's first legs ──
+const savedPlan = JSON.parse(fs.readFileSync('/tulospalvelupaavo/exampledata/halikkoviesti_suunnitelma.json', 'utf8'));
+getEl('poolText').value = savedPlan.poolText;
+generateAll();
+const S7 = __S();
+const sickA = S7.runners.find(r => r.nimi === 'Hakala Pauliina');
+const sickB = S7.runners.find(r => r.nimi === 'Nurmi Tuuli');
+assert('regress: pool → 3 teams (2 kilpa + 1 avoin)', S7.teams.length === 3 && S7.kilpaCount === 2, JSON.stringify({ n: S7.teams.length, k: S7.kilpaCount }));
+assert('regress: avoin team complete after generation', S7.teams[2].filter(Boolean).length === 15 && S7.teams[2][0] && S7.teams[2][1], S7.teams[2].map(x => x && x.nimi).slice(0, 3).join(','));
+assert('regress: sick runners found', !!sickA && !!sickB, String(!!sickA) + ',' + String(!!sickB));
+setSick(S7.runners.indexOf(sickA), true);
+setSick(S7.runners.indexOf(sickB), true);
+fillGaps();
+assert('regress: all teams front-packed (os15 reservation exempt)', S7.teams.every(frontPacked), JSON.stringify(S7.teams.map(t => t.map(x => x ? 1 : 0).join(''))));
+assert('regress: avoin team first legs filled', S7.teams[2][0] && S7.teams[2][1], S7.teams[2].map(x => x && x.nimi).slice(0, 2).join(','));
+assert('regress: avoin team complete', S7.teams[2].filter(Boolean).length === 15, String(S7.teams[2].filter(Boolean).length));
+assert('regress: kilpa teams keep their 5+ women', S7.teams.slice(0, S7.kilpaCount).every(t => validateTeam(t, slots, 'kilpa').every(p => !p.includes('naisia 4/5'))));
+
+// ── example pools ──
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const origRandom = Math.random;
+Math.random = mulberry32(42);
+loadExamplePool(45);
+Math.random = origRandom;
+const ex45 = getEl('poolText').value.split('\n').filter(Boolean);
+assert('example 45: 45 lines', ex45.length === 45, String(ex45.length));
+assert('example 45: Sarja:Nimi format', ex45.every(l => /^[HD]\d+:[A-ZÄÖa-zäö]+ [A-ZÄÖa-zäö]+/.test(l)), ex45.slice(0, 3).join(' | '));
+assert('example 45: runners loaded', __S().runners.length === 45, String(__S().runners.length));
+generateAll();
+const S4 = __S();
+assert('example 45: kilpa + avoin teams, all valid', S4.teams.length >= 3 && S4.kilpaCount >= 1 && S4.teams.length > S4.kilpaCount && S4.teams.every((t, i) => validateTeam(t, slots, i < S4.kilpaCount ? 'kilpa' : 'avoin').length === 0), JSON.stringify({ n: S4.teams.length, k: S4.kilpaCount }));
+
+Math.random = mulberry32(7);
+loadExamplePool(60);
+Math.random = origRandom;
+generateAll();
+const S5 = __S();
+assert('example 60: teams generated & valid', S5.teams.length >= 4 && S5.teams.every((t, i) => validateTeam(t, slots, i < S5.kilpaCount ? 'kilpa' : 'avoin').length === 0), JSON.stringify({ n: S5.teams.length, k: S5.kilpaCount }));
+
+Math.random = mulberry32(11);
+loadExamplePool(75);
+Math.random = origRandom;
+generateAll();
+const S6 = __S();
+assert('example 75: teams generated & valid', S6.teams.length >= 4 && S6.teams.every((t, i) => validateTeam(t, slots, i < S6.kilpaCount ? 'kilpa' : 'avoin').length === 0), JSON.stringify({ n: S6.teams.length, k: S6.kilpaCount }));
+
+// ── error paths ──
+getEl('poolText').value = 'H21:A\nH21:B\nH21:C';
+generateAll();
+assert('err: <15 runners → vähintään 15', getEl('statusBar').innerHTML.includes('vähintään 15'), getEl('statusBar').innerHTML.slice(0, 120));
+assert('err: <15 runners keeps previous teams (kuten 25-mannassa)', __S().teams.length === 5, String(__S().teams.length));
+getEl('poolText').value = new Array(15).fill('H21').map((s, i) => s + ':Mies' + i).join('\n');
+generateAll();
+assert('err: no formable team → teams cleared', __S().teams.length === 0, String(__S().teams.length));
+assert('err: infeasible message shown', /ei voitu muodostaa/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+
+console.log('\n' + pass + ' passed, ' + fail + ' failed');
+process.exit(fail ? 1 : 0);

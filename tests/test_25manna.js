@@ -375,19 +375,26 @@ assert('json: empty slot restored as null', S.teams[0][2] === null, String(S.tea
 assert('json: restored team 24/25', S.teams[0].filter(Boolean).length === 24, String(S.teams[0].filter(Boolean).length));
 assert('json: removed runner back in pool after load', unassignedRunners().some(r => r.nimi === removedR.nimi && r.sarja === removedR.sarja));
 
-// ── fillGaps cascade: steal from later team when pool lacks an eligible runner ──
+// ── fillGaps cascade: clean steal from a later team when the pool lacks an
+//    eligible runner, source refillable and both teams stay valid ──
+const C0 = ['D21:t0s0','H21:t0s1','D21:t0s2','D16:t0s3','H16:t0s4','H50:t0s5','D18:t0s6','D45:t0s7','H14:t0s8','H60:t0s9',
+            'H21:t0s10','H21:t0s11','H21:t0s12','H21:t0s13','D21:t0s14','D21:t0s15','D45:t0s16','D21:t0s17','H30:t0s18','H40:t0s19',
+            'H21:t0s20','H21:t0s21','D40:t0s22','D21:t0s23','H21:t0s24'];
+const C1 = ['D21:t1s0','H14:t1s1','D21:t1s2','D16:t1s3','H16:t1s4','H50:t1s5','H14:t1s6','H60:t1s7','D18:t1s8','D45:t1s9',
+            'H21:t1s10','H21:t1s11','H21:t1s12','H21:t1s13','D21:t1s14','D21:t1s15','D21:t1s16','D45:t1s17','H21:t1s18','H21:t1s19',
+            'H30:t1s20','H40:t1s21','H55:t1s22','D21:t1s23','H21:t1s24'];
+const poolC = parsePool(C0.concat(C1, ['D21:pool0','H21:pool1','D16:pool2','H60:pool3']).join('\n'));
 const Sc = __S();
-const s7 = Sc.teams[1].find(r => r && legEligible(r, 7));
-assert('cascade: team1 has an osuus7-eligible runner', !!s7);
-const s7slot = Sc.teams[1].indexOf(s7);
-const slot1R = Sc.teams[1][1];
-Sc.teams[1][1] = s7;
-Sc.teams[1][s7slot] = slot1R;
-removeFromTeam(0, 6);
+Sc.runners = poolC;
+Sc.teams = [poolC.slice(0, 25), poolC.slice(25, 50)];
+const spare = Sc.teams[1][1];                  // extra H14 at open slot 2
+removeFromTeam(0, 8);                          // remove H14 at os9 (man)
 for (const r of unassignedRunners()) if (legEligible(r, 7)) r.kipea = true;
 fillGaps();
-assert('cascade: team0 osuus7 gap filled from team1', Sc.teams[0][6] === s7, Sc.teams[0][6] && Sc.teams[0][6].nimi);
+assert('cascade: team0 os9 gap filled from team1 spare', Sc.teams[0][8] === spare, Sc.teams[0][8] && Sc.teams[0][8].nimi);
+assert('cascade: team0 valid', validateTeam(Sc.teams[0], slots).length === 0, validateTeam(Sc.teams[0], slots).join(';'));
 assert('cascade: team1 still 25 (refilled from pool)', Sc.teams[1].filter(Boolean).length === 25, String(Sc.teams[1].filter(Boolean).length));
+assert('cascade: team1 valid after refill', validateTeam(Sc.teams[1], slots).length === 0, validateTeam(Sc.teams[1], slots).join(';'));
 assert('cascade: feedback shows filled count', /Täytettiin|täytetty/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
 
 // ── kipeä resets luotettavuus to 0 ──
@@ -397,13 +404,27 @@ relRunner.luotettavuus = 8;
 setSick(S.runners.indexOf(relRunner), true);
 assert('kipea reset: luotettavuus zeroed when marked sick', relRunner.kipea === true && relRunner.luotettavuus === 0, String(relRunner.luotettavuus));
 
-// ── cascade steals even when the pool cannot refill the later team ──
+// ── cascade does NOT steal when the later team could not be refilled ──
 const Sd = __S();
 removeFromTeam(0, 24);
 for (const r of unassignedRunners()) r.kipea = true;
 fillGaps();
-assert('cascade2: team0 gap filled from team1 despite empty pool', Sd.teams[0][24] !== null, String(Sd.teams[0][24] && Sd.teams[0][24].nimi));
-assert('cascade2: team1 left with a gap', Sd.teams[1].filter(x => !x).length >= 1, String(Sd.teams[1].filter(x => !x).length));
+assert('cascade2: pool empty → team0 not refilled (no steal without refill)', Sd.teams[0].filter(Boolean).length === 24, String(Sd.teams[0].filter(Boolean).length));
+assert('cascade2: team1 stays 25/25 (not drained)', Sd.teams[1].filter(Boolean).length === 25, String(Sd.teams[1].filter(Boolean).length));
+assert('cascade2: team0 front slot (os1) packed', Sd.teams[0][0] !== null, Sd.teams[0][0] && Sd.teams[0][0].nimi);
+
+// ── regression: fillGaps + packing must not leave a later team's front legs empty ──
+const Se = __S();
+for (const r of Se.runners) r.kipea = false;
+Se.teams[0][0] = null;                       // front gap in team0
+for (const r of unassignedRunners()) r.kipea = true;  // pool empty
+const team1Front = Se.teams[1][0];
+fillGaps();
+assert('regress25: team0 front slot packed (os1 filled)', Se.teams[0][0] !== null, Se.teams[0][0] && Se.teams[0][0].nimi);
+assert('regress25: team0 no runner lost', Se.teams[0].filter(Boolean).length === 23, String(Se.teams[0].filter(Boolean).length));
+assert('regress25: team1 front runner preserved', Se.teams[1][0] === team1Front, Se.teams[1][0] && Se.teams[1][0].nimi);
+assert('regress25: team1 stays 25/25', Se.teams[1].filter(Boolean).length === 25, String(Se.teams[1].filter(Boolean).length));
+assert('regress25: packed team0 valid on all slots', Se.teams[0].every((r, s) => !r || legEligible(r, __SLOTS()[s].osuus)));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
