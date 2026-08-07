@@ -39,6 +39,18 @@ numbers); overlapping numbers across profiles block saving.
 
 Example: `rastilippu_parallel_legs_to_navisport.html?teams=40&ex=halikko&seed=123`
 
+### [`25manna_joukkuesuunnittelija.html`](25manna_joukkuesuunnittelija.html)
+25-manna team planner. Reads a runner pool (`Sarja:Nimi`, optional team wish as a
+third field, e.g. `D16:Virtanen Aino:1`) and generates as many valid 25-runner
+teams as fit, optimising strength distribution (team 1 strongest) and honouring
+team wishes ("Toiveet ensin / Vahvuus ensin" toggle). Teams can be adjusted by
+drag-and-drop; marking a runner as sick (kipeä) auto-replaces them from the
+spares or another team. Exports a Navisport start-list CSV (parallel legs as
+`Alaosuus` sub-numbers, matching the Rastilippu converter), a print-ready PDF
+via the browser, and JSON save/load with `localStorage` autosave. 25-manna
+eligibility rules (women-only legs, restricted age/gender legs 3–10/23, ≥9 men
+with ≥1 H≤16, ≥9 women with ≥1 D≤16, ≤8 H21) are built in.
+
 ### [`fetch_irma_clubs.bash`](fetch_irma_clubs.bash)
 Downloads the public club registry from the Finnish Orienteering Federation's
 IRMA system (`irma.suunnistusliitto.fi`). Outputs the full club list as JSON.

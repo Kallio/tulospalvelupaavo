@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>25-manna joukkuesuunnittelija</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps:last-child { margin-top: auto; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+textarea, input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bp { background: #e94560; color: #fff; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; }
+.chk input { width: auto; }
+
+#main { padding: 16px; margin-left: 386px; }
+
+#statusBar { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+#statusBar .ok  { color: #27ae60; font-weight: bold; }
+#statusBar .err { color: #e94560; font-weight: bold; }
+#statusBar .warn { color: #e67e22; font-weight: bold; }
+#statusBar .line { margin-top: 4px; }
+
+.card { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #1a2a4a; margin-bottom: 8px; }
+
+table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
+.scores th { background: #16213e; color: #7ec8e3; padding: 5px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+.scores td { padding: 3px 8px; border-bottom: 1px solid #e5e5e5; }
+.scores input[type="number"] { width: 52px; padding: 2px 4px; }
+.scores select { width: auto; padding: 2px 4px; }
+.scores tr.sick td { background: #fdeaea; color: #b05050; }
+.scores td.til { font-size: 11px; color: #667; }
+
+#teamsWrap { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
+.team-col {
+  flex: 1 1 0; min-width: 250px; background: #fff; border: 1px solid #ccc;
+  border-radius: 8px; overflow: hidden; font-size: 12px;
+}
+.team-hdr { background: #16213e; color: #eee; padding: 8px 10px; }
+.team-hdr .tname { font-weight: bold; color: #7ec8e3; font-size: 13px; }
+.team-hdr .tmeta { font-size: 11px; color: #aab; margin-top: 2px; }
+.team-hdr .status { font-size: 10px; font-weight: bold; padding: 1px 7px; border-radius: 9px; margin-left: 6px; }
+.team-hdr .status.ok { background: #27ae60; color: #fff; }
+.team-hdr .status.err { background: #e94560; color: #fff; }
+.team-hdr .problems { font-size: 10.5px; color: #fbb; margin-top: 4px; line-height: 1.4; }
+.slot-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-bottom: 1px solid #f0f0f0; }
+.slot-row:nth-child(odd) { background: #fafbfc; }
+.slot-row.invalid { background: #fdeaea; }
+.slot-lab { font-family: ui-monospace, Menlo, Consolas, monospace; color: #667; width: 42px; flex: none; }
+.slot-eh { font-size: 9.5px; color: #99a; flex: none; max-width: 110px; }
+.runner {
+  flex: 1; background: #0f3460; color: #eee; border-radius: 4px; padding: 2px 7px;
+  cursor: grab; user-select: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.runner:hover { background: #14467c; }
+.runner.sick { background: #8b3a3a; text-decoration: line-through; cursor: not-allowed; }
+.runner .str { color: #7ec8e3; font-size: 10px; margin-left: 4px; }
+.slot-empty { flex: 1; background: #f0f2f5; color: #bbb; border-radius: 4px; padding: 2px 7px; border: 1px dashed #ccc; font-style: italic; text-align: center; }
+.rm-btn { flex: none; background: transparent; border: none; color: #c66; cursor: pointer; font-size: 12px; padding: 0 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: #0f3460; color: #eee; border-radius: 4px; padding: 2px 8px; font-size: 11px;
+  cursor: grab; user-select: none;
+}
+.chip.sick { background: #8b3a3a; text-decoration: line-through; cursor: not-allowed; }
+
+#saveWrap { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+#saveStatus { font-size: 12px; color: #667; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+
+@media print {
+  #top, #statusBar .no-print, .no-print { display: none !important; }
+  #main { margin: 0; padding: 0; }
+  body { background: #fff; color: #000; }
+  .card { border: none; padding: 4px 0; }
+  #teamsWrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .team-col { border: 1px solid #999; page-break-inside: avoid; }
+  .team-col:nth-child(n+4) { grid-row: 2; }
+  .scores, .chips { display: none; }
+}
+@page { size: A4 landscape; margin: 8mm; }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps">
+    <h3>1. Juoksijapooli</h3>
+    <label>Sarja:Nimi, rivikohtaisesti (toive joukkuelle voi olla kolmantena: <code>D16:Virtanen Aino:1</code>)</label>
+    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa&#10;D16:Ojapalo Venla:1&#10;H50:Nurmi Mikko"></textarea>
+    <div class="row">
+      <button class="bs" onclick="readPool()">Lue pooli</button>
+      <button class="bg btn-sm" onclick="loadExamplePool()">Esimerkkipooli (55)</button>
+      <label class="chk"><input type="file" id="poolFile" accept=".csv,.txt" style="width:auto;"> Tiedosto</label>
+    </div>
+    <label>Seura</label>
+    <input id="klubi" type="text" value="Espoon Suunta">
+    <label>Ensimmäinen kilpailunumero</label>
+    <input id="firstNum" type="number" value="1" min="1">
+  </div>
+  <div class="ps">
+    <h3>2. Generointi</h3>
+    <div class="row">
+      <button class="bs" onclick="generateAll()">Generoi joukkuuet</button>
+      <button class="bg" onclick="optimize()">Optimoi</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet ensin (muuten vahvuus ensin)</label>
+    <label>Vahvuuskerroin nopeudelle: <input id="wSpeed" type="number" min="0" max="1" step="0.1" value="0.7"></label>
+  </div>
+  <div class="ps" id="statusPanel"></div>
+  <div class="ps">
+    <h3>3. Tulosta / tallenna</h3>
+    <div class="row">
+      <button class="bs" onclick="exportCSV()">Vie Navisport-CSV</button>
+      <button class="bg" onclick="window.print()">Vie PDF</button>
+    </div>
+    <div class="row">
+      <button class="bg btn-sm" onclick="saveState()">Tallenna (JSON)</button>
+      <label class="chk"><input type="file" id="loadFile" accept=".json" style="width:auto;"> Lataa (JSON)</label>
+    </div>
+    <button class="bp btn-sm" onclick="resetAll()" style="margin-top:6px;">Tyhjennä kaikki</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="statusBar"></div>
+  <div class="card no-print" id="poolWrap"></div>
+  <div class="card no-print" id="chipsWrap"></div>
+  <div class="card" id="teamsCard"><h3>Joukkuelistat (25 osuutta, rinnakkaiset alaosuuksina)</h3><div id="teamsWrap"></div></div>
+  <div class="card no-print" id="csvWrap" style="display:none;">
+    <h3>Navisport-CSV (esikatselu)</h3>
+    <textarea id="csvOut" rows="6" style="width:100%;"></textarea>
+  </div>
+</div>
+
+<script>
+const PROFILE = [[1,1],[2,1],[3,4],[7,4],[11,4],[15,4],[19,4],[23,1],[24,1],[25,1]];
+const RATA = {
+  1:'Sininen', 2:'Sininen 7,2 km', 3:'Oranssi 4,7 km', 7:'Valkoinen 2,5 km',
+  11:'Sininen 6,3 km', 15:'Violetti 4,4 km', 19:'Violetti 5,6 km',
+  23:'Oranssi 4,2 km', 24:'Sininen 6,1 km (uusintalähtö 4,5 km)', 25:'Sininen 8,1 km (uusintalähtö 6,3 km)'
+};
+const LEG_INFO = {
+  1:'Nainen', 2:'Kaikki', 3:'Mies H≤16/H≥50 tai nainen', 7:'Mies H≤14/H≥60 tai nainen D≤18/D≥45',
+  11:'Kaikki', 15:'Nainen', 19:'Kaikki', 23:'Mies H≤16/H≥55 tai nainen D≤20/D≥40',
+  24:'Nainen', 25:'Kaikki'
+};
+
+function buildSlots() {
+  const slots = [];
+  for (const [osuus, lkm] of PROFILE) {
+    for (let j = 0; j < lkm; j++) slots.push({ osuus, alaosuus: lkm > 1 ? String(j + 1) : '', rata: RATA[osuus], info: LEG_INFO[osuus] });
+  }
+  return slots;
+}
+const SLOTS = buildSlots();
+
+function parseSarja(sarja) {
+  const m = /^([HD])\s*-?\s*(\d+)/i.exec(String(sarja).trim());
+  if (!m) return { gender: null, num: null };
+  return { gender: m[1].toUpperCase() === 'H' ? 'M' : 'N', num: parseInt(m[2], 10) };
+}
+
+function parsePool(text) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split(':').map(s => s.trim());
+    const sarja = parts[0], nimi = parts[1];
+    if (!sarja || !nimi) continue;
+    const key = sarja + ':' + nimi;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { gender, num } = parseSarja(sarja);
+    let toive = parts[2] ? parseInt(parts[2], 10) : null;
+    if (!Number.isInteger(toive) || toive < 1) toive = null;
+    out.push({ nimi, sarja, gender, num, toive, nopeus: 0, luotettavuus: 0, kipea: false, locked: false });
+  }
+  return out;
+}
+
+function legEligible(r, osuus) {
+  const g = r.gender, n = r.num;
+  if (osuus === 1 || osuus === 15 || osuus === 16 || osuus === 17 || osuus === 18 || osuus === 24) return g === 'N';
+  if (osuus === 2 || osuus === 11 || osuus === 12 || osuus === 13 || osuus === 14 ||
+      osuus === 19 || osuus === 20 || osuus === 21 || osuus === 22 || osuus === 25) return true;
+  if (osuus === 3 || osuus === 4 || osuus === 5 || osuus === 6) return g === 'N' || (g === 'M' && (n <= 16 || n >= 50));
+  if (osuus === 7 || osuus === 8 || osuus === 9 || osuus === 10) return g === 'N' ? (n <= 18 || n >= 45) : (g === 'M' && (n <= 14 || n >= 60));
+  if (osuus === 23) return g === 'N' ? (n <= 20 || n >= 40) : (g === 'M' && (n <= 16 || n >= 55));
+  return false;
+}
+
+function isYoungM(r) { return r.gender === 'M' && r.num !== null && r.num <= 16; }
+function isYoungW(r) { return r.gender === 'N' && r.num !== null && r.num <= 16; }
+function isH21(r) { return r.gender === 'M' && r.num === 21; }
+
+function teamRequirements(assigned) {
+  const problems = [];
+  const men = assigned.filter(r => r.gender === 'M');
+  const women = assigned.filter(r => r.gender === 'N');
+  if (men.length < 9) problems.push(`miehiä ${men.length}/9`);
+  else if (!men.some(isYoungM)) problems.push('ei H16 tai nuorempaa miestä');
+  if (women.length < 9) problems.push(`naisia ${women.length}/9`);
+  else if (!women.some(isYoungW)) problems.push('ei D16 tai nuorempaa naista');
+  const h21 = assigned.filter(isH21).length;
+  if (h21 > 8) problems.push(`H21-sarjalaisia ${h21}/8`);
+  return problems;
+}
+
+function validateTeam(team, slots) {
+  const assigned = team.filter(Boolean);
+  if (assigned.length !== 25) return [`keskeneräinen (${assigned.length}/25)`];
+  const problems = [];
+  for (let i = 0; i < slots.length; i++) {
+    const r = team[i];
+    if (r && !legEligible(r, slots[i].osuus)) problems.push(`osuus ${slots[i].osuus}${slots[i].alaosuus ? '.' + slots[i].alaosuus : ''}: ${r.nimi} (${r.sarja}) ei kelpaa`);
+  }
+  return problems.concat(teamRequirements(assigned));
+}
+
+function strengthOf(r) {
+  if (!r) return 0;
+  return (S.wSpeed || 0.7) * (r.nopeus || 0) + (1 - (S.wSpeed || 0.7)) * (r.luotettavuus || 0);
+}
+
+// Solves all N teams jointly: slot types are processed in ascending candidate
+// order across every team, so scarce restricted-class runners (e.g. legs 7–10)
+// are shared fairly instead of being squandered by the first team.
+function solveAllTeams(pool, N) {
+  const cands = SLOTS.map(s => pool.filter(r => !r.kipea && legEligible(r, s.osuus)));
+  const order = SLOTS.map((s, i) => i).sort((a, b) => cands[a].length - cands[b].length);
+  const teams = Array.from({ length: N }, () => new Array(25).fill(null));
+  const cnt = Array.from({ length: N }, () => ({ men: 0, women: 0, youngM: 0, youngW: 0, h21: 0 }));
+  const plan = [];
+  for (const s of order) for (let t = 0; t < N; t++) plan.push([t, s]);
+  const used = new Set();
+  let nodes = 0;
+
+  function feasible(k) {
+    const sets = [];
+    for (let t = 0; t < N; t++) sets.push({ w: new Set(), m: new Set(), ym: new Set(), yw: new Set() });
+    for (let x = k; x < plan.length; x++) {
+      const [t, s] = plan[x];
+      const arr = cands[s];
+      for (let i = 0; i < arr.length; i++) {
+        const r = arr[i];
+        if (used.has(r)) continue;
+        const st = sets[t];
+        if (r.gender === 'N') st.w.add(r); else st.m.add(r);
+        if (isYoungM(r)) st.ym.add(r);
+        if (isYoungW(r)) st.yw.add(r);
+      }
+    }
+    for (let t = 0; t < N; t++) {
+      if (cnt[t].h21 > 8) return false;
+      const st = sets[t];
+      if (cnt[t].women + st.w.size < 9) return false;
+      if (cnt[t].men + st.m.size < 9) return false;
+      if (cnt[t].youngM + st.ym.size < 1) return false;
+      if (cnt[t].youngW + st.yw.size < 1) return false;
+    }
+    return true;
+  }
+
+  function backtrack(k) {
+    if (k === plan.length) return true;
+    if (++nodes > 300000) return false;
+    const [t, s] = plan[k];
+    const list = cands[s].filter(r => !used.has(r))
+      .sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
+    for (const r of list) {
+      teams[t][s] = r;
+      used.add(r);
+      const c = cnt[t];
+      if (r.gender === 'N') c.women++; else c.men++;
+      if (isYoungM(r)) c.youngM++;
+      if (isYoungW(r)) c.youngW++;
+      if (isH21(r)) c.h21++;
+      if (feasible(k + 1) && backtrack(k + 1)) return true;
+      teams[t][s] = null;
+      used.delete(r);
+      if (r.gender === 'N') c.women--; else c.men--;
+      if (isYoungM(r)) c.youngM--;
+      if (isYoungW(r)) c.youngW--;
+      if (isH21(r)) c.h21--;
+    }
+    return false;
+  }
+
+  return backtrack(0) ? teams : null;
+}
+
+// Cheap necessary conditions to reject an impossible team count before search.
+function quickFeasible(pool, n) {
+  if (pool.length < n * 25) return false;
+  let women = 0, men = 0, youngM = 0, youngW = 0, h21 = 0, leg710 = 0, leg23 = 0;
+  for (const r of pool) {
+    if (r.gender === 'N') women++; else men++;
+    if (isYoungM(r)) youngM++;
+    if (isYoungW(r)) youngW++;
+    if (isH21(r)) h21++;
+    if (legEligible(r, 7)) leg710++;
+    if (legEligible(r, 23)) leg23++;
+  }
+  if (women < n * 6) return false; // 6 women-only slots per team
+  if (women < n * 9 || men < n * 9) return false;
+  if (youngM < n || youngW < n) return false;
+  if (h21 > n * 8) return false;
+  if (leg710 < n * 4) return false; // 4 slots of osuus 7–10 per team
+  if (leg23 < n) return false;      // 1 slot of osuus 23 per team
+  return true;
+}
+
+function generateTeams(runners, N) {
+  for (let n = N; n >= 1; n--) {
+    const remaining = runners.filter(r => !r.kipea);
+    if (!quickFeasible(remaining, n)) continue;
+    const teams = solveAllTeams(remaining, n);
+    if (!teams) continue;
+    const usedSet = new Set(teams.flat().filter(Boolean));
+    return { teams, leftovers: remaining.filter(r => !usedSet.has(r)), count: n };
+  }
+  return { error: 'Joukkuetta ei voitu muodostaa. Tarkista pooli: jokaisessa joukkuussa on oltava vähintään 9 miestä (väh. yksi H≤16), vähintään 9 naista (väh. yksi D≤16), enintään 8 H21-sarjalaista ja osuus 1 nainen. Aikuismiehet (H17–H49) mahtuvat vain kaikki-osuuksille (10 paikkaa).' };
+}
+
+function scoreState() {
+  let pref = 0;
+  const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
+  for (let i = 0; i < S.teams.length; i++) for (const r of S.teams[i]) if (r && r.toive === i + 1) pref++;
+  let balance = 0;
+  for (let i = 0; i < sums.length - 1; i++) for (let j = i + 1; j < sums.length; j++) balance += (sums[i] - sums[j]);
+  const prefW = S.toiveFirst ? 5000 : 1;
+  return pref * prefW + balance;
+}
+
+function swapSlots(aT, aS, bT, bS) {
+  const A = S.teams[aT], B = S.teams[bT];
+  const ra = A[aS], rb = B[bS];
+  if (ra === rb) return true;
+  if ((ra && ra.kipea) || (rb && rb.kipea)) return false;
+  A[aS] = rb; B[bS] = ra;
+  const ok = aT === bT
+    ? validateTeam(A, SLOTS).length === 0
+    : validateTeam(A, SLOTS).length === 0 && validateTeam(B, SLOTS).length === 0;
+  if (!ok) { A[aS] = ra; B[bS] = rb; }
+  return ok;
+}
+
+function optimizePasses() {
+  if (!S.teams.length) return;
+  for (let pass = 0; pass < 80; pass++) {
+    let improved = false;
+    const before = scoreState();
+
+    // 1) fill empty slots from pool, keeping the team valid
+    for (let t = 0; t < S.teams.length; t++) {
+      for (let s = 0; s < 25; s++) {
+        if (S.teams[t][s]) continue;
+        const cands = unassignedRunners().filter(r => !r.kipea && legEligible(r, SLOTS[s].osuus));
+        if (!cands.length) continue;
+        cands.sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
+        S.teams[t][s] = cands[0];
+        if (validateTeam(S.teams[t], SLOTS).length === 0) improved = true;
+        else S.teams[t][s] = null;
+      }
+    }
+
+    // 2) pair swaps between teams that improve the score and stay valid
+    for (let i = 0; i < S.teams.length; i++) {
+      for (let j = i + 1; j < S.teams.length; j++) {
+        for (let a = 0; a < 25; a++) {
+          for (let b = 0; b < 25; b++) {
+            const A = S.teams[i][a], B = S.teams[j][b];
+            if (!A || !B || A === B) continue;
+            if (swapSlots(i, a, j, b)) {
+              if (scoreState() > before) improved = true;
+              else swapSlots(j, b, i, a);
+            }
+          }
+        }
+      }
+    }
+
+    // 3) pool <-> team swaps (only when the runner is not already assigned)
+    const poolNow = unassignedRunners();
+    for (let i = 0; i < S.teams.length; i++) {
+      for (let s = 0; s < 25; s++) {
+        const r = S.teams[i][s];
+        if (!r) continue;
+        for (let p = 0; p < poolNow.length; p++) {
+          const pr = poolNow[p];
+          if (pr.kipea || pr === r || findLocation(pr).kind === 'team') continue;
+          S.teams[i][s] = pr;
+          if (validateTeam(S.teams[i], SLOTS).length === 0 && scoreState() > before) {
+            updatePoolFromTeams();
+            improved = true;
+            continue;
+          }
+          S.teams[i][s] = r;
+        }
+      }
+    }
+
+    if (!improved) break;
+  }
+}
+
+function optimize() {
+  if (!S.teams.length) return;
+  optimizePasses();
+  renderAll();
+  autosave();
+}
+
+function readInputs() {
+  S.klubi = getEl('klubi').value.trim() || 'Espoon Suunta';
+  S.firstNum = parseInt(getEl('firstNum').value, 10);
+  if (!Number.isInteger(S.firstNum) || S.firstNum < 1) S.firstNum = 1;
+  S.wSpeed = parseFloat(getEl('wSpeed').value);
+  if (!(S.wSpeed >= 0 && S.wSpeed <= 1)) S.wSpeed = 0.7;
+  S.toiveFirst = getEl('toiveFirst').checked;
+  S.poolText = getEl('poolText').value;
+}
+
+function readPool() {
+  readInputs();
+  const runners = parsePool(S.poolText);
+  if (!runners.length) { showError('Poolissa ei ollut yhtään juoksijaa (muoto Sarja:Nimi rivikohtaisesti).'); return; }
+  S.runners = runners;
+  S.teams = [];
+  renderAll();
+  autosave();
+}
+
+function generateAll() {
+  readInputs();
+  S.runners = parsePool(S.poolText);
+  if (!S.runners.length) { showError('Poolissa ei ollut yhtään juoksijaa.'); return; }
+  const N = Math.floor(S.runners.length / 25);
+  if (N < 1) { showError('Tarvitaan vähintään 25 juoksijaa.'); return; }
+  const res = generateTeams(S.runners, N);
+  if (res.error) { showError(res.error); S.teams = []; renderAll(); return; }
+  S.teams = res.teams;
+  updatePoolFromTeams();
+  optimizePasses();
+  renderAll();
+  autosave();
+}
+
+function unassignedRunners() {
+  if (!S.teams.length) return S.runners.slice();
+  return S.runners.filter(r => !S.teams.some(t => t.includes(r)));
+}
+
+function updatePoolFromTeams() {
+  for (let t = 0; t < S.teams.length; t++) {
+    const seen = new Set();
+    for (let s = 0; s < 25; s++) {
+      if (S.teams[t][s] && seen.has(S.teams[t][s])) S.teams[t][s] = null;
+      if (S.teams[t][s]) seen.add(S.teams[t][s]);
+    }
+  }
+}
+
+function findLocation(r) {
+  for (let t = 0; t < S.teams.length; t++) {
+    const s = S.teams[t].indexOf(r);
+    if (s !== -1) return { kind: 'team', t, s };
+  }
+  return { kind: 'pool' };
+}
+
+function fillSlot(teamIdx, slotIdx) {
+  const t = S.teams[teamIdx];
+  if (t[slotIdx]) return true;
+  const osuus = SLOTS[slotIdx].osuus;
+  const poolNow = unassignedRunners();
+  const cands = poolNow.filter(r => !r.kipea && legEligible(r, osuus));
+  if (cands.length) {
+    cands.sort((a, b) => (b.toive === teamIdx + 1) - (a.toive === teamIdx + 1) || strengthOf(b) - strengthOf(a));
+    t[slotIdx] = cands[0];
+    return validateTeam(t, SLOTS).length === 0;
+  }
+  const backup = cloneTeams();
+  for (let j = teamIdx + 1; j < S.teams.length; j++) {
+    const tj = S.teams[j];
+    for (let s = 0; s < 25; s++) {
+      const r = tj[s];
+      if (!r || r.kipea || !legEligible(r, osuus)) continue;
+      tj[s] = null;
+      t[slotIdx] = r;
+      if (validateTeam(t, SLOTS).length === 0) {
+        const pNow = unassignedRunners();
+        const pc = pNow.filter(p => !p.kipea && legEligible(p, SLOTS[s].osuus));
+        if (pc.length) {
+          pc.sort((a, b) => strengthOf(b) - strengthOf(a));
+          tj[s] = pc[0];
+          if (validateTeam(tj, SLOTS).length === 0) return true;
+        }
+      }
+      tj[s] = r;
+      t[slotIdx] = null;
+    }
+  }
+  restoreTeams(backup);
+  return false;
+}
+
+function cloneTeams() { return S.teams.map(t => t.slice()); }
+function restoreTeams(backup) { S.teams = backup; }
+
+function performMove(runnerIdx, teamIdx, slotIdx) {
+  const r = S.runners[runnerIdx];
+  if (!r || r.kipea) return;
+  const loc = findLocation(r);
+  if (loc.kind === 'team' && loc.t === teamIdx && loc.s === slotIdx) return;
+  const backup = cloneTeams();
+  let vacated = null;
+  if (loc.kind === 'team') {
+    S.teams[loc.t][loc.s] = null;
+    vacated = { t: loc.t, s: loc.s };
+  }
+  const occupant = S.teams[teamIdx][slotIdx];
+  if (occupant && occupant !== r) {
+    if (loc.kind === 'pool' || (loc.kind === 'team' && !(loc.t === teamIdx && loc.s === slotIdx))) {
+      // occupant goes to pool (unassigned)
+    }
+  }
+  S.teams[teamIdx][slotIdx] = r;
+  let ok = true;
+  const affected = new Set();
+  if (vacated) affected.add(vacated.t);
+  affected.add(teamIdx);
+  for (const t of affected) {
+    const probs = validateTeam(S.teams[t], SLOTS);
+    if (probs.length && probs[0].startsWith('keskeneräinen')) {
+      if (vacated && t === vacated.t) {
+        if (!fillSlot(t, vacated.s)) ok = false;
+      }
+    } else if (probs.length) {
+      ok = false;
+    }
+  }
+  if (!ok) {
+    restoreTeams(backup);
+    showWarn('Siirto estetty: vaatimukset eivät täyty (ei kelvollista korvaajaa).');
+    return;
+  }
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+function removeFromTeam(teamIdx, slotIdx) {
+  const r = S.teams[teamIdx][slotIdx];
+  if (!r) return;
+  const backup = cloneTeams();
+  S.teams[teamIdx][slotIdx] = null;
+  if (!fillSlot(teamIdx, slotIdx)) {
+    if (validateTeam(S.teams[teamIdx], SLOTS).some(p => !p.startsWith('keskeneräinen'))) {
+      restoreTeams(backup);
+      showWarn('Poistoa ei voitu tehdä: ei kelvollista korvaajaa.');
+      return;
+    }
+  }
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+function setSick(idx, checked) {
+  const r = S.runners[idx];
+  r.kipea = checked;
+  if (checked) {
+    const loc = findLocation(r);
+    if (loc.kind === 'team') {
+      S.teams[loc.t][loc.s] = null;
+      fillSlot(loc.t, loc.s);
+    }
+  }
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+function setScore(idx, field, value) {
+  const v = parseInt(value, 10);
+  if (Number.isInteger(v) && v >= 0 && v <= 10) S.runners[idx][field] = v;
+  renderAll();
+  autosave();
+}
+
+function setToive(idx, value) {
+  const v = parseInt(value, 10);
+  S.runners[idx].toive = Number.isInteger(v) && v >= 1 ? v : null;
+  renderAll();
+  autosave();
+}
+
+const S = { runners: [], teams: [], klubi: 'Espoon Suunta', firstNum: 1, wSpeed: 0.7, toiveFirst: true, poolText: '' };
+
+function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+
+function toCSV() {
+  if (!S.teams.length) return '';
+  const base = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'];
+  const header = base.map(q);
+  for (let b = 1; b <= 25; b++) {
+    header.push(q(' '.repeat(b)));
+    header.push(q(`Nimi-${b}`), q(`Kilpailukortti-${b}`), q(`Lainakortti-${b}`),
+      q(`Osuus-${b}`), q(`Alaosuus-${b}`), q(`Rata-${b}`), q(`Lähtöaika-${b}`));
+  }
+  const lines = [header.join(',')];
+  S.teams.forEach((team, ti) => {
+    const cells = [q(String(S.firstNum + ti)), q('25-manna'), q(`${S.klubi} ${ti + 1}`), q('FIN'), q(S.klubi)];
+    for (let s = 0; s < 25; s++) {
+      const r = team[s];
+      cells.push(q(' '.repeat(s + 1)));
+      cells.push(q(r ? r.nimi : ''), q(''), q(''), q(String(SLOTS[s].osuus)), q(SLOTS[s].alaosuus), q(SLOTS[s].rata), q(''));
+    }
+    lines.push(cells.join(','));
+  });
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
+}
+
+function exportCSV() {
+  const csv = toCSV();
+  if (!csv) { showWarn('Ei joukkuelistoja — generoi ensin.'); return; }
+  download('25manna_navisport.csv', csv);
+  getEl('csvOut').value = csv;
+  getEl('csvWrap').style.display = 'block';
+}
+
+function download(name, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function serializeState() {
+  return {
+    v: 1,
+    klubi: S.klubi, firstNum: S.firstNum, wSpeed: S.wSpeed, toiveFirst: S.toiveFirst, poolText: S.poolText,
+    runners: S.runners.map(r => ({ nimi: r.nimi, sarja: r.sarja, toive: r.toive, nopeus: r.nopeus, luotettavuus: r.luotettavuus, kipea: r.kipea, locked: r.locked })),
+    teams: S.teams.map(t => t.map(r => r ? S.runners.indexOf(r) : null)),
+  };
+}
+
+function restoreState(data) {
+  if (!data || data.v !== 1) return false;
+  S.klubi = data.klubi || 'Espoon Suunta';
+  S.firstNum = data.firstNum || 1;
+  S.wSpeed = data.wSpeed != null ? data.wSpeed : 0.7;
+  S.toiveFirst = data.toiveFirst !== false;
+  S.poolText = data.poolText || '';
+  S.runners = (data.runners || []).map(d => ({ nimi: d.nimi, sarja: d.sarja, toive: d.toive, nopeus: d.nopeus || 0, luotettavuus: d.luotettavuus || 0, kipea: !!d.kipea, locked: !!d.locked }));
+  S.teams = (data.teams || []).map(t => t.map(i => (Number.isInteger(i) && S.runners[i]) ? S.runners[i] : null));
+  getEl('klubi').value = S.klubi;
+  getEl('firstNum').value = S.firstNum;
+  getEl('wSpeed').value = S.wSpeed;
+  getEl('toiveFirst').checked = S.toiveFirst;
+  getEl('poolText').value = S.poolText;
+  return true;
+}
+
+function saveState() {
+  download('25manna_suunnitelma.json', JSON.stringify(serializeState(), null, 2));
+}
+
+function autosave() {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem('25manna_state_v1', JSON.stringify(serializeState())); } catch (e) {}
+}
+
+function resetAll() {
+  S.runners = []; S.teams = []; S.poolText = '';
+  getEl('poolText').value = '';
+  if (typeof localStorage !== 'undefined') { try { localStorage.removeItem('25manna_state_v1'); } catch (e) {} }
+  renderAll();
+}
+
+function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function genderLabel(r) {
+  if (!r.gender) return '?';
+  return r.gender === 'M' ? 'Mies' : 'Nainen';
+}
+
+function renderStatus() {
+  const el = getEl('statusBar');
+  const lines = [];
+  if (!S.runners.length) {
+    el.innerHTML = '<span class="warn">Liitä juoksijapooli (Sarja:Nimi) tai lataa tiedosto ja paina <b>Lue pooli</b>.</span>';
+    return;
+  }
+  lines.push(`<b>${S.runners.length}</b> juoksijaa`);
+  if (S.teams.length) {
+    lines.push(`<b>${S.teams.length}</b> joukkuetta`);
+    const un = unassignedRunners();
+    lines.push(`<b>${un.length}</b> vapaana`);
+    const men = S.runners.filter(r => r.gender === 'M').length;
+    const women = S.runners.filter(r => r.gender === 'N').length;
+    lines.push(`${men} miestä / ${women} naista`);
+  }
+  let html = lines.join(' · ');
+  if (S.teams.length) {
+    let allOk = true;
+    for (let t = 0; t < S.teams.length; t++) {
+      const probs = validateTeam(S.teams[t], SLOTS);
+      if (probs.length) { allOk = false; html += `<div class="line err">Joukkku ${t + 1}: ${esc(probs.join('; '))}</div>`; }
+    }
+    if (allOk) html += `<div class="line ok">Kaikki joukkeet kelvollisia.</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderPanel() {
+  const el = getEl('statusPanel');
+  if (!S.teams.length) { el.innerHTML = ''; return; }
+  const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
+  let html = '<h3>Joukkuiden vahvuudet</h3>';
+  for (let t = 0; t < S.teams.length; t++) {
+    const probs = validateTeam(S.teams[t], SLOTS);
+    html += `<div class="row" style="justify-content:space-between;"><span style="color:#7ec8e3;">Joukkku ${t + 1}</span><span>${sums[t].toFixed(1)} <span class="${probs.length ? 'err-msg' : 'ok'}">${probs.length ? '✖' : '✔'}</span></span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderPoolTable() {
+  const wrap = getEl('poolWrap');
+  if (!S.runners.length) { wrap.innerHTML = ''; return; }
+  let html = '<h3>Juoksijat ja pisteet</h3><table class="scores"><thead><tr>' +
+    '<th>Nimi</th><th>Sarja</th><th>Toive</th><th>Nopeus</th><th>Luotettavuus</th><th>Vahvuus</th><th>Kipeä</th><th>Tilanne</th>' +
+    '</tr></thead><tbody>';
+  S.runners.forEach((r, idx) => {
+    const loc = findLocation(r);
+    const til = loc.kind === 'team' ? `Joukkku ${loc.t + 1} · osuus ${SLOTS[loc.s].osuus}${SLOTS[loc.s].alaosuus ? '.' + SLOTS[loc.s].alaosuus : ''}` : (r.kipea ? 'kipeä' : 'varamies');
+    html += `<tr class="${r.kipea ? 'sick' : ''}">` +
+      `<td>${esc(r.nimi)}</td>` +
+      `<td>${esc(r.sarja)} (${genderLabel(r)})</td>` +
+      `<td><select onchange="setToive(${idx}, this.value)">${[null,1,2,3,4,5].map(n => `<option value="${n || ''}" ${r.toive === n ? 'selected' : ''}>${n ? 'Joukkku ' + n : '—'}</option>`).join('')}</select></td>` +
+      `<td><input type="number" min="0" max="10" value="${r.nopeus}" onchange="setScore(${idx}, 'nopeus', this.value)"></td>` +
+      `<td><input type="number" min="0" max="10" value="${r.luotettavuus}" onchange="setScore(${idx}, 'luotettavuus', this.value)"></td>` +
+      `<td>${strengthOf(r).toFixed(1)}</td>` +
+      `<td><input type="checkbox" style="width:auto;" ${r.kipea ? 'checked' : ''} onchange="setSick(${idx}, this.checked)"></td>` +
+      `<td class="til">${til}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function renderChips() {
+  const wrap = getEl('chipsWrap');
+  const un = S.runners.length ? unassignedRunners() : [];
+  if (!S.teams.length || !un.length) { wrap.innerHTML = ''; return; }
+  let html = '<h3>Varamiehet (vedä joukkuelistaan)</h3><div class="chips">';
+  un.forEach(r => {
+    html += `<span class="chip ${r.kipea ? 'sick' : ''}" draggable="true"
+      data-drag="${S.runners.indexOf(r)}"
+      ondragstart="dragStart(event)">${esc(r.nimi)} (${esc(r.sarja)})${r.kipea ? ' ✖' : ''}</span>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function renderTeams() {
+  const wrap = getEl('teamsWrap');
+  if (!S.teams.length) { wrap.innerHTML = '<div style="color:#667;">Generoi joukkeet poolista (vähintään 25 juoksijaa).</div>'; return; }
+  let html = '';
+  S.teams.forEach((team, t) => {
+    const probs = validateTeam(team, SLOTS);
+    const sum = team.reduce((s, r) => s + strengthOf(r), 0);
+    html += `<div class="team-col">` +
+      `<div class="team-hdr"><div class="tname">Joukkku ${t + 1} <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
+      `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/25</div>` +
+      (probs.length ? `<div class="problems">${probs.map(esc).join('<br>')}</div>` : '') +
+      `</div>`;
+    for (let s = 0; s < 25; s++) {
+      const r = team[s];
+      const lab = `${SLOTS[s].osuus}${SLOTS[s].alaosuus ? '.' + SLOTS[s].alaosuus : ''}`;
+      const valid = !r || legEligible(r, SLOTS[s].osuus);
+      html += `<div class="slot-row ${r && !valid ? 'invalid' : ''}" data-team="${t}" data-slot="${s}" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})">` +
+        `<span class="slot-lab">${lab}</span>` +
+        `<span class="slot-eh">${SLOTS[s].info}</span>` +
+        (r
+          ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="event.preventDefault()">${esc(r.nimi)}<span class="str">${strengthOf(r).toFixed(0)}${r.toive === t + 1 ? ' ★' : ''}</span></span>` +
+            `<button class="rm-btn" title="Poista joukkuesta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
+          : `<span class="slot-empty">— tyhjä —</span>`) +
+        `</div>`;
+    }
+    html += '</div>';
+  });
+  wrap.innerHTML = html;
+}
+
+function dragStart(e) {
+  const el = e.target.closest('[data-drag]');
+  if (!el) return;
+  e.dataTransfer.setData('text/plain', String(el.getAttribute('data-drag')));
+}
+
+function allowDrop(e) { e.preventDefault(); }
+
+function dropSlot(e, teamIdx, slotIdx) {
+  e.preventDefault();
+  const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+  if (Number.isInteger(id)) performMove(id, teamIdx, slotIdx);
+}
+
+function renderAll() {
+  renderStatus();
+  renderPanel();
+  renderPoolTable();
+  renderChips();
+  renderTeams();
+}
+
+function showError(msg) {
+  getEl('statusBar').innerHTML = `<span class="err">✖ ${esc(msg)}</span>`;
+}
+
+function showWarn(msg) {
+  getEl('statusBar').innerHTML = `<span class="warn">⚠ ${esc(msg)}</span>`;
+}
+
+function getEl(id) { return document.getElementById(id); }
+
+function decodeText(buf) {
+  const u8 = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  try { const t = decodeURIComponent(escape(s)); if (!t.includes('\uFFFD')) return t; } catch (e) {}
+  return s;
+}
+
+getEl('poolFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    getEl('poolText').value = decodeText(rd.result);
+    readPool();
+  };
+  rd.readAsArrayBuffer(f);
+  this.value = '';
+});
+
+getEl('loadFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      if (restoreState(JSON.parse(rd.result))) renderAll();
+      else showError('Tiedosto ei ole kelvollinen 25-manna-suunnitelma.');
+    } catch (e) { showError('JSON:n lukeminen epäonnistui: ' + e.message); }
+  };
+  rd.readAsText(f);
+  this.value = '';
+});
+
+function loadExamplePool() {
+  const pool = [];
+  const classes = [];
+  const add = (n, c) => { for (let i = 0; i < n; i++) classes.push(c); };
+  add(8, 'H21'); add(8, 'D21'); add(2, 'H16'); add(2, 'H14'); add(2, 'D16'); add(2, 'D18');
+  add(2, 'H50'); add(1, 'H60'); add(2, 'D40'); add(2, 'H18'); add(1, 'D20'); add(1, 'H55');
+  add(2, 'H35'); add(2, 'D35'); add(1, 'H45'); add(1, 'D45'); add(1, 'H20');
+  while (pool.length < 55) classes.push(Math.random() < 0.5 ? 'H21' : 'D21');
+  const boys = ['Aapo','Aleksi','Antti','Eino','Esa','Jari','Jouni','Jukka','Juha','Kaapo','Kalle','Lauri','Mikko','Niilo','Olli','Paavo','Pasi','Pekka','Petri','Sami','Seppo','Teemu','Vesa','Ville'];
+  const girls = ['Aino','Anni','Elina','Emma','Hanna','Heidi','Iida','Kaisa','Karoliina','Katariina','Katja','Lotta','Maija','Marja','Minna','Outi','Pauliina','Päivi','Riikka','Sanna','Satu','Suvi','Tuuli','Venla'];
+  const surnames = ['Aaltonen','Aho','Hakala','Helenius','Heikkinen','Heinonen','Järvinen','Kivelä','Korhonen','Koskela','Laine','Lehtonen','Miettinen','Mäkelä','Nieminen','Nurmi','Pesonen','Ranta','Räsänen','Salmi','Salminen','Sipilä','Toivonen','Virtanen'];
+  const names = new Set();
+  classes.forEach((c, i) => {
+    const g = c[0] === 'H' ? boys : girls;
+    let n;
+    do { n = surnames[Math.floor(Math.random() * surnames.length)] + ' ' + g[Math.floor(Math.random() * g.length)]; } while (names.has(n));
+    names.add(n);
+    const toive = Math.random() < 0.25 ? 1 + Math.floor(Math.random() * 3) : null;
+    pool.push(`${c}:${n}${toive ? ':' + toive : ''}`);
+  });
+  getEl('poolText').value = pool.join('\n');
+  readPool();
+}
+
+(function init() {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('25manna_state_v1');
+      if (raw) { if (restoreState(JSON.parse(raw))) { renderAll(); return; } }
+    } catch (e) {}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
