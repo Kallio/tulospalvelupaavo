@@ -309,8 +309,10 @@ assert('packTeam avoin: no empty slot before filled', frontPacked(packedAvoin), 
 assert('packTeam avoin: os1 eligible', packedAvoin[0] && legEligible(packedAvoin[0], 1, 'avoin'), packedAvoin[0] && packedAvoin[0].nimi);
 assert('packTeam avoin: all 13 runners kept', packedAvoin.filter(Boolean).length === 13, String(packedAvoin.filter(Boolean).length));
 
-// ── regression: fillGaps must not drain the Avoin team's first legs ──
-// (45-runner pool from the saved plan that originally exposed the bug)
+// ── regression: fillGaps may borrow one runner from a full later team (the
+//    Avoin team) when the pool is empty, but must never drain it further and
+//    must keep first legs filled. (45-runner pool from the saved plan that
+//    originally exposed the bug)
 const REGRESS_POOL = [
   'H16:Pesonen Esa','D21:Laine Minna:3','D21:Pesonen Maija','D21:Hakala Pauliina','D21:Laine Marja',
   'D16:Nurmi Tuuli','D14:Heinonen Katja','H13:Mäkelä Aapo:1','H65:Heikkinen Jouni:1','H55:Lehtonen Teemu',
@@ -335,7 +337,8 @@ setSick(S7.runners.indexOf(sickB), true);
 fillGaps();
 assert('regress: all teams front-packed (os15 reservation exempt)', S7.teams.every(frontPacked), JSON.stringify(S7.teams.map(t => t.map(x => x ? 1 : 0).join(''))));
 assert('regress: avoin team first legs filled', S7.teams[2][0] && S7.teams[2][1], S7.teams[2].map(x => x && x.nimi).slice(0, 2).join(','));
-assert('regress: avoin team complete', S7.teams[2].filter(Boolean).length === 15, String(S7.teams[2].filter(Boolean).length));
+assert('regress: kilpa gap filled via relaxed steal from avoin', S7.teams[0].filter(Boolean).length === 15, String(S7.teams[0].filter(Boolean).length));
+assert('regress: avoin valid except count after lending a runner', S7.teams[2].filter(Boolean).length === 14 && validateTeam(S7.teams[2], slots, 'avoin').every(e => /^keskeneräinen/.test(e)), validateTeam(S7.teams[2], slots, 'avoin').join(';'));
 assert('regress: kilpa teams keep their 5+ women', S7.teams.slice(0, S7.kilpaCount).every(t => validateTeam(t, slots, 'kilpa').every(p => !p.includes('naisia 4/5'))));
 
 // ── example pools ──

@@ -741,6 +741,7 @@ function fillGaps() {
         for (let sj = 0; sj < 15; sj++) {
           const r = tj[sj];
           if (!r || r.kipea || !legEligible(r, osuus, teamMode(t))) continue;
+          const srcFull = tj.filter(Boolean).length === 15;
           tj[sj] = null;
           S.teams[t][s] = r;
           if (validateTeam(S.teams[t], SLOTS, teamMode(t)).length === 0) {
@@ -751,6 +752,8 @@ function fillGaps() {
               tj[sj] = pc[0];
               if (validateTeam(tj, SLOTS, modeJ).length === 0) { filled++; break; }
             }
+            tj[sj] = null;
+            if (srcFull && validateTeam(tj, SLOTS, modeJ).every(e => /^keskeneräinen/.test(e))) { filled++; break; }
           }
           tj[sj] = r;
           S.teams[t][s] = null;
