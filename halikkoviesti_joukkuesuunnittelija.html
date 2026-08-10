@@ -88,6 +88,8 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 .runner .str { color: #7ec8e3; font-size: 10px; margin-left: 4px; }
 .slot-empty { flex: 1; background: #f0f2f5; color: #bbb; border-radius: 4px; padding: 2px 7px; border: 1px dashed #ccc; font-style: italic; text-align: center; }
 .rm-btn { flex: none; background: transparent; border: none; color: #c66; cursor: pointer; font-size: 12px; padding: 0 2px; }
+.sick-btn { flex: none; background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; }
+.sick-btn:hover { transform: scale(1.2); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -1131,6 +1133,7 @@ function renderTeams() {
         `<span class="slot-eh">${esc(legInfo(SLOTS[s].osuus, mode))}</span>` +
         (r
           ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})">${esc(r.nimi)}<span class="str">${strengthOf(r).toFixed(0)}${r.toive === t + 1 ? ' ★' : ''}</span></span>` +
+            `<button class="sick-btn" title="Merkitse kipeäksi — poistetaan joukkuesta, ei käytetä aukkojen täytössä" onclick="setSick(${S.runners.indexOf(r)}, true)">🤒</button>` +
             `<button class="rm-btn" title="Poista joukkeusta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
           : `<span class="slot-empty" ondragover="event.preventDefault()" ondrop="dropSlot(event, ${t}, ${s})">— tyhjä —</span>`) +
         `</div>`;

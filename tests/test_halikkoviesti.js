@@ -184,6 +184,7 @@ assert('DOM gen: all valid', S.teams.every((t, i) => validateTeam(t, slots, i < 
 assert('DOM gen: statusBar has kilpa/avoin', getEl('statusBar').innerHTML.includes('2 kilpa') && getEl('statusBar').innerHTML.includes('1 avoin'), getEl('statusBar').innerHTML.slice(0, 200));
 assert('DOM gen: teams rendered with badges', getEl('teamsWrap').innerHTML.includes('Kilpa 1') && getEl('teamsWrap').innerHTML.includes('Avoin 1'));
 assert('DOM gen: legend present', getEl('rulesLegend').innerHTML.includes('Kilpasarja'));
+assert('DOM gen: sick button on every runner line', (getEl('teamsWrap').innerHTML.match(/onclick="setSick\(/g) || []).length === 45, String((getEl('teamsWrap').innerHTML.match(/onclick="setSick\(/g) || []).length));
 
 assert('wizard after gen: pool step collapsed', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
 assert('wizard after gen: gen step open', getEl('psBodyGen').style.display !== 'none', String(getEl('psBodyGen').style.display));
@@ -243,6 +244,17 @@ fillGaps();
 assert('fillGaps: gap refilled', S3.teams[0][3] !== null && S3.teams.every(t => t.filter(Boolean).length === 15));
 assert('fillGaps: teams valid after fill', S3.teams.every((t, i) => validateTeam(t, slots, i < S3.kilpaCount ? 'kilpa' : 'avoin').length === 0));
 assert('fillGaps: feedback', /Täytettiin|täytetty/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+
+// ── removeFromTeam + setSick: sick runner must not reappear via fillGaps ──
+const sickGap = S3.teams[0][3];
+removeFromTeam(0, 3);
+assert('sick-gap: runner back in reserve pool', unassignedRunners().includes(sickGap));
+setSick(S3.runners.indexOf(sickGap), true);
+assert('sick-gap: runner flagged kipeä', sickGap.kipea === true);
+fillGaps();
+assert('sick-gap: gap filled with non-sick runner', S3.teams[0][3] && S3.teams[0][3] !== sickGap, S3.teams[0][3] && S3.teams[0][3].nimi);
+assert('sick-gap: sick runner stays out of all teams', !S3.teams.some(t => t.includes(sickGap)));
+assert('sick-gap: teams full after fill', S3.teams.every(t => t.filter(Boolean).length === 15));
 
 // ── CSV ──
 const csv = toCSV();

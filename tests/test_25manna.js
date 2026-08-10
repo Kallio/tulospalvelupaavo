@@ -159,6 +159,7 @@ assert('DOM generateAll: teams valid after optimize', S.teams.every(t => validat
 assert('DOM generateAll: statusBar has 2 teams + ok line', getEl('statusBar').innerHTML.includes('2</b> joukkuetta') && getEl('statusBar').innerHTML.includes('Kaikki joukkuelistat kelvollisia'), getEl('statusBar').innerHTML.slice(0, 200));
 assert('DOM renderTeams: pool table rendered', getEl('poolWrap').innerHTML.includes('Juoksijat ja pisteet'));
 assert('DOM renderPanel: strength rows', getEl('statusPanel').innerHTML.includes('vahvuudet') || getEl('statusPanel').innerHTML.includes('Vahvuudet'));
+assert('DOM renderTeams: sick button on every runner line', (getEl('teamsWrap').innerHTML.match(/onclick="setSick\(/g) || []).length === 50, String((getEl('teamsWrap').innerHTML.match(/onclick="setSick\(/g) || []).length));
 
 assert('wizard after gen: pool step collapsed', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
 assert('wizard after gen: gen step open', getEl('psBodyGen').style.display !== 'none', String(getEl('psBodyGen').style.display));
@@ -236,6 +237,17 @@ assert('remove: non-sick filler available in pool', !!filler);
 performMove(S.runners.indexOf(filler), 0, 1);
 assert('remove: refilled by dragging pool runner, team valid again', S.teams[0][1] === filler && validateTeam(S.teams[0], slots).length === 0, validateTeam(S.teams[0], slots).join(';'));
 assert('remove: statusBar has no Joukkku typo', !getEl('statusBar').innerHTML.includes('Joukkku'));
+
+// ── removeFromTeam + setSick: sick runner must not reappear via fillGaps ──
+const sickGap = S.teams[0][1];
+removeFromTeam(0, 1);
+assert('sick-gap: runner back in reserve pool', unassignedRunners().includes(sickGap));
+setSick(S.runners.indexOf(sickGap), true);
+assert('sick-gap: runner flagged kipeä', sickGap.kipea === true);
+fillGaps();
+assert('sick-gap: gap filled with non-sick runner', S.teams[0][1] && S.teams[0][1] !== sickGap, S.teams[0][1] && S.teams[0][1].nimi);
+assert('sick-gap: sick runner stays out of all teams', !S.teams.some(t => t.includes(sickGap)));
+assert('sick-gap: teams full after fill', S.teams.every(t => t.filter(Boolean).length === 25));
 
 // ── CSV ──
 const csv = toCSV();
