@@ -39,13 +39,24 @@ function assert(name, cond, extra) {
   else { fail++; console.log('  FAIL ' + name + (extra ? ' — ' + extra : '')); }
 }
 
-// ── test 1: parse rastilippu CSV (exampledata 3-osainen, latin-1 bytes) ──
-const latin1 = fs.readFileSync(path.join('/tulospalvelupaavo/exampledata/3osainenviestiesimerkki.csv'));
+// ── test 1: parse Rastilippu CSV (self-contained 3-osainen fixture, latin-1 bytes) ──
+const RL_CLUBS = ['Jämsän Retki-Veikot', 'Punkalaitumen Kunto', 'Espoon Suunta', 'Kalevan Rasti', 'Vaasan Suunnistajat'];
+const RL_NAMES = ['Nurmo Katariina', 'Mäkelä Aapo', 'Virtanen Eino', 'Heikkinen Satu', 'Korhonen Pekka', 'Laine Anni', 'Salmi Jari', 'Nieminen Viivi'];
+const rlRows = ['Sarja;Joukkueen nimi;Seura;Osuuden 1 juoksija;Osuuden 2 juoksija;Osuuden 3 juoksija'];
+for (let i = 1; i <= 53; i++) {
+  const club = i === 43 ? 'Punkalaitumen Kunto' : RL_CLUBS[(i - 1) % RL_CLUBS.length];
+  const sarja = i % 2 ? 'H14' : 'D14';
+  const names = i === 43
+    ? ['Nurmo Katariina', 'Mäkelä Aapo', 'Virtanen Eino']
+    : [RL_NAMES[(i * 3) % RL_NAMES.length], RL_NAMES[(i * 3 + 1) % RL_NAMES.length], i % 4 === 0 ? '' : RL_NAMES[(i * 3 + 2) % RL_NAMES.length]];
+  rlRows.push([sarja, club + ' ' + i, club, ...names].join(';'));
+}
+const latin1 = Buffer.from(rlRows.join('\n'), 'latin1');
 const decoded = new TextDecoder('latin1').decode(latin1);
 const rows = parseCSV(decoded, ';');
 const parsed = parseRastilippu(rows);
-assert('parse exampledata 3-osainen: no error', !parsed.error, parsed.error);
-assert('parse exampledata 3-osainen: teams = 53', parsed.teams.length === 53, String(parsed.teams.length));
+assert('parse fixture 3-osainen: no error', !parsed.error, parsed.error);
+assert('parse fixture 3-osainen: teams = 53', parsed.teams.length === 53, String(parsed.teams.length));
 assert('parse: 3 osuus columns found', parsed.osuudet.length === 3, String(parsed.osuudet.length));
 assert('parse: runner count on Punkalaitumen row', parsed.teams[42].runners.length === 3 && parsed.teams[42].runners[0] === 'Nurmo Katariina', JSON.stringify(parsed.teams[42].runners));
 
@@ -126,8 +137,17 @@ const { text, enc } = decodeBuffer(buf);
 assert('decodeBuffer detects latin-1', enc.startsWith('latin'), enc);
 assert('decodeBuffer preserves ä', text.includes('Jämsän'));
 
-// ── test 10: navisport example re-parses with our tokenizer ──
-const nv = fs.readFileSync(path.join('/tulospalvelupaavo/exampledata/navisportmuotoilu.csv'));
+// ── test 10: navisport example (embedded fixture) re-parses with our tokenizer ──
+const NAVISPORT_CSV = [
+  '\ufeff"Kilpailunumero","Sarja","Joukkueen nimi","Kansalaisuus","Seura"," ","Nimi-1","Kilpailukortti-1","Lainakortti-1","Osuus-1","Alaosuus-1","Rata-1","Lähtöaika-1","  ","Nimi-2","Kilpailukortti-2","Lainakortti-2","Osuus-2","Alaosuus-2","Rata-2","Lähtöaika-2","   ","Nimi-3","Kilpailukortti-3","Lainakortti-3","Osuus-3","Alaosuus-3","Rata-3","Lähtöaika-3","    ","Nimi-4","Kilpailukortti-4","Lainakortti-4","Osuus-4","Alaosuus-4","Rata-4","Lähtöaika-4","     ","Nimi-5","Kilpailukortti-5","Lainakortti-5","Osuus-5","Alaosuus-5","Rata-5","Lähtöaika-5"',
+  '"101","H14","Parhaat","","Espoon Suunta"," ","Vesa","","","1","","","","  ","Paavo","","","2","1","","","   ","Esko","","","2","2","","","    ","Vili","","","2","3","","","     ","Pedro","","","3","","",""',
+  '"102","H14","Parhaat 2","","Espoon Suunta"," ","Aino","","","1","","","","  ","Anni","","","2","1","","","   ","Annika","","","2","2","","","    ","Elina","","","2","3","","","     ","Emma","","","3","","",""',
+  '"103","H14","Parhaat 3","","Espoon Suunta"," ","Hanna","","","1","","","","  ","Heidi","","","2","","","","   ","Iida","","","3","","","","    ","","","","","","","","     ","","","","","","",""',
+  '"104","Avoin Oranssi","Pikku Parhaat","","Espoon Suunta"," ","Jenna","","","1","","","","  ","Kaisa","","","2","","","","   ","Karoliina","","","3","","","","    ","","","","","","","","     ","","","","","","",""',
+  '"105","D12","Parhaat 5","","Kalevan Rasti"," ","Kerttu","","","1","","","","  ","Lotta","","","2","1","","","   ","Maija","","","2","2","","","    ","Marja","","","2","3","","","     ","Minna","","","3","","",""',
+  '"106","H12","Parhaat 6","","Kalevan Rasti"," ","Niina","","","1","","","","  ","Outi","","","3","","","","   ","","","","","","","","    ","","","","","","","","     ","","","","","","",""',
+].join('\r\n');
+const nv = Buffer.from(NAVISPORT_CSV, 'utf8');
 const { text: nvText } = decodeBuffer(nv.buffer.slice(nv.byteOffset, nv.byteOffset + nv.byteLength));
 const nvRows = parseCSV(nvText, ',');
 assert('navisport example: 7 rows', nvRows.length === 7, String(nvRows.length));

@@ -167,6 +167,12 @@ assert('gen avoin: 1 team without women', ga.count === 1 && ga.teams.length === 
 assert('gen avoin: valid', validateTeam(ga.teams[0], slots, 'avoin').length === 0, validateTeam(ga.teams[0], slots, 'avoin').join(';'));
 assert('gen kilpa: men-only pool infeasible', !!generateTeams(parsePool(menOnly), 1, 'kilpa').error);
 
+// ── wizard: steps 2 & 3 stay collapsed until a pool is loaded ──
+renderAll();
+assert('wizard initial: gen step collapsed', getEl('psBodyGen').style.display === 'none', String(getEl('psBodyGen').style.display));
+assert('wizard initial: save step collapsed', getEl('psBodySave').style.display === 'none', String(getEl('psBodySave').style.display));
+assert('wizard initial: pool step open', getEl('psBodyPool').style.display !== 'none', String(getEl('psBodyPool').style.display));
+
 // ── generateAll: mixed pool → kilpa first, then avoin ──
 getEl('poolText').value = mixedPool(2, 1);
 getEl('toiveFirst').checked = true;
@@ -178,6 +184,20 @@ assert('DOM gen: all valid', S.teams.every((t, i) => validateTeam(t, slots, i < 
 assert('DOM gen: statusBar has kilpa/avoin', getEl('statusBar').innerHTML.includes('2 kilpa') && getEl('statusBar').innerHTML.includes('1 avoin'), getEl('statusBar').innerHTML.slice(0, 200));
 assert('DOM gen: teams rendered with badges', getEl('teamsWrap').innerHTML.includes('Kilpa 1') && getEl('teamsWrap').innerHTML.includes('Avoin 1'));
 assert('DOM gen: legend present', getEl('rulesLegend').innerHTML.includes('Kilpasarja'));
+
+assert('wizard after gen: pool step collapsed', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
+assert('wizard after gen: gen step open', getEl('psBodyGen').style.display !== 'none', String(getEl('psBodyGen').style.display));
+assert('pool list minimized after gen', S.showPool === false && getEl('poolWrap').innerHTML.includes('display:none'), String(S.showPool));
+toggleStep('pool');
+assert('wizard toggle: pool step reopened manually', getEl('psBodyPool').style.display !== 'none', String(getEl('psBodyPool').style.display));
+toggleStep('pool');
+assert('wizard toggle: pool step collapsed again', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
+getEl('showPool').checked = true;
+togglePool();
+assert('pool list: manual reopen works after gen', S.showPool === true && getEl('poolTableWrap').style.display === '', String(S.showPool));
+getEl('showPool').checked = false;
+togglePool();
+assert('pool list: re-minimized manually', S.showPool === false, String(S.showPool));
 
 // ── generateAll: no kilpa possible → avoin only ──
 getEl('poolText').value = menOnly;
@@ -278,8 +298,19 @@ assert('packTeam avoin: os1 eligible', packedAvoin[0] && legEligible(packedAvoin
 assert('packTeam avoin: all 13 runners kept', packedAvoin.filter(Boolean).length === 13, String(packedAvoin.filter(Boolean).length));
 
 // ── regression: fillGaps must not drain the Avoin team's first legs ──
-const savedPlan = JSON.parse(fs.readFileSync('/tulospalvelupaavo/exampledata/halikkoviesti_suunnitelma.json', 'utf8'));
-getEl('poolText').value = savedPlan.poolText;
+// (45-runner pool from the saved plan that originally exposed the bug)
+const REGRESS_POOL = [
+  'H16:Pesonen Esa','D21:Laine Minna:3','D21:Pesonen Maija','D21:Hakala Pauliina','D21:Laine Marja',
+  'D16:Nurmi Tuuli','D14:Heinonen Katja','H13:Mäkelä Aapo:1','H65:Heikkinen Jouni:1','H55:Lehtonen Teemu',
+  'H14:Hakala Esa','H21:Lehtonen Aleksi','H35:Salmi Eino','H18:Helenius Teemu:3','H21:Miettinen Juha',
+  'H16:Helenius Olli:3','D21:Salmi Minna','D21:Järvinen Katariina','D21:Salminen Hanna','D21:Pesonen Päivi',
+  'D16:Toivonen Emma','D14:Aho Satu','H13:Koskela Kaapo','H65:Mäkelä Pekka','H55:Heikkinen Niilo',
+  'H14:Salmi Niilo:2','H21:Lehtonen Sami','H35:Sipilä Seppo:1','H18:Salminen Olli:2','H21:Räsänen Kalle',
+  'H16:Kivelä Seppo','D21:Hakala Outi:1','H21:Kivelä Aapo','H21:Ranta Esa','H21:Nurmi Pasi:1',
+  'H21:Hakala Juha','H35:Toivonen Vesa','H35:Nieminen Teemu','H35:Aho Teemu:1','H40:Virtanen Paavo',
+  'H40:Mäkelä Vesa','H45:Virtanen Seppo:1','H45:Nieminen Aapo:3','H18:Aaltonen Teemu:2','H18:Koskela Lauri'
+].join('\n');
+getEl('poolText').value = REGRESS_POOL;
 generateAll();
 const S7 = __S();
 const sickA = S7.runners.find(r => r.nimi === 'Hakala Pauliina');
@@ -315,6 +346,20 @@ assert('example 45: runners loaded', __S().runners.length === 45, String(__S().r
 generateAll();
 const S4 = __S();
 assert('example 45: kilpa + avoin teams, all valid', S4.teams.length >= 3 && S4.kilpaCount >= 1 && S4.teams.length > S4.kilpaCount && S4.teams.every((t, i) => validateTeam(t, slots, i < S4.kilpaCount ? 'kilpa' : 'avoin').length === 0), JSON.stringify({ n: S4.teams.length, k: S4.kilpaCount }));
+
+// ── live pool sync ──
+getEl('poolText').value = S4.runners.map(r => r.sarja + ':' + r.nimi + (r.toive ? ':' + r.toive : '')).join('\n');
+const teamsBefore = S4.teams.length;
+syncPool();
+assert('syncPool: unchanged text does not wipe teams', S4.teams.length === teamsBefore, String(S4.teams.length));
+getEl('poolText').value += '\nH21:Uusi Juoksija';
+syncPool();
+assert('syncPool: new line adds runner', S4.runners.some(r => r.nimi === 'Uusi Juoksija'), String(S4.runners.length));
+assert('syncPool: real change clears teams', S4.teams.length === 0, String(S4.teams.length));
+assert('syncPool: pool list back on when teams cleared', S4.showPool === true, String(S4.showPool));
+getEl('poolText').value = '';
+syncPool();
+assert('syncPool: cleared text empties pool', S4.runners.length === 0 && S4.teams.length === 0, String(S4.runners.length));
 
 Math.random = mulberry32(7);
 loadExamplePool(60);

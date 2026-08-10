@@ -17,6 +17,9 @@ body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
 .ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
 .ps:last-child { margin-top: auto; }
 .ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.step-hdr { cursor: pointer; user-select: none; }
+.step-hdr:hover { opacity: .85; }
+.step-toggle { display: inline-block; width: 16px; color: #7ec8e3; }
 .ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
 textarea, input[type="text"], input[type="number"], select {
   width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
@@ -119,11 +122,11 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 
 <div id="top">
   <div class="ps">
-    <h3>1. Juoksijapooli</h3>
+    <h3 class="step-hdr" onclick="toggleStep('pool')"><span class="step-toggle" id="stepTogglePool">▾</span> 1. Juoksijapooli</h3>
+    <div class="ps-body" id="psBodyPool">
     <label>Sarja:Nimi, rivikohtaisesti (toive joukkuelle voi olla kolmantena: <code>D16:Virtanen Aino:1</code>)</label>
     <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa&#10;D16:Ojapalo Venla:1&#10;H50:Nurmi Mikko"></textarea>
     <div class="row">
-      <button class="bs" onclick="readPool()">Lue pooli</button>
       <button class="bg btn-sm" onclick="loadExamplePool(55)">Esimerkkipooli (55)</button>
       <button class="bg btn-sm" onclick="loadExamplePool(80)">(80)</button>
       <button class="bg btn-sm" onclick="loadExamplePool(105)">(105)</button>
@@ -131,11 +134,11 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     </div>
     <label>Seura</label>
     <input id="klubi" type="text" value="Espoon Suunta">
-    <label>Ensimmäinen kilpailunumero</label>
-    <input id="firstNum" type="number" value="1" min="1">
+    </div>
   </div>
   <div class="ps">
-    <h3>2. Generointi</h3>
+    <h3 class="step-hdr" onclick="toggleStep('gen')"><span class="step-toggle" id="stepToggleGen">▾</span> 2. Generointi</h3>
+    <div class="ps-body" id="psBodyGen">
     <div class="row">
       <button class="bs" onclick="generateAll()">Generoi joukkuuet</button>
       <button class="bg" onclick="optimize()">Optimoi</button>
@@ -143,10 +146,12 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     </div>
     <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet ensin (muuten vahvuus ensin)</label>
     <label>Vahvuuskerroin nopeudelle: <input id="wSpeed" type="number" min="0" max="1" step="0.1" value="0.7"></label>
+    </div>
   </div>
   <div class="ps" id="statusPanel"></div>
   <div class="ps">
-    <h3>3. Tulosta / tallenna</h3>
+    <h3 class="step-hdr" onclick="toggleStep('save')"><span class="step-toggle" id="stepToggleSave">▾</span> 3. Tulosta / tallenna</h3>
+    <div class="ps-body" id="psBodySave">
     <div class="row">
       <button class="bs" onclick="exportCSV()">Vie Navisport-CSV</button>
       <button class="bg" onclick="window.print()">Tulosta</button>
@@ -156,6 +161,7 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
       <label class="chk"><input type="file" id="loadFile" accept=".json" style="width:auto;"> Lataa (JSON)</label>
     </div>
     <button class="bp btn-sm" onclick="resetAll()" style="margin-top:6px;">Tyhjennä kaikki</button>
+    </div>
   </div>
 </div>
 
@@ -470,8 +476,6 @@ function optimize() {
 
 function readInputs() {
   S.klubi = getEl('klubi').value.trim() || 'Espoon Suunta';
-  S.firstNum = parseInt(getEl('firstNum').value, 10);
-  if (!Number.isInteger(S.firstNum) || S.firstNum < 1) S.firstNum = 1;
   S.wSpeed = parseFloat(getEl('wSpeed').value);
   if (!(S.wSpeed >= 0 && S.wSpeed <= 1)) S.wSpeed = 0.7;
   S.toiveFirst = getEl('toiveFirst').checked;
@@ -495,16 +499,26 @@ function mergePoolState(parsed) {
   }
 }
 
-function readPool() {
+function poolSignature(r) { return r.sarja + ':' + r.nimi + ':' + (r.toive || ''); }
+
+// Synkronoi poolin tekstilaatikosta. Muutosten tunnistus sarja:nimi:toive
+// -allekirjoituksilla: jos sisältö on sama (esim. tyhjä rivi), joukkeita ei
+// tyhjennetä turhaan.
+function syncPool() {
   readInputs();
   const runners = parsePool(S.poolText);
-  if (!runners.length) { showError('Poolissa ei ollut yhtään juoksijaa (muoto Sarja:Nimi rivikohtaisesti).'); return; }
+  const same = S.runners.length === runners.length &&
+    S.runners.every((r, i) => poolSignature(r) === poolSignature(runners[i]));
+  if (same) return;
   mergePoolState(runners);
   S.runners = runners;
   S.teams = [];
   renderAll();
   autosave();
+  if (!runners.length) showWarn('Pooli tyhjä — liitä juoksijoita (Sarja:Nimi) tai lataa tiedosto.');
 }
+
+function readPool() { syncPool(); }
 
 function generateAll() {
   readInputs();
@@ -517,6 +531,7 @@ function generateAll() {
   const res = generateTeams(S.runners, N);
   if (res.error) { showError(res.error); S.teams = []; renderAll(); return; }
   S.teams = res.teams;
+  S.showPool = false;
   updatePoolFromTeams();
   optimizePasses();
   renderAll();
@@ -812,7 +827,6 @@ function restoreState(data) {
   });
   S.teams = (data.teams || []).map(t => t.map(i => (Number.isInteger(i) && S.runners[i]) ? S.runners[i] : null));
   getEl('klubi').value = S.klubi;
-  getEl('firstNum').value = S.firstNum;
   getEl('wSpeed').value = S.wSpeed;
   getEl('toiveFirst').checked = S.toiveFirst;
   getEl('poolText').value = S.poolText;
@@ -847,7 +861,7 @@ function renderStatus() {
   const el = getEl('statusBar');
   const lines = [];
   if (!S.runners.length) {
-    el.innerHTML = '<span class="warn">Liitä juoksijapooli (Sarja:Nimi) tai lataa tiedosto ja paina <b>Lue pooli</b>.</span>';
+    el.innerHTML = '<span class="warn">Liitä juoksijapooli (Sarja:Nimi) tai lataa tiedosto — juoksijat päivittyvät automaattisesti.</span>';
     return;
   }
   lines.push(`<b>${S.runners.length}</b> juoksijaa`);
@@ -1043,12 +1057,45 @@ function dropSlot(e, teamIdx, slotIdx) {
   if (Number.isInteger(id)) performMove(id, teamIdx, slotIdx);
 }
 
+const STEP_KEYS = ['pool', 'gen', 'save'];
+const stepCollapsed = { pool: false, gen: true, save: true };
+let stepManual = {};
+let prevHasPool = null, prevHasTeams = null;
+
+function toggleStep(k) {
+  stepCollapsed[k] = !stepCollapsed[k];
+  stepManual[k] = true;
+  applySteps();
+}
+
+function updateSteps() {
+  const hasPool = S.runners.length > 0;
+  const hasTeams = S.teams.length > 0;
+  if (hasPool !== prevHasPool || hasTeams !== prevHasTeams) stepManual = {};
+  prevHasPool = hasPool; prevHasTeams = hasTeams;
+  stepCollapsed.pool = stepManual.pool ? stepCollapsed.pool : hasTeams;
+  stepCollapsed.gen = stepManual.gen ? stepCollapsed.gen : !hasPool;
+  stepCollapsed.save = stepManual.save ? stepCollapsed.save : !hasPool;
+  applySteps();
+}
+
+function applySteps() {
+  for (const k of STEP_KEYS) {
+    const cap = k[0].toUpperCase() + k.slice(1);
+    const body = getEl('psBody' + cap), tog = getEl('stepToggle' + cap);
+    if (body) body.style.display = stepCollapsed[k] ? 'none' : '';
+    if (tog) tog.textContent = stepCollapsed[k] ? '▸' : '▾';
+  }
+}
+
 function renderAll() {
+  if (!S.teams.length) S.showPool = true;
   renderStatus();
   renderPanel();
   renderPoolTable();
   renderChips();
   renderTeams();
+  updateSteps();
 }
 
 function showError(msg) {
@@ -1073,12 +1120,18 @@ function decodeText(buf) {
   return s;
 }
 
+let poolTimer = null;
+getEl('poolText').addEventListener('input', function() {
+  clearTimeout(poolTimer);
+  poolTimer = setTimeout(syncPool, 800);
+});
+
 getEl('poolFile').addEventListener('change', function() {
   const f = this.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
     getEl('poolText').value = decodeText(rd.result);
-    readPool();
+    syncPool();
   };
   rd.readAsArrayBuffer(f);
   this.value = '';
@@ -1122,7 +1175,7 @@ function loadExamplePool(count) {
     pool.push(`${c}:${nm}${toive ? ':' + toive : ''}`);
   });
   getEl('poolText').value = pool.join('\n');
-  readPool();
+  syncPool();
 }
 
 (function init() {

@@ -142,6 +142,12 @@ const gp = generateTeams(parsePool(poolPref), 2);
 const prefNames = ['D21-0', 'D21-1', 'D21-2'];
 assert('gen pref: team1 contains all 3 toive=1 runners', prefNames.every(n => gp.teams[0].some(r => r && r.nimi === n)), gp.teams[0].filter(Boolean).map(r => r.nimi).join(','));
 
+// ── wizard: steps 2 & 3 stay collapsed until a pool is loaded ──
+renderAll();
+assert('wizard initial: gen step collapsed', getEl('psBodyGen').style.display === 'none', String(getEl('psBodyGen').style.display));
+assert('wizard initial: save step collapsed', getEl('psBodySave').style.display === 'none', String(getEl('psBodySave').style.display));
+assert('wizard initial: pool step open', getEl('psBodyPool').style.display !== 'none', String(getEl('psBodyPool').style.display));
+
 // ── DOM flow: readPool + generateAll ──
 getEl('poolText').value = POOL_62;
 getEl('toiveFirst').checked = true;
@@ -153,6 +159,20 @@ assert('DOM generateAll: teams valid after optimize', S.teams.every(t => validat
 assert('DOM generateAll: statusBar has 2 teams + ok line', getEl('statusBar').innerHTML.includes('2</b> joukkuetta') && getEl('statusBar').innerHTML.includes('Kaikki joukkuelistat kelvollisia'), getEl('statusBar').innerHTML.slice(0, 200));
 assert('DOM renderTeams: pool table rendered', getEl('poolWrap').innerHTML.includes('Juoksijat ja pisteet'));
 assert('DOM renderPanel: strength rows', getEl('statusPanel').innerHTML.includes('vahvuudet') || getEl('statusPanel').innerHTML.includes('Vahvuudet'));
+
+assert('wizard after gen: pool step collapsed', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
+assert('wizard after gen: gen step open', getEl('psBodyGen').style.display !== 'none', String(getEl('psBodyGen').style.display));
+assert('pool list minimized after gen', S.showPool === false && getEl('poolWrap').innerHTML.includes('display:none'), String(S.showPool));
+toggleStep('pool');
+assert('wizard toggle: pool step reopened manually', getEl('psBodyPool').style.display !== 'none', String(getEl('psBodyPool').style.display));
+toggleStep('pool');
+assert('wizard toggle: pool step collapsed again', getEl('psBodyPool').style.display === 'none', String(getEl('psBodyPool').style.display));
+getEl('showPool').checked = true;
+togglePool();
+assert('pool list: manual reopen works after gen', S.showPool === true && getEl('poolTableWrap').style.display === '', String(S.showPool));
+getEl('showPool').checked = false;
+togglePool();
+assert('pool list: re-minimized manually', S.showPool === false, String(S.showPool));
 
 // ── sick replacement (pool-first fill) ──
 const extra = { nimi: 'Extra Woman', sarja: 'D21', gender: 'N', num: 21, toive: 1, nopeus: 8, luotettavuus: 8, kipea: false, locked: false };
@@ -342,12 +362,10 @@ assert('optimize: feedback shown with strengths', getEl('statusBar').innerHTML.i
 // ── JSON export/import round-trip reflects current inputs ──
 const S4 = __S();
 getEl('klubi').value = 'Kajo Team';
-getEl('firstNum').value = '7';
 getEl('wSpeed').value = '0.4';
 getEl('toiveFirst').checked = false;
 const snap2 = serializeState();
 assert('json: export reflects current klubi input', snap2.klubi === 'Kajo Team', snap2.klubi);
-assert('json: export reflects current firstNum input', snap2.firstNum === 7, String(snap2.firstNum));
 assert('json: export reflects current wSpeed input', snap2.wSpeed === 0.4, String(snap2.wSpeed));
 assert('json: export reflects toiveFirst checkbox', snap2.toiveFirst === false, String(snap2.toiveFirst));
 assert('json: runners exported', Array.isArray(snap2.runners) && snap2.runners.length === S4.runners.length);
@@ -356,12 +374,11 @@ S.teams = [];
 assert('json: restore returns true', restoreState(JSON.parse(JSON.stringify(snap2))) === true);
 assert('json: restore rebuilds teams', S.teams.length === S4.teams.length && S.teams[0][0] && S.teams[0][0].nimi === S4.teams[0][0].nimi);
 assert('json: restore keeps klubi', S.klubi === 'Kajo Team', S.klubi);
-assert('json: restore keeps firstNum', S.firstNum === 7, String(S.firstNum));
 assert('json: restore keeps wSpeed', S.wSpeed === 0.4, String(S.wSpeed));
 assert('json: restore keeps toiveFirst', S.toiveFirst === false, String(S.toiveFirst));
-assert('json: restore keeps view prefs', S.showPool === true && S.poolSort === 'order' && S.showRules === true);
+assert('json: restore keeps view prefs', S.showPool === false && S.poolSort === 'order' && S.showRules === true);
 const csv2 = toCSV();
-assert('json: after restore club/number appear in CSV', csv2.includes('Kajo Team 1') && csv2.includes('"7"'), csv2.slice(0, 120));
+assert('json: after restore club/number appear in CSV', csv2.includes('Kajo Team 1') && csv2.includes('"1"'), csv2.slice(0, 120));
 
 // ── empty (null) slots survive round-trip ──
 const S5 = __S();
@@ -425,6 +442,21 @@ assert('regress25: team0 no runner lost', Se.teams[0].filter(Boolean).length ===
 assert('regress25: team1 front runner preserved', Se.teams[1][0] === team1Front, Se.teams[1][0] && Se.teams[1][0].nimi);
 assert('regress25: team1 stays 25/25', Se.teams[1].filter(Boolean).length === 25, String(Se.teams[1].filter(Boolean).length));
 assert('regress25: packed team0 valid on all slots', Se.teams[0].every((r, s) => !r || legEligible(r, __SLOTS()[s].osuus)));
+
+// ── live pool sync ──
+const Sf = __S();
+const teamsBefore = Sf.teams.length;
+getEl('poolText').value = Sf.runners.map(r => r.sarja + ':' + r.nimi + (r.toive ? ':' + r.toive : '')).join('\n');
+syncPool();
+assert('syncPool: unchanged text does not wipe teams', Sf.teams.length === teamsBefore, String(Sf.teams.length));
+getEl('poolText').value += '\nH21:Uusi Juoksija';
+syncPool();
+assert('syncPool: new line adds runner', Sf.runners.some(r => r.nimi === 'Uusi Juoksija'), String(Sf.runners.length));
+assert('syncPool: real change clears teams', Sf.teams.length === 0, String(Sf.teams.length));
+assert('syncPool: pool list back on when teams cleared', Sf.showPool === true, String(Sf.showPool));
+getEl('poolText').value = '';
+syncPool();
+assert('syncPool: cleared text empties pool', Sf.runners.length === 0 && Sf.teams.length === 0, String(Sf.runners.length));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
