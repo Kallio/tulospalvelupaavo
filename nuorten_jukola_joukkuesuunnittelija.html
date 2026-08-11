@@ -59,9 +59,9 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 .stp { width: 22px; height: 22px; padding: 0; border: 1px solid #334; border-radius: 4px; background: #0f3460; color: #7ec8e3; font-size: 13px; line-height: 1; cursor: pointer; }
 .stp-val { display: inline-block; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 
-#teamsWrap { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
+#teamsWrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; padding-bottom: 8px; }
 .team-col {
-  flex: 1 1 0; min-width: 250px; background: #fff; border: 1px solid #ccc;
+  min-width: 0; background: #fff; border: 1px solid #ccc;
   border-radius: 8px; overflow: hidden; font-size: 12px;
 }
 .team-hdr { color: #fff; padding: 8px 10px; }
@@ -255,8 +255,12 @@ function sarjaFromBirthYear(gender, year) {
   return (gender === 'N' ? 'D' : 'H') + num;
 }
 
-function parsePool(text) {
+// Palauttaa { runners, skipped }: tunnistamattomat sarjat (esim. liimatut
+// URLit, "http://...") ohitetaan sen sijaan, että niistä tehtäisiin
+// käyttökelvottomia "juoksijoita", jotka vain nostavat poolin koon.
+function parsePoolLines(text) {
   const out = [];
+  let skipped = 0;
   const seen = new Set();
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim();
@@ -278,14 +282,18 @@ function parsePool(text) {
       gender = g.gender; num = g.num;
       toive = parts[2] ? parseInt(parts[2], 10) : null;
     }
-    if (!nimi || !sarja) continue;
+    if (!nimi || !sarja || !gender || !num) { skipped++; continue; }
     const key = sarja + ':' + nimi;
     if (seen.has(key)) continue;
     seen.add(key);
     if (!Number.isInteger(toive) || toive < 1) toive = null;
     out.push({ nimi, sarja, gender, num, toive, nopeus: 0, luotettavuus: 0, kipea: false, locked: false });
   }
-  return out;
+  return { runners: out, skipped };
+}
+
+function parsePool(text) {
+  return parsePoolLines(text).runners;
 }
 
 // Osuuskohtainen kelpoisuus kilpailukutsun mukaisesti ("s. 20XX–" = syntynyt
@@ -513,7 +521,8 @@ function poolSignature(r) { return r.sarja + ':' + r.nimi + ':' + (r.toive || ''
 // tyhjennetä turhaan.
 function syncPool() {
   readInputs();
-  const runners = parsePool(S.poolText);
+  const parsed = parsePoolLines(S.poolText);
+  const runners = parsed.runners;
   const same = S.runners.length === runners.length &&
     S.runners.every((r, i) => poolSignature(r) === poolSignature(runners[i]));
   if (same) return;
@@ -523,16 +532,19 @@ function syncPool() {
   renderAll();
   autosave();
   if (!runners.length) showWarn('Pooli tyhjä — liitä juoksijoita (Sarja:Nimi) tai lataa tiedosto.');
+  else if (parsed.skipped) showWarn(`Ohitettiin ${parsed.skipped} riviä, joissa ei ollut tunnistettavaa sarjaa (oikea muoto: Sarja:Nimi tai Nimi:Vuosi:Sukupuoli).`);
 }
 
 function readPool() { syncPool(); }
 
 function generateAll() {
   readInputs();
-  const parsed = parsePool(S.poolText);
-  if (!parsed.length) { showError('Poolissa ei ollut yhtään juoksijaa.'); return; }
-  mergePoolState(parsed);
-  S.runners = parsed;
+  const parsed = parsePoolLines(S.poolText);
+  const parsedRunners = parsed.runners;
+  if (!parsedRunners.length) { showError('Poolissa ei ollut yhtään juoksijaa.'); return; }
+  if (parsed.skipped) showWarn(`Ohitettiin ${parsed.skipped} riviä, joissa ei ollut tunnistettavaa sarjaa.`);
+  mergePoolState(parsedRunners);
+  S.runners = parsedRunners;
   const N = Math.floor(S.runners.length / 7);
   if (N < 1) { showError('Tarvitaan vähintään 7 juoksijaa.'); return; }
   const res = generateTeams(S.runners, N);

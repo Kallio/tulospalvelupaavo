@@ -97,6 +97,17 @@ assert('sarjaByYear: optional toive part', parsePool(`Virtanen Aino:${YY - 13}:N
 assert('sarjaByYear: sarja:nimi format unchanged', parsePool('D14:Pesonen Aino')[0].sarja === 'D14' && parsePool('D14:Pesonen Aino')[0].toive === null);
 assert('sarjaByYear: empty sarja still skipped', parsePool(':Nimi').length === 0);
 
+// ── input sanitisation: garbage lines (URLs, unknown sarja) must not become runners ──
+assert('sanitize: http:// alone → nothing', parsePool('http://').length === 0, JSON.stringify(parsePool('http://')));
+assert('sanitize: http://foo → nothing', parsePool('http://foo').length === 0);
+assert('sanitize: https://x.y/z → nothing', parsePool('https://x.y/z').length === 0);
+assert('sanitize: http:foo → nothing', parsePool('http:foo').length === 0);
+assert('sanitize: foo:bar unknown sarja → nothing', parsePool('foo:bar').length === 0);
+assert('sanitize: mixed garbage + valid keeps valid only', parsePool('http://\nD14:Virtanen Aino\nfoo:bar').length === 1, JSON.stringify(parsePool('http://\nD14:Virtanen Aino\nfoo:bar')));
+assert('sanitize: parsePoolLines counts skipped', parsePoolLines('http://\nfoo:bar\nD14:Virtanen Aino').skipped === 2, String(parsePoolLines('http://\nfoo:bar\nD14:Virtanen Aino').skipped));
+assert('sanitize: adult sarja still accepted', parsePool('H21:Pesonen Antti').length === 1);
+assert('sanitize: birth-year line still accepted', parsePool(`Virtanen Matti:${YY - 14}:M`).length === 1);
+
 // ── legEligible: floor model ("s. 20XX–" = syntynyt mainittuna tai sen jälkeen) ──
 const D12 = parsePool('D12:X')[0], H12 = parsePool('H12:X')[0],
       D14 = parsePool('D14:X')[0], H14 = parsePool('H14:X')[0],
@@ -424,6 +435,31 @@ syncPool();
 assert('syncPool: new line adds runner', Sf.runners.some(r => r.nimi === 'Uusi Juoksija'), String(Sf.runners.length));
 assert('syncPool: real change clears teams', Sf.teams.length === 0, String(Sf.teams.length));
 assert('syncPool: pool list back on when teams cleared', Sf.showPool === true, String(Sf.showPool));
+getEl('poolText').value = 'http://\nD14:Virtanen Aino\nfoo:bar\nD14:Niemi Elsa';
+syncPool();
+assert('syncPool: garbage skipped, valid parsed', Sf.runners.length === 2, String(Sf.runners.length));
+assert('syncPool: skipped lines warned in status bar', getEl('statusBar').innerHTML.includes('Ohitettiin 2 riviä'), getEl('statusBar').innerHTML.slice(0, 140));
+Sf.runners = [];
+Sf.teams = [];
+
+// ── grid layout: all teams render, no nav ──
+const Sp = __S();
+Math.random = mulberry32(11);
+loadExamplePool(35);
+Math.random = origRandom;
+const gen5 = generateTeams(Sp.runners, 5);
+Sp.teams = gen5.teams;
+Sp.showPool = false;
+renderAll();
+const teamCols = () => (getEl('teamsWrap').innerHTML.match(/class="team-col"/g) || []).length;
+assert('grid: all 5 teams rendered at once', teamCols() === 5, String(teamCols()));
+assert('grid: no pagination nav in markup', !html.includes('teamsNav') && !html.includes('teamsPage') && !html.includes('teamsPrev'), 'nav remnants found');
+Sp.teams = gen5.teams.slice(0, 3);
+renderTeams();
+assert('grid: exactly 3 teams fills one row', teamCols() === 3, String(teamCols()));
+Sp.teams = [];
+renderTeams();
+assert('grid: empty state shows placeholder', getEl('teamsWrap').innerHTML.includes('Generoi joukkuelistat'), getEl('teamsWrap').innerHTML.slice(0, 80));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
