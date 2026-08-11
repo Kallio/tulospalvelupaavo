@@ -337,8 +337,11 @@ setSick(S7.runners.indexOf(sickB), true);
 fillGaps();
 assert('regress: all teams front-packed (os15 reservation exempt)', S7.teams.every(frontPacked), JSON.stringify(S7.teams.map(t => t.map(x => x ? 1 : 0).join(''))));
 assert('regress: avoin team first legs filled', S7.teams[2][0] && S7.teams[2][1], S7.teams[2].map(x => x && x.nimi).slice(0, 2).join(','));
-assert('regress: kilpa gap filled via relaxed steal from avoin', S7.teams[0].filter(Boolean).length === 15, String(S7.teams[0].filter(Boolean).length));
-assert('regress: avoin valid except count after lending a runner', S7.teams[2].filter(Boolean).length === 14 && validateTeam(S7.teams[2], slots, 'avoin').every(e => /^keskeneräinen/.test(e)), validateTeam(S7.teams[2], slots, 'avoin').join(';'));
+assert('regress: kilpa gap filled via relaxed steal from later team', S7.teams[0].filter(Boolean).length === 15, String(S7.teams[0].filter(Boolean).length));
+assert('regress: first kilpa team complete and valid', validateTeam(S7.teams[0], slots, 'kilpa').length === 0, validateTeam(S7.teams[0], slots, 'kilpa').join(';'));
+assert('regress: avoin team untouched and complete', S7.teams[2].filter(Boolean).length === 15 && validateTeam(S7.teams[2], slots, 'avoin').length === 0, validateTeam(S7.teams[2], slots, 'avoin').join(';'));
+assert('regress: lending kilpa team partial (13/15)', S7.teams[1].filter(Boolean).length === 13 && validateTeam(S7.teams[1], slots, 'kilpa').every(e => /^keskeneräinen/.test(e)), validateTeam(S7.teams[1], slots, 'kilpa').join(';'));
+assert('regress: all runners distinct', new Set(S7.teams.flat().filter(Boolean)).size === 43, String(new Set(S7.teams.flat().filter(Boolean)).size));
 assert('regress: kilpa teams keep their 5+ women', S7.teams.slice(0, S7.kilpaCount).every(t => validateTeam(t, slots, 'kilpa').every(p => !p.includes('naisia 4/5'))));
 
 // ── example pools ──
@@ -399,6 +402,46 @@ getEl('poolText').value = new Array(15).fill('H21').map((s, i) => s + ':Mies' + 
 generateAll();
 assert('err: no formable team → teams cleared', __S().teams.length === 0, String(__S().teams.length));
 assert('err: infeasible message shown', /ei voitu muodostaa/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+
+// ── cascade regression (25-manna (6b) -vastine): joukkuussa 0 on KAKSI aukkoa
+//    ja piilopuutos (osuudet 2-5: -H13/H65- 1/2), poolissa ei ole terveitä
+//    varamiehiä. Yhden ryöstön kerrallaan validointi ei korjaa joukkuetta 0;
+//    peräkkäisryöstö täyttää molemmat aukot (ensimmäinen lisää tarvitun H65:n)
+//    ja joukkuu 0 tulee validiksi 15/15, joukkuu 1 jää vajaaksi. ──
+const CASC_POOL = [
+  'H50:Virtanen Matti', 'D21:Laine Katri', 'D21:Pesonen Mari', 'H21:Nurmi Kalle', 'D16:Aho Eeva',
+  'H16:Salmi Jussi', 'H65:Heikkinen Unto', 'D20:Hakala Tuula', 'H21:Lehtonen Pekka', 'H55:Mäkelä Arvo',
+  'D18:Järvinen Satu', 'H18:Virtanen Juha', 'D45:Toivonen Lea',
+  'H65:Heikkinen Olavi', 'D16:Nurmi Ulla', 'H21:Hakala Heikki', 'H21:Salmi Olli', 'H21:Laine Aarne',
+  'D14:Pesonen Riitta', 'H21:Kivelä Tauno', 'H13:Aho Mikko', 'D18:Järvinen Anja', 'D20:Toivonen Sirpa',
+  'H55:Mäkelä Reino', 'H16:Virtanen Saku', 'H65:Heikkinen Paavo', 'H18:Laine Jorma', 'D45:Hakala Kaarina',
+].join('\n');
+const CASC_TEAMS = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, null, null, 12],
+  [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27],
+];
+function loadCasc() {
+  const runners = parsePool(CASC_POOL);
+  const st = __S();
+  st.runners = runners;
+  st.kilpaCount = 2;
+  st.teams = CASC_TEAMS.map(t => t.map(i => (Number.isInteger(i) && runners[i]) ? runners[i] : null));
+  return st;
+}
+const Sc = loadCasc();
+assert('casc: initial state (13/15 + 15/15)', Sc.teams[0].filter(Boolean).length === 13 && Sc.teams[1].filter(Boolean).length === 15);
+assert('casc: no healthy spares in pool', Sc.runners.filter(r => !r.kipea && !Sc.teams.some(t => t.includes(r))).length === 0);
+fillGaps();
+assert('casc fillGaps: team0 complete 15/15', Sc.teams[0].filter(Boolean).length === 15, String(Sc.teams[0].filter(Boolean).length));
+assert('casc fillGaps: team0 valid (hidden catE fixed)', validateTeam(Sc.teams[0], slots, 'kilpa').length === 0, validateTeam(Sc.teams[0], slots, 'kilpa').join(';'));
+assert('casc fillGaps: source team partial (13/15)', Sc.teams[1].filter(Boolean).length === 13 && validateTeam(Sc.teams[1], slots, 'kilpa').every(e => /^keskeneräinen/.test(e)), validateTeam(Sc.teams[1], slots, 'kilpa').join(';'));
+assert('casc fillGaps: all runners distinct', new Set(Sc.teams.flat().filter(Boolean)).size === 28, String(new Set(Sc.teams.flat().filter(Boolean)).size));
+assert('casc fillGaps: feedback shows filled count', /Täytettiin/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+const Scc = loadCasc();
+optimize();
+assert('casc optimize: team0 complete and valid', Scc.teams[0].filter(Boolean).length === 15 && validateTeam(Scc.teams[0], slots, 'kilpa').length === 0, validateTeam(Scc.teams[0], slots, 'kilpa').join(';'));
+assert('casc optimize: source team partial (13/15)', Scc.teams[1].filter(Boolean).length === 13, String(Scc.teams[1].filter(Boolean).length));
+assert('casc optimize: feedback shows Optimoidu', getEl('statusBar').innerHTML.includes('Optimoitu'), getEl('statusBar').innerHTML.slice(0, 160));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

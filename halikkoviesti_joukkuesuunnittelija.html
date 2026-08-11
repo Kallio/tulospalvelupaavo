@@ -509,6 +509,7 @@ function optimizePasses() {
 
 function optimize() {
   if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
+  if (S.teams.some(t => validateTeam(t, SLOTS, teamMode(S.teams.indexOf(t))).length !== 0)) repairTeamGaps();
   optimizePasses();
   renderAll();
   autosave();
@@ -714,11 +715,16 @@ function removeFromTeam(teamIdx, slotIdx) {
 // jos poolista ei löydy kelvollista, lainaa myöhemmästä joukkeesta vain silloin,
 // kun tämän aukko voidaan täyttää poolista (eikä toista joukkuetta jätetä vajaaksi).
 // Lopuksi vajaiden joukkeiden juoksijat pakataan ensimmäisiltä osuuksilta alkaen.
-function fillGaps() {
-  if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
+// Täyttää aukot aikaisimmista joukkeista alkaen. Käyttää ensin varamiehiä
+// (pooli); kun poolissa ei ole kelvollista juoksijaa, ryöstää takaperin
+// myöhemmistä joukkeista niin, että aikaisin joukkuu valmistuu (sen aukot
+// siirtyvät myöhempiin joukkeisiin, joiden aukot täyttyvät vuorostaan omista
+// myöhemmistä joukkeistaan). Lopuksi vajaiden joukkeiden juoksijat pakataan
+// ensimmäisille osuuksille.
+function repairTeamGaps() {
   const N = S.teams.length;
+  if (!N) return 0;
   let filled = 0;
-
   for (let t = 0; t < N; t++) {
     for (let s = 0; s < 15; s++) {
       if (S.teams[t][s]) continue;
@@ -730,39 +736,71 @@ function fillGaps() {
     }
   }
   updatePoolFromTeams();
-
-  for (let t = 0; t < N; t++) {
-    for (let s = 0; s < 15; s++) {
-      if (S.teams[t][s]) continue;
-      const osuus = SLOTS[s].osuus;
-      for (let j = t + 1; j < N && !S.teams[t][s]; j++) {
-        const tj = S.teams[j];
-        const modeJ = teamMode(j);
-        for (let sj = 0; sj < 15; sj++) {
-          const r = tj[sj];
-          if (!r || r.kipea || !legEligible(r, osuus, teamMode(t))) continue;
-          const srcFull = tj.filter(Boolean).length === 15;
-          tj[sj] = null;
-          S.teams[t][s] = r;
-          if (validateTeam(S.teams[t], SLOTS, teamMode(t)).length === 0) {
-            const pNow = unassignedRunners();
-            const pc = pNow.filter(p => !p.kipea && legEligible(p, SLOTS[sj].osuus, modeJ));
-            if (pc.length) {
-              pc.sort((a, b) => (b.toive === j + 1) - (a.toive === j + 1) || strengthOf(b) - strengthOf(a));
-              tj[sj] = pc[0];
-              if (validateTeam(tj, SLOTS, modeJ).length === 0) { filled++; break; }
-            }
-            tj[sj] = null;
-            if (srcFull && validateTeam(tj, SLOTS, modeJ).every(e => /^keskeneräinen/.test(e))) { filled++; break; }
-          }
-          tj[sj] = r;
-          S.teams[t][s] = null;
-        }
-      }
-    }
-  }
+  for (let t = 0; t < N; t++) filled += cascadeFillTeam(t);
   updatePoolFromTeams();
   packIncompleteTeams();
+  return filled;
+}
+
+// Täyttää joukkeen t kaikki aukot: jos poolissa ei ole kelvollista varamiestä,
+// ryöstää kelvollisen juoksijan myöhemmästä joukkeesta mieluiten sellaisesta,
+// jonka aukko voidaan paikata poolista (jolloin lähde pysyy täytenä). Joukkuu
+// t validoidaan vasta kun kaikki sen aukot on käsitelty; epäonnistuessa kaikki
+// joukkeen t vuoksi tehdyt muutokset perutaan, joten muut joukkueet säilyvät.
+function cascadeFillTeam(t) {
+  const team = S.teams[t];
+  if (!team.some(x => !x)) return 0;
+  const N = S.teams.length;
+  let filled = 0;
+  const journal = [];
+  for (let s = 0; s < 15; s++) {
+    if (team[s]) continue;
+    const osuus = SLOTS[s].osuus;
+    const pool = unassignedRunners().filter(r => !r.kipea && legEligible(r, osuus, teamMode(t)));
+    if (pool.length) {
+      pool.sort((a, b) => (b.toive === t + 1) - (a.toive === t + 1) || strengthOf(b) - strengthOf(a));
+      team[s] = pool[0];
+      journal.push([t, s, null, pool[0]]);
+      filled++;
+      continue;
+    }
+    let best = null, bestRefill = false;
+    for (let j = t + 1; j < N; j++) {
+      const tj = S.teams[j];
+      const modeJ = teamMode(j);
+      for (let sj = 0; sj < 15; sj++) {
+        const r = tj[sj];
+        if (!r || r.kipea || !legEligible(r, osuus, teamMode(t))) continue;
+        const refillable = unassignedRunners().some(p => !p.kipea && legEligible(p, SLOTS[sj].osuus, modeJ));
+        if (!best || (refillable && !bestRefill)) { best = { j, sj, r, refillable }; bestRefill = refillable; }
+      }
+    }
+    if (!best) break;
+    team[s] = best.r;
+    journal.push([t, s, null, best.r]);
+    S.teams[best.j][best.sj] = null;
+    journal.push([best.j, best.sj, best.r, null]);
+    if (best.refillable) {
+      const pc = unassignedRunners().filter(p => !p.kipea && legEligible(p, SLOTS[best.sj].osuus, teamMode(best.j)));
+      pc.sort((a, b) => (b.toive === best.j + 1) - (a.toive === best.j + 1) || strengthOf(b) - strengthOf(a));
+      S.teams[best.j][best.sj] = pc[0];
+      journal.push([best.j, best.sj, null, pc[0]]);
+    }
+    filled++;
+  }
+  if (validateTeam(team, SLOTS, teamMode(t)).length !== 0) {
+    for (let k = journal.length - 1; k >= 0; k--) {
+      const [ti, si, before] = journal[k];
+      S.teams[ti][si] = before;
+    }
+    return 0;
+  }
+  return filled;
+}
+
+function fillGaps() {
+  if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
+  const filled = repairTeamGaps();
   renderAll();
   autosave();
   const gaps = S.teams.reduce((n, tm) => n + tm.filter(x => !x).length, 0);

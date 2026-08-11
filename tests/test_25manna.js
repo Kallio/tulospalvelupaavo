@@ -136,6 +136,18 @@ assert('gen 62: leftovers 12', g2.leftovers.length === 12, String(g2.leftovers.l
 assert('gen 62: no runner appears twice', new Set(g2.teams.flat().map(r => r.nimi)).size === 50);
 assert('gen 62: each team 25 runners', g2.teams.every(t => t.filter(Boolean).length === 25));
 
+// ── surplus H21 in pool must not block generation (≤8 H21 per team, the
+//    extra H21 runners stay as spares) ──
+const POOL_33H21 = buildPool([
+  ['D21', 9], ['D16', 1], ['D18', 1], ['D45', 1], ['D20', 1],
+  ['H21', 13], ['H14', 2], ['H16', 2], ['H60', 2], ['H50', 1],
+]);
+const g33 = generateTeams(parsePool(POOL_33H21), 1);
+assert('h21 surplus: 1 team generated', g33.count === 1 && g33.teams.length === 1, JSON.stringify(g33));
+assert('h21 surplus: team valid', validateTeam(g33.teams[0], slots).length === 0, validateTeam(g33.teams[0], slots).join(';'));
+assert('h21 surplus: team has ≤8 H21', g33.teams[0].filter(r => r && r.sarja === 'H21').length <= 8, String(g33.teams[0].filter(r => r && r.sarja === 'H21').length));
+assert('h21 surplus: surplus H21 left as spares', g33.leftovers.filter(r => r.sarja === 'H21').length >= 5, String(g33.leftovers.filter(r => r.sarja === 'H21').length));
+
 // ── pref-first ordering ──
 const poolPref = POOL_62.split('\n').map(l => (/^D21:D21-[0-2]$/.test(l) ? l + ':1' : l)).join('\n');
 const gp = generateTeams(parsePool(poolPref), 2);
@@ -490,6 +502,42 @@ assert('syncPool: pool list back on when teams cleared', Sf.showPool === true, S
 getEl('poolText').value = '';
 syncPool();
 assert('syncPool: cleared text empties pool', Sf.runners.length === 0 && Sf.teams.length === 0, String(Sf.runners.length));
+
+// ── regression: 25manna_suunnitelma(6b) — broken 2-team state with no healthy
+//    spares (team1 23/25 with 2 gaps, team2 24/25) must be repaired so at least
+//    team1 becomes complete and valid; teams stay as-is otherwise ──
+const POOL_6B = "H21:Pesonen Antti\nH21:Salminen Jouni:1\nH21:Heinonen Kalle:2\nH21:Laine Paavo:2\nD21:Korhonen Elina\nD21:Nurmi Katariina\nD21:Mäkelä Emma:2\nD21:Aaltonen Suvi:3\nH16:Kivelä Teemu\nH16:Aaltonen Teemu\nH14:Heinonen Ville\nH14:Laine Ville:3\nD16:Nieminen Lotta\nD16:Lehtonen Aino\nD18:Ranta Karoliina\nD18:Salmi Elina\nH50:Heinonen Jouni:3\nH50:Salmi Seppo\nH60:Salmi Petri\nH60:Koskela Kaapo\nD40:Toivonen Karoliina\nD40:Järvinen Outi\nH18:Koskela Niilo\nH18:Järvinen Lauri:2\nD20:Korhonen Anni\nD20:Aaltonen Maija\nH55:Aaltonen Jouni:2\nH55:Toivonen Seppo\nH35:Mäkelä Pasi:1\nH35:Miettinen Eino\nD35:Nurmi Anni\nD35:Ranta Päivi:3\nH45:Ranta Kaapo\nH45:Salmi Lauri:1\nD45:Hakala Maija\nD45:Heikkinen Suvi\nH20:Miettinen Ville\nH20:Korhonen Olli\nD21:Aaltonen Sanna\nH21:Kivelä Aapo:3\nD21:Mäkelä Outi:3\nH21:Nieminen Sami:2\nD21:Järvinen Sanna\nH21:Järvinen Antti\nH21:Ranta Ville:2\nD21:Nieminen Pauliina\nD21:Lehtonen Outi\nH21:Aaltonen Paavo\nH21:Korhonen Esa\nH21:Järvinen Vesa\nH21:Heikkinen Seppo\nD21:Ranta Aino\nH21:Ranta Seppo\nH21:Aho Jari\nD21:Laine Riikka";
+const SICK_6B = ['Korhonen Elina', 'Kivelä Teemu', 'Ranta Karoliina', 'Salmi Seppo', 'Aaltonen Maija', 'Miettinen Ville', 'Nieminen Pauliina', 'Aaltonen Paavo'];
+const TEAMS_6B = [
+  [5, 1, 16, 9, 10, 11, 18, 12, 35, null, 28, 33, 0, 22, 40, 51, 7, 31, 29, 53, 39, 52, 21, null, 49],
+  [6, 2, 27, 26, 19, 42, 13, 15, 34, null, 3, 23, 41, 44, 46, 54, 30, 38, 32, 37, 43, 48, 20, 24, 50],
+];
+function load6b() {
+  const runners = parsePool(POOL_6B);
+  runners.forEach(r => { if (SICK_6B.includes(r.nimi)) r.kipea = true; });
+  const st = __S();
+  st.runners = runners;
+  st.teams = TEAMS_6B.map(t => t.map(i => (Number.isInteger(i) && runners[i]) ? runners[i] : null));
+  return st;
+}
+const g6b = generateTeams(parsePool(POOL_6B).map(r => (SICK_6B.includes(r.nimi) ? Object.assign(r, { kipea: true }) : r)), 2);
+assert('6b generateTeams: exactly 1 team generated', g6b.count === 1 && g6b.teams.length === 1, JSON.stringify(g6b));
+assert('6b generateTeams: team valid', validateTeam(g6b.teams[0], slots).length === 0, validateTeam(g6b.teams[0], slots).join(';'));
+const Stb = load6b();
+assert('6b: initial state broken (23/25 + 24/25)', Stb.teams[0].filter(Boolean).length === 23 && Stb.teams[1].filter(Boolean).length === 24);
+assert('6b: no healthy spares in pool', Stb.runners.filter(r => !r.kipea && !Stb.teams.some(t => t.includes(r))).length === 0);
+fillGaps();
+assert('6b fillGaps: team1 complete 25/25', Stb.teams[0].filter(Boolean).length === 25, String(Stb.teams[0].filter(Boolean).length));
+assert('6b fillGaps: team1 valid', validateTeam(Stb.teams[0], slots).length === 0, validateTeam(Stb.teams[0], slots).join(';'));
+assert('6b fillGaps: still 2 teams', Stb.teams.length === 2, String(Stb.teams.length));
+assert('6b fillGaps: team2 partial (22/25)', Stb.teams[1].filter(Boolean).length === 22, String(Stb.teams[1].filter(Boolean).length));
+assert('6b fillGaps: all runners distinct', new Set(Stb.teams.flat().filter(Boolean)).size === 47, String(new Set(Stb.teams.flat().filter(Boolean)).size));
+assert('6b fillGaps: feedback shows filled count', /Täytettiin/.test(getEl('statusBar').innerHTML), getEl('statusBar').innerHTML.slice(0, 160));
+const Sotb = load6b();
+optimize();
+assert('6b optimize: team1 complete and valid', Sotb.teams[0].filter(Boolean).length === 25 && validateTeam(Sotb.teams[0], slots).length === 0, validateTeam(Sotb.teams[0], slots).join(';'));
+assert('6b optimize: still 2 teams', Sotb.teams.length === 2, String(Sotb.teams.length));
+assert('6b optimize: feedback shows Optimoidu', getEl('statusBar').innerHTML.includes('Optimoitu'), getEl('statusBar').innerHTML.slice(0, 160));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
