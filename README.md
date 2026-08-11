@@ -51,6 +51,19 @@ via the browser, and JSON save/load with `localStorage` autosave. 25-manna
 eligibility rules (women-only legs, restricted age/gender legs 3–10/23, ≥9 men
 with ≥1 H≤16, ≥9 women with ≥1 D≤16, ≤8 H21) are built in.
 
+### [`nuorten_jukola_joukkuesuunnittelija.html`](nuorten_jukola_joukkuesuunnittelija.html)
+Nuorten Jukola team planner. Reads a runner pool (`Sarja:Nimi`, optional team
+wish as a third field) and generates as many valid 7-runner teams as fit,
+optimising strength distribution (team 1 strongest) and honouring team wishes.
+The 2026 Nuorten Jukola profile is built in: 7 legs with per-leg age/gender
+restrictions (D16/H-D16 os. 1–2, H/D14 os. 3–5, D18/H-D18 os. 6–7; "s. 20XX–"
+means born that year or later, so younger runners qualify for older legs, and
+os. 1/4/6 are women-only). Supports drag-and-drop adjustment, sick-runner
+auto-replacement (with cascade steal from later teams), per-runner scores and
+team wishes, Navisport start-list CSV export (7 blocks matching the Rastilippu
+converter), JSON save/load and `localStorage` autosave, plus built-in example
+pools of 21/28/35 runners.
+
 ### [`halikkoviesti_joukkuesuunnittelija.html`](halikkoviesti_joukkuesuunnittelija.html)
 Halikko-viesti team planner. Reads a runner pool (`Sarja:Nimi`, optional team
 wish as a third field) and automatically splits the runners into as many valid
