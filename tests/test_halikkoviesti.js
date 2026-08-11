@@ -483,5 +483,62 @@ assert('casc optimize: team0 complete and valid', Scc.teams[0].filter(Boolean).l
 assert('casc optimize: source team partial (13/15)', Scc.teams[1].filter(Boolean).length === 13, String(Scc.teams[1].filter(Boolean).length));
 assert('casc optimize: feedback shows Optimoidu', getEl('statusBar').innerHTML.includes('Optimoitu'), getEl('statusBar').innerHTML.slice(0, 160));
 
+// ── XSS / CSV-injection: user input must never become live markup or formulas ──
+assert('xss: esc neutralizes angle-bracket payload', esc('<img src=x onerror=alert(1)>') === '&lt;img src=x onerror=alert(1)&gt;');
+assert('xss: esc neutralizes quote/script payload', esc('"><script>alert(1)</script>') === '&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+assert('xss: esc escapes single quote', esc("It's") === 'It&#39;s');
+assert('xss: esc & ordering avoids double-escape', esc('&') === '&amp;' && esc('&lt;') === '&amp;lt;');
+
+const XSS_NM = 'Virtanen<img src=x onerror=alert(1)>';
+const XSS_MALE = 'Niemi"><script>alert(1)</script>';
+const XSS_SR = 'H21"><svg onload=alert(1)>';
+const POOL_XSS = mixedPool(2, 1)
+  .replace(/^H21:H21-m-\d+$/m, 'H21:' + XSS_MALE)
+  .replace(/^D21:D21-m-\d+$/m, 'D21:' + XSS_NM)
+  .replace(/^H16:H16-m-\d+$/m, XSS_SR + ':X');
+const Sx = __S();
+getEl('poolText').value = POOL_XSS;
+generateAll();
+const pPool = getEl('poolWrap').innerHTML;
+assert('xss: teams generated', Sx.teams.length === 3, String(Sx.teams.length));
+assert('xss: pool accepts payload names', Sx.runners.some(r => r.nimi === XSS_NM) && Sx.runners.some(r => r.nimi === XSS_MALE) && Sx.runners.some(r => r.sarja === XSS_SR), Sx.runners.map(r => r.sarja + ':' + r.nimi).join('|'));
+assert('xss: pool table name escaped', pPool.includes('&lt;img src=x onerror=alert(1)&gt;') && !pPool.includes('<img'), pPool.slice(0, 220));
+assert('xss: payload sarja escaped in table', pPool.includes('&lt;svg onload=alert(1)&gt;') && !pPool.includes('<svg'), pPool.slice(0, 220));
+assert('xss: statusBar no raw markup', !getEl('statusBar').innerHTML.includes('<img') && !getEl('statusBar').innerHTML.includes('<svg'), getEl('statusBar').innerHTML.slice(0, 160));
+
+const xr = Sx.runners.find(r => r.nimi === XSS_NM);
+Sx.teams[0][0] = xr;
+renderAll();
+assert('xss: team slot name escaped', getEl('teamsWrap').innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;') && !getEl('teamsWrap').innerHTML.includes('<img'), getEl('teamsWrap').innerHTML.slice(0, 220));
+const xssMale = Sx.runners.find(r => r.nimi === XSS_MALE);
+const xssOrig0 = Sx.teams[0][0];
+Sx.teams[0][0] = xssMale;
+renderStatus();
+assert('xss: validateTeam problem line escaped', getEl('statusBar').innerHTML.includes('&lt;script&gt;') && !getEl('statusBar').innerHTML.includes('<script'), getEl('statusBar').innerHTML.slice(0, 200));
+Sx.teams[0][0] = xssOrig0;
+
+const XSS_EXTRA = { nimi: 'Extra<img src=x onerror=alert(2)>', sarja: 'H21', gender: 'M', num: 21, toive: null, nopeus: 0, luotettavuus: 0, kipea: false, locked: false };
+Sx.runners.push(XSS_EXTRA);
+renderChips();
+assert('xss: reserve chips escaped', getEl('chipsWrap').innerHTML.includes('&lt;img') && !getEl('chipsWrap').innerHTML.includes('<img'), getEl('chipsWrap').innerHTML.slice(0, 160));
+showWarn('Varoitus <img src=x onerror=alert(3)>');
+assert('xss: showWarn escaped', getEl('statusBar').innerHTML.includes('&lt;img') && !getEl('statusBar').innerHTML.includes('<img'), getEl('statusBar').innerHTML.slice(0, 120));
+
+const t0 = Sx.teams[0];
+t0[0].nimi = '=HYPERLINK("http://evil",1)';
+t0[1].nimi = '+SUM(1,1)';
+t0[2].nimi = '@cmd|calc!A1';
+t0[4].nimi = 'Aho "Kurre" Kalle';
+Sx.klubi = '+SUM(1,1)';
+const xssCsv = toCSV();
+const xssRows = parseCSV(xssCsv, ',');
+const xssR = xssRows[1];
+assert('csv-inj: = name guarded', xssR[6].startsWith("'="), xssR[6]);
+assert('csv-inj: + name guarded', xssR[14].startsWith("'+"), xssR[14]);
+assert('csv-inj: @ name guarded', xssR[22].startsWith("'@"), xssR[22]);
+assert('csv-inj: klubi guarded', xssR[4].startsWith("'+"), xssR[4]);
+assert('csv-inj: plain quote name still round-trips', xssR[38] === 'Aho "Kurre" Kalle', xssR[38]);
+assert('csv-inj: guarded cells still valid CSV (row width)', xssRows[1].length === 125, String(xssRows[1].length));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

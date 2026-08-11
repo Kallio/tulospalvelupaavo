@@ -811,6 +811,10 @@ const S = { runners: [], teams: [], klubi: 'Espoon Suunta', firstNum: 1, wSpeed:
 
 function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
 
+// CSV-tahrainjektio: solu, joka alkaa laskentakaava-merkillä (=, +, -, @),
+// estetään Excel/LibreOffice-tulkintaa vastaan etuliitteellä '.
+function csvCell(v) { const s = String(v); return /^[=+\-@]/.test(s) ? q("'" + s) : q(s); }
+
 function toCSV() {
   if (!S.teams.length) return '';
   const base = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'];
@@ -822,11 +826,11 @@ function toCSV() {
   }
   const lines = [header.join(',')];
   S.teams.forEach((team, ti) => {
-    const cells = [q(String(S.firstNum + ti)), q('Nuorten Jukola'), q(`${S.klubi} ${ti + 1}`), q('FIN'), q(S.klubi)];
+    const cells = [q(String(S.firstNum + ti)), q('Nuorten Jukola'), csvCell(`${S.klubi} ${ti + 1}`), q('FIN'), csvCell(S.klubi)];
     for (let s = 0; s < 7; s++) {
       const r = team[s];
       cells.push(q(' '.repeat(s + 1)));
-      cells.push(q(r ? r.nimi : ''), q(''), q(''), q(String(SLOTS[s].osuus)), q(SLOTS[s].alaosuus), q(SLOTS[s].rata), q(''));
+      cells.push(csvCell(r ? r.nimi : ''), q(''), q(''), q(String(SLOTS[s].osuus)), q(SLOTS[s].alaosuus), q(SLOTS[s].rata), q(''));
     }
     lines.push(cells.join(','));
   });
@@ -905,7 +909,7 @@ function resetAll() {
   renderAll();
 }
 
-function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 function genderLabel(r) {
   if (!r.gender) return '?';
