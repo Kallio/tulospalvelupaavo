@@ -2,10 +2,7 @@
 
 [English](README.md) · **Suomi**
 
-**Tulospalvelupaavo** on kokoelma työkaluja — vain kasvava laatikko apuvälineitä, jotka
-laajentavat sitä, mitä Navisport tarjoaa, ja tekevät datasta yhtä helposti
-saavutettavaa järjestäjille, lähettäjille ja osallistujille. Jotkin ovat täysiä
-HTML-sovelluksia, toiset nopeita kertakäyttöskriptejä.
+**Tulospalvelupaavo** Tulospalvelupaavo on kokoelma työkaluja – ikään kuin kasvava työkalupakki, joka laajentaa tulospalvelun, kuten Navisport, ominaisuuksia ja näkymiä tulospalvelun toteutukseen, streamaukseen sekä osallistujille. Osa työkaluista on täysimittaisia HTML‑sovelluksia, toiset taas nopeita kertakäyttöscriptejä.
 ---
 
 ## Päätyökalut
