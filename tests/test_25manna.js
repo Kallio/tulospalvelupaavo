@@ -87,6 +87,20 @@ assert('parseSarja: D16 → N/16', JSON.stringify(parseSarja('D16')) === '{"gend
 assert('parseSarja: H-50 with dash → M/50', JSON.stringify(parseSarja('H-50')) === '{"gender":"M","num":50}');
 assert('parseSarja: junk → null/null', JSON.stringify(parseSarja('Foo')) === '{"gender":null,"num":null}');
 
+// ── birth-year input "Suku- ja etunimi:Vuosi:Sukupuoli[:Toive]" → sarja ──
+const YY = new Date().getFullYear();
+assert('sarjaByYear: 27v M → H21', parsePool(`Virtanen Matti:${YY - 27}:M`)[0].sarja === 'H21');
+assert('sarjaByYear: 27v M → gender/num', JSON.stringify(parsePool(`Virtanen Matti:${YY - 27}:M`)[0].gender) === '"M"' && parsePool(`Virtanen Matti:${YY - 27}:M`)[0].num === 21);
+assert('sarjaByYear: 13v N → D14', parsePool(`Korhonen Elina:${YY - 13}:N`)[0].sarja === 'D14');
+assert('sarjaByYear: 35v M → H35', parsePool(`Lehtonen Juha:${YY - 35}:M`)[0].sarja === 'H35');
+assert('sarjaByYear: 60v N → D60', parsePool(`Mäkelä Anna:${YY - 60}:N`)[0].sarja === 'D60');
+assert('sarjaByYear: 75v M → H75', parsePool(`Salmi Ahti:${YY - 78}:M`)[0].sarja === 'H75');
+assert('sarjaByYear: gender alias H/N/Mies/Nainen', parsePool(`A:${YY - 27}:H`)[0].gender === 'M' && parsePool(`B:${YY - 27}:N`)[0].gender === 'N' && parsePool(`C:${YY - 27}:Mies`)[0].gender === 'M' && parsePool(`D:${YY - 27}:Nainen`)[0].gender === 'N');
+assert('sarjaByYear: optional toive part', parsePool(`Virtanen Matti:${YY - 27}:M:2`)[0].toive === 2);
+assert('sarjaByYear: old sarja:nimi format unchanged', parsePool('H21:Pesonen Antti')[0].sarja === 'H21' && parsePool('H21:Pesonen Antti')[0].toive === null);
+assert('sarjaByYear: derived key dedups with explicit sarja', parsePool(`H21:Virtanen Matti\nVirtanen Matti:${YY - 27}:M`).length === 1);
+assert('sarjaByYear: empty sarja still skipped', parsePool(':Nimi').length === 0);
+
 // ── legEligible ──
 const M21 = parsePool('H21:X')[0], M16 = parsePool('H16:X')[0], M14 = parsePool('H14:X')[0],
       M50 = parsePool('H50:X')[0], M60 = parsePool('H60:X')[0], M55 = parsePool('H55:X')[0], M35 = parsePool('H35:X')[0];
@@ -357,6 +371,32 @@ S.poolSort = 'order'; S.poolDir = 1;
 restoreState(JSON.parse(JSON.stringify(snapSort)));
 assert('sort: poolSort/poolDir restored', S.poolSort === 'toive' && S.poolDir === 1, S.poolSort + '/' + S.poolDir);
 S.poolSort = 'order'; S.poolDir = 1;
+
+// ── score steppers: bumpScore clamps 0–10, pool table shows % readouts ──
+const Sst = __S();
+Sst.runners = parsePool('H21:Steppi Mies\nD21:Steppi Nainen');
+Sst.teams = [];
+Sst.runners.forEach(r => { r.nopeus = 0; r.luotettavuus = 0; });
+renderPoolTable();
+assert('stepper: 0% readout shown', getEl('poolWrap').innerHTML.includes('0%'), getEl('poolWrap').innerHTML.slice(0, 300));
+bumpScore(0, 'nopeus', 1);
+assert('stepper: bump +1 → 1', Sst.runners[0].nopeus === 1, String(Sst.runners[0].nopeus));
+bumpScore(0, 'nopeus', -5);
+assert('stepper: clamps at 0', Sst.runners[0].nopeus === 0, String(Sst.runners[0].nopeus));
+Sst.runners[0].nopeus = 10;
+bumpScore(0, 'nopeus', 1);
+assert('stepper: clamps at 10', Sst.runners[0].nopeus === 10, String(Sst.runners[0].nopeus));
+Sst.runners[1].nopeus = 7; Sst.runners[1].luotettavuus = 10;
+renderPoolTable();
+const poolHtml = getEl('poolWrap').innerHTML;
+assert('stepper: 70% and 100% readouts shown', poolHtml.includes('70%') && poolHtml.includes('100%'), poolHtml.slice(0, 400));
+assert('stepper: type=number inputs removed', !poolHtml.includes('type="number"'), poolHtml.slice(0, 200));
+
+// ── team rows show sarja after nimi (like reserve pool chips) ──
+Sst.teams = [Sst.runners.slice()];
+renderAll();
+const tHtml = getEl('teamsWrap').innerHTML;
+assert('teams: runner row shows sarja after nimi', tHtml.includes('Steppi Mies (H21)') && tHtml.includes('Steppi Nainen (D21)'), tHtml.slice(0, 400));
 
 // ── state merge: kipeä/vahvuudet/toive survive re-generate ──
 Math.random = mulberry32(42);

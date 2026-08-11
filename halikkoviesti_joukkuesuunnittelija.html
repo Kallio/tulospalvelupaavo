@@ -55,6 +55,9 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 .scores tr.sick td { background: #fdeaea; color: #b05050; }
 .scores tr.varamies td { background: rgba(39,174,96,.12); }
 .scores td.til { font-size: 11px; color: #667; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.stp { width: 22px; height: 22px; padding: 0; border: 1px solid #334; border-radius: 4px; background: #0f3460; color: #7ec8e3; font-size: 13px; line-height: 1; cursor: pointer; }
+.stp-val { display: inline-block; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 
 #teamsWrap { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
 .team-col {
@@ -127,7 +130,7 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     <h3 class="step-hdr" onclick="toggleStep('pool')"><span class="step-toggle" id="stepTogglePool">▾</span> 1. Juoksijapooli</h3>
     <div class="ps-body" id="psBodyPool">
     <label>Sarja:Nimi, rivikohtaisesti (toive joukkuelle voi olla kolmantena: <code>D16:Virtanen Aino:1</code>)</label>
-    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa&#10;D16:Ojapalo Venla:1&#10;H50:Nurmi Mikko"></textarea>
+    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa&#10;D16:Ojapalo Venla:1&#10;H50:Nurmi Mikko&#10;tai syntymävuosi:&#10;Virtanen Matti:1999:M"></textarea>
     <div class="row">
       <button class="bg btn-sm" onclick="loadExamplePool(45)">Esimerkkipooli (45)</button>
       <button class="bg btn-sm" onclick="loadExamplePool(60)">(60)</button>
@@ -226,6 +229,37 @@ function parseSarja(sarja) {
   return { gender: m[1].toUpperCase() === 'H' ? 'M' : 'N', num: parseInt(m[2], 10) };
 }
 
+function parseGender(tok) {
+  const t = String(tok || '').trim().toLowerCase();
+  if (t === 'm' || t === 'h' || t === 'mies') return 'M';
+  if (t === 'n' || t === 'd' || t === 'nainen') return 'N';
+  return null;
+}
+
+// Johtaa sarjaluokan syntymävuodesta (esim. 1999 → H21). Ikä lasketaan
+// järjestelmän nykyisestä vuodesta, joten sarja noudattaa vuoden vaihtuessa
+// vakiomuotoista ikäluokkataulukkoa.
+function sarjaFromBirthYear(gender, year) {
+  const age = new Date().getFullYear() - year;
+  let num;
+  if (age <= 12) num = 12;
+  else if (age <= 14) num = 14;
+  else if (age <= 16) num = 16;
+  else if (age <= 18) num = 18;
+  else if (age <= 20) num = 20;
+  else if (age <= 34) num = 21;
+  else if (age <= 39) num = 35;
+  else if (age <= 44) num = 40;
+  else if (age <= 49) num = 45;
+  else if (age <= 54) num = 50;
+  else if (age <= 59) num = 55;
+  else if (age <= 64) num = 60;
+  else if (age <= 69) num = 65;
+  else if (age <= 74) num = 70;
+  else num = 75;
+  return (gender === 'N' ? 'D' : 'H') + num;
+}
+
 function parsePool(text) {
   const out = [];
   const seen = new Set();
@@ -233,13 +267,26 @@ function parsePool(text) {
     const line = raw.trim();
     if (!line) continue;
     const parts = line.split(':').map(s => s.trim());
-    const sarja = parts[0], nimi = parts[1];
-    if (!sarja || !nimi) continue;
+    let sarja, nimi, gender, num, toive;
+    // Muoto "Suku- ja etunimi:Vuosi:Sukupuoli[:Toive]" → johda sarja iästä.
+    if (parts.length >= 3 && /^\d{4}$/.test(parts[1]) && parseGender(parts[2])) {
+      nimi = parts[0];
+      gender = parseGender(parts[2]);
+      sarja = sarjaFromBirthYear(gender, parseInt(parts[1], 10));
+      const g = parseSarja(sarja);
+      gender = g.gender; num = g.num;
+      toive = parts[3] ? parseInt(parts[3], 10) : null;
+    } else {
+      sarja = parts[0]; nimi = parts[1];
+      if (!sarja || !nimi) continue;
+      const g = parseSarja(sarja);
+      gender = g.gender; num = g.num;
+      toive = parts[2] ? parseInt(parts[2], 10) : null;
+    }
+    if (!nimi || !sarja) continue;
     const key = sarja + ':' + nimi;
     if (seen.has(key)) continue;
     seen.add(key);
-    const { gender, num } = parseSarja(sarja);
-    let toive = parts[2] ? parseInt(parts[2], 10) : null;
     if (!Number.isInteger(toive) || toive < 1) toive = null;
     out.push({ nimi, sarja, gender, num, toive, nopeus: 0, luotettavuus: 0, kipea: false, locked: false });
   }
@@ -870,9 +917,9 @@ function setSick(idx, checked) {
   autosave();
 }
 
-function setScore(idx, field, value) {
-  const v = parseInt(value, 10);
-  if (Number.isInteger(v) && v >= 0 && v <= 10) S.runners[idx][field] = v;
+function bumpScore(idx, field, delta) {
+  const v = (S.runners[idx][field] || 0) + delta;
+  S.runners[idx][field] = Math.max(0, Math.min(10, v));
   renderAll();
   autosave();
 }
@@ -1100,8 +1147,8 @@ function renderPoolTable() {
       `<td>${esc(r.nimi)}</td>` +
       `<td>${esc(r.sarja)} (${genderLabel(r)})</td>` +
       `<td><select onchange="setToive(${idx}, this.value)">${[null,1,2,3,4,5,6].map(n => `<option value="${n || ''}" ${r.toive === n ? 'selected' : ''}>${n ? 'Joukkue ' + n : '—'}</option>`).join('')}</select></td>` +
-      `<td><input type="number" min="0" max="10" value="${r.nopeus}" onchange="setScore(${idx}, 'nopeus', this.value)"></td>` +
-      `<td><input type="number" min="0" max="10" value="${r.luotettavuus}" onchange="setScore(${idx}, 'luotettavuus', this.value)"></td>` +
+      `<td><span class="stepper"><button class="stp" onclick="bumpScore(${idx}, 'nopeus', -1)" ${r.nopeus <= 0 ? 'disabled' : ''}>−</button><span class="stp-val">${r.nopeus * 10}%</span><button class="stp" onclick="bumpScore(${idx}, 'nopeus', 1)" ${r.nopeus >= 10 ? 'disabled' : ''}>+</button></span></td>` +
+      `<td><span class="stepper"><button class="stp" onclick="bumpScore(${idx}, 'luotettavuus', -1)" ${r.luotettavuus <= 0 ? 'disabled' : ''}>−</button><span class="stp-val">${r.luotettavuus * 10}%</span><button class="stp" onclick="bumpScore(${idx}, 'luotettavuus', 1)" ${r.luotettavuus >= 10 ? 'disabled' : ''}>+</button></span></td>` +
       `<td>${strengthOf(r).toFixed(1)}</td>` +
       `<td><input type="checkbox" style="width:auto;" ${r.kipea ? 'checked' : ''} onchange="setSick(${idx}, this.checked)"></td>` +
       `<td class="til">${til}</td></tr>`;
@@ -1173,7 +1220,7 @@ function renderTeams() {
         `<span class="slot-lab">${esc(dispLeg(s))}</span>` +
         `<span class="slot-eh">${esc(legInfo(SLOTS[s].osuus, mode))}</span>` +
         (r
-          ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})">${esc(r.nimi)}<span class="str">${strengthOf(r).toFixed(0)}${r.toive === t + 1 ? ' ★' : ''}</span></span>` +
+          ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})">${esc(r.nimi)} (${esc(r.sarja)})<span class="str">${strengthOf(r).toFixed(0)}${r.toive === t + 1 ? ' ★' : ''}</span></span>` +
             `<button class="sick-btn" title="Merkitse kipeäksi — poistetaan joukkuesta, ei käytetä aukkojen täytössä" onclick="setSick(${S.runners.indexOf(r)}, true)">🤒</button>` +
             `<button class="rm-btn" title="Poista joukkeusta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
           : `<span class="slot-empty" ondragover="event.preventDefault()" ondrop="dropSlot(event, ${t}, ${s})">— tyhjä —</span>`) +
