@@ -81,7 +81,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <div id="fileList"></div>
   </div>
 
-  <div class="ps">
+  <div class="ps" id="psStep2">
     <h3><span data-i18n="step2">2. Asetukset</span></h3>
     <label data-i18n="titleLabel"></label>
     <input type="text" id="titleIn" placeholder="Demokisa 2026">
@@ -91,7 +91,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <input type="text" id="creatorIn" placeholder="ppen_to_iof.html">
   </div>
 
-  <div class="ps">
+  <div class="ps" id="psStep3">
     <h3><span data-i18n="step3">3. Esikatselu</span></h3>
     <label style="margin:0;color:#7ec8e3;"><input type="file" id="mapImgInput" accept=".png,.jpg,.jpeg" style="width:auto;"> <span data-i18n="imgLabel"></span></label>
     <div class="img-bounds" style="margin-top:6px;">
@@ -102,7 +102,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     </div>
   </div>
 
-  <div class="ps">
+  <div class="ps" id="psStep4">
     <h3><span data-i18n="step4">4. Lataa XML</span></h3>
     <div id="saveWrap" style="margin-top:10px;display:block;">
       <button class="bs" id="saveBtn" style="width:100%;" disabled onclick="download()"><span data-i18n="downloadBtn"></span></button>
@@ -773,7 +773,15 @@ function renderSummary(merge, eventTitle, bounds) {
   getEl('saveStatus').textContent = totalActive ? '' : t.noFiles;
 }
 
+function syncSteps() {
+  const show = files.length > 0;
+  ['psStep2', 'psStep3', 'psStep4'].forEach(function (id) {
+    getEl(id).style.display = show ? '' : 'none';
+  });
+}
+
 function convert() {
+  syncSteps();
   const totalActive = files.filter(function (f) { return f.include; }).length;
   if (!totalActive) {
     lastResult = null;

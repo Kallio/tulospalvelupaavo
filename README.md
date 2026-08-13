@@ -10,6 +10,20 @@ quick one-off scripts.
 
 ## Main tools
 
+### Contents
+
+- [Bib Number Generator](#bib-number-generator)
+- [Rastilippu → Navisport Parallel-Leg Fixer](#rastilippu--navisport-parallel-leg-fixer)
+- [25-manna Team Planner](#25-manna-team-planner)
+- [Nuorten Jukola Team Planner](#nuorten-jukola-team-planner)
+- [Halikko-viesti Team Planner](#halikko-viesti-team-planner)
+- [IRMA Club Registry Fetcher](#irma-club-registry-fetcher)
+- [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts)
+- [Purple Pen → IOF Converter](#purple-pen--iof-converter)
+- [OBS Broadcast Overlays](#obs-broadcast-overlays)
+- [Pokaalijahti WordPress Plugin](#pokaalijahti-wordpress-plugin)
+- [Press Results Formatter](#press-results-formatter)
+
 ### Bib Number Generator
 
 File: [`bibgenerator.html`](bibgenerator.html)
@@ -118,7 +132,8 @@ The HTML tool runs offline in any browser: load one or more `.ppen` files
 (multiple files are merged into a single CourseData, chosen by print-area
 overlap), inspect the courses on an SVG preview with an optional map image, and
 download the XML — the XML is regenerated automatically as you change anything,
-so there is no separate convert step. Event title, map bounds, and the XML
+so there is no separate convert step, and the options/preview/download steps
+stay hidden until files are loaded. Event title, map bounds, and the XML
 `creator` attribute are settable in Options. Preview symbols scale with the
 print-area size, use `fill="none"`, print-area rectangles are labeled with their
 source file, and clicking an area rect toggles it (and its file's courses) in
@@ -126,8 +141,8 @@ the view — a hidden area stays clickable as a faint outline so it can always b
 brought back. The XML output is never changed by view toggles. A clear button
 resets files and options for a fresh start, and the FI/EN button toggles the UI
 language. A built-in demo button loads an obfuscated "Nuorten kisa" (youth race)
-example for testing without any files on disk. Example `.ppen` files are in
-[`exampledata/`](exampledata/). The Python CLI produces identical output.
+example for testing without any files on disk. The Python CLI produces identical
+output.
 
 ### OBS Broadcast Overlays
 

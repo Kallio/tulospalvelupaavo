@@ -8,6 +8,20 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 
 ## Päätyökalut
 
+### Sisällysluettelo
+
+- [Lähtönumerojen generaattori](#lähtönumerojen-generaattori)
+- [Rastilippu → Navisport -rinnakkaisosuuksien korjaaja](#rastilippu--navisport--rinnakkaisosuuksien-korjaaja)
+- [25-manna joukkuesuunnittelu](#25-manna-joukkuesuunnittelu)
+- [Nuorten Jukola -joukkuesuunnittelu](#nuorten-jukola--joukkuesuunnittelu)
+- [Halikko-viesti -joukkuesuunnittelu](#halikko-viesti--joukkuesuunnittelu)
+- [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija)
+- [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen)
+- [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin)
+- [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat)
+- [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen)
+- [Lehdistötulokset](#lehdistötulokset)
+
 ### Lähtönumerojen generaattori
 
 Tiedosto: [`bibgenerator.html`](bibgenerator.html)
@@ -123,8 +137,9 @@ HTML-työkalu toimii offline selaimessa: lataa yksi tai useampi `.ppen`-tiedosto
 (useat tiedostot yhdistetään yhdeksi CourseData-XML:ksi print-alueiden
 päällekkäisyyden mukaan), tarkastele ratoja SVG-esikatselussa (valinnainen
 karttakuva) ja lataa XML. XML päivittyy automaattisesti kaikista muutoksista,
-joten erillistä muunnospainiketta ei ole. Asetuksissa voi määrittää tapahtuman
-nimen, kartan rajat ja XML:n `creator`-attribuutin. Symbolit skaalautuvat
+joten erillistä muunnospainiketta ei ole, ja asetus-, esikatselu- ja
+latausvaiheet ovat piilossa kunnes tiedostoja on ladattu. Asetuksissa voi
+määrittää tapahtuman nimen, kartan rajat ja XML:n `creator`-attribuutin. Symbolit skaalautuvat
 print-alueen koon mukaan, käyttävät `fill="none"`-täyttöä ja print-alueiden
 suorakulmiot on nimetty lähdetiedoston mukaan. Aluetta klikkaamalla se (ja sen
 tiedoston radat) voidaan piilottaa esikatselusta; piilotettu alue jää näkyviin
@@ -132,9 +147,7 @@ haaleana katkoviivana, jota klikkaamalla se palautetaan. XML ei muutu
 näkymävalinnoista. Tyhjennä-painike nollaa tiedostot ja asetukset alkuun, ja
 FI/EN-painike vaihtaa käyttöliittymän kielen. Yksi sisäänrakennettu
 demopainike lataa nimetön (obfuskoitu) "Nuorten kisa" -esimerkin ilman levykkeitä.
-Esimerkki-`.ppen`-tiedostot löytyvät
-[`exampledata/`](exampledata/)-kansiosta. Python-CLI tuottaa identtisen
-tulosteen.
+Python-CLI tuottaa identtisen tulosteen.
 
 ### OBS-lähetysgrafiikat
 

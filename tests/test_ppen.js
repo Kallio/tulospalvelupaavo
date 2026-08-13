@@ -30,7 +30,7 @@ global.URL = { createObjectURL: () => 'blob:x' };
 
 let threw = null;
 try {
-  eval(code + '; global.__fn = { parsePpen, mergePpen, buildIofXml, traverseCourse, legLengthM, fmtCoord, miniParse, addPpenFile, files, convert, setInclude, loadDemo, setLang, toggleLang, clearAll, toggleArea, hiddenAreas }; global.__last = () => lastResult;');
+  eval(code + '; global.__fn = { parsePpen, mergePpen, buildIofXml, traverseCourse, legLengthM, fmtCoord, miniParse, addPpenFile, files, convert, setInclude, loadDemo, setLang, toggleLang, clearAll, toggleArea, hiddenAreas, POKAALIJAHTI_DEMO }; global.__last = () => lastResult;');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 let pass = 0, fail = 0;
@@ -81,22 +81,19 @@ function makePpen({ title = 'Syn', scale = 15000, pa = null, controls = [], cour
   return lines.join('\n');
 }
 
-const real = [
-  ['Pokaalijahti_hd16.ppen', fs.readFileSync('/tulospalvelupaavo/exampledata/Pokaalijahti_hd16.ppen', 'utf8')],
-  ['Pokaalijahti_suorat.ppen', fs.readFileSync('/tulospalvelupaavo/exampledata/Pokaalijahti_suorat.ppen', 'utf8')],
-  ['Pokaalijahti2026_siimari (1).ppen', fs.readFileSync('/tulospalvelupaavo/exampledata/Pokaalijahti2026_siimari (1).ppen', 'utf8')],
-  ['Pokaalijahti_tukireitti.ppen', fs.readFileSync('/tulospalvelupaavo/exampledata/Pokaalijahti_tukireitti.ppen', 'utf8')],
-];
+// Ground truth uses the demo data embedded in the HTML (same real-world data,
+// obfuscated as a generic "Nuorten kisa" youth race) — no files on disk needed.
+const real = Object.entries(F.POKAALIJAHTI_DEMO).map(([n, t]) => [n, t]);
 
-// ── parser: real hd16 file ──
+// ── parser: real d16 file ──
 const p = F.parsePpen(real[0][1], real[0][0]);
-assert('parse hd16: scale 15000', p.scale === 15000, String(p.scale));
-assert('parse hd16: title', p.title === 'Pokaalijahti_hd16', p.title);
+assert('parse d16: scale 15000', p.scale === 15000, String(p.scale));
+assert('parse d16: title', p.title === 'Nuorten kisa', p.title);
 assert('parse hd16: event print-area', p.bounds.present && p.bounds.left === -154.640259 && p.bounds.top === 25.4121246 && p.bounds.right === -14.601593 && p.bounds.bottom === -172.538544, JSON.stringify(p.bounds));
 assert('parse hd16: 13 controls', Object.keys(p.controls).length === 13);
 assert('parse hd16: start/finish no code, normals have code', p.controls['1'].kind === 'finish' && p.controls['2'].kind === 'start' && p.controls['2'].code === null && p.controls['3'].code === '109');
-assert('parse hd16: course + sequence labels + cc chain', p.courses.length === 1 && p.courses[0].name === 'HD16' && p.courses[0].label_kind === 'sequence' && p.course_controls['1'].control === '2' && p.course_controls['1'].next === '3' && p.course_controls['5'].next === '14' && p.course_controls['2'].next === null);
-assert('parse hd16: course-level print-area', p.courses[0].bounds && p.courses[0].bounds.left === -145.316681, JSON.stringify(p.courses[0].bounds));
+assert('parse d16: course + sequence labels + cc chain', p.courses.length === 1 && p.courses[0].name === 'D16' && p.courses[0].label_kind === 'sequence' && p.course_controls['1'].control === '2' && p.course_controls['1'].next === '3' && p.course_controls['5'].next === '14' && p.course_controls['2'].next === null);
+assert('parse d16: course-level print-area', p.courses[0].bounds && p.courses[0].bounds.left === -145.316681, JSON.stringify(p.courses[0].bounds));
 
 // ── merge all four real files ──
 reset();
@@ -107,15 +104,15 @@ assert('merge real: starts/finishes collapsed to one each', [...m.controls.value
 assert('merge real: code 100 deduped across 3 files', [...m.controls.values()].filter(c => c.code === '100').length === 1);
 assert('merge real: code 78 deduped', [...m.controls.values()].filter(c => c.code === '78').length === 1);
 assert('merge real: 6 courses, none skipped', m.courses.length === 6 && m.skipped.length === 0);
-assert('merge real: title from biggest print-area', m.title === 'Pokaalijahti_hd16', m.title);
+assert('merge real: title from biggest print-area', m.title === 'Nuorten kisa', m.title);
 assert('merge real: bounds = biggest (hd16) print-area', m.bounds.left === -154.640259 && m.bounds.top === 25.4121246 && m.bounds.right === -14.601593 && m.bounds.bottom === -172.538544);
 assert('merge real: scale 15000, no warnings', m.scale === 15000 && m.warnings.length === 0);
 
 const lengths = {};
 m.courses.forEach(c => { lengths[c.name] = F.traverseCourse(c.first_cc, m.courseControls, m.controls, m.scale).total; });
 assert('merge real: per-course lengths match python ground truth',
-  lengths.HD16 === 3075 && lengths.HD10 === 1249 && lengths.HD12 === 1952 &&
-  lengths.HD14 === 2385 && lengths.HD10RR === 1607 && lengths['hd12tr'] === 1390, JSON.stringify(lengths));
+  lengths.D16 === 3075 && lengths.D10 === 1249 && lengths.D12 === 1952 &&
+  lengths.D14 === 2385 && lengths.D10RR === 1607 && lengths.D12TR === 1390, JSON.stringify(lengths));
 
 const xml = F.buildIofXml(m.controls, m.courses, m.courseControls, m.scale, m.bounds, m.title, '2026-01-01T00:00:00Z', 'ppen_to_iof.html');
 assert('serialize: xml declaration', xml.startsWith("<?xml version='1.0' encoding='UTF-8'?>\n"));
@@ -126,10 +123,10 @@ const codes = [...xml.matchAll(/<Control type="Control">\s*<Id>([^<]*)<\/Id>/g)]
 assert('output: control order across files (python ground truth)',
   codes.join(',') === '109,48,60,100,130,117,116,122,127,133,40,58,72,62,56,129,34,32,113,78,143,64,46,75,74,114,79,87,90,93,94', codes.join(','));
 const courseOrder = [...xml.matchAll(/<Course>\s*<Name>([^<]*)<\/Name>/g)].map(x => x[1]);
-assert('output: course order', courseOrder.join(',') === 'HD16,HD10,HD12,HD14,HD10RR,hd12tr', courseOrder.join(','));
-const hd16Block = xml.match(/<Course>[\s\S]*?<Name>HD16<\/Name>[\s\S]*?<\/Course>/)[0];
-const hd16Seq = [...hd16Block.matchAll(/<Control>([^<]*)<\/Control>/g)].map(x => x[1]);
-assert('output: HD16 control sequence (start→finish)', hd16Seq.join(',') === 'STA1,109,48,60,40,130,117,116,122,127,133,100,FIN1', hd16Seq.join(','));
+assert('output: course order', courseOrder.join(',') === 'D16,D10,D12,D14,D10RR,D12TR', courseOrder.join(','));
+const d16Block = xml.match(/<Course>[\s\S]*?<Name>D16<\/Name>[\s\S]*?<\/Course>/)[0];
+const d16Seq = [...d16Block.matchAll(/<Control>([^<]*)<\/Control>/g)].map(x => x[1]);
+assert('output: D16 control sequence (start→finish)', d16Seq.join(',') === 'STA1,109,48,60,40,130,117,116,122,127,133,100,FIN1', d16Seq.join(','));
 assert('output: STA1/FIN1 ids + positions', xml.includes('<Control type="Start">\n      <Id>STA1</Id>\n      <MapPosition x="-104.52" y="-142.08" />\n    </Control>') && xml.includes('<Id>FIN1</Id>'));
 assert('output: MapText + LegLength counts (48 + 54)', (xml.match(/<MapText>/g) || []).length === 48 && (xml.match(/<LegLength>/g) || []).length === 54);
 assert('output: 6 class assignments', (xml.match(/<ClassCourseAssignment>/g) || []).length === 6);
@@ -304,8 +301,7 @@ reset();
 real.forEach(([n, t]) => F.addPpenFile(n, t));
 F.setInclude(0, false);
 let m2 = F.mergePpen(F.files);
-assert('toggle: excluding hd16 → 5 courses', m2.courses.length === 5, String(m2.courses.length));
-assert('toggle: title = new biggest (suorat)', m2.title === 'Pokaalijahti 10.8.2026', m2.title);
+assert('toggle: excluding d16 → 5 courses', m2.courses.length === 5, String(m2.courses.length));
 assert('toggle: bounds = suorat print-area', m2.bounds.left === -147.606064 && m2.bounds.right === -73.56506);
 F.setInclude(0, true);
 assert('toggle: re-enabled → 6 courses again', F.mergePpen(F.files).courses.length === 6);
@@ -314,18 +310,22 @@ assert('toggle: re-enabled → 6 courses again', F.mergePpen(F.files).courses.le
 reset();
 F.loadDemo();
 assert('pk demo: 4 embedded files loaded', F.files.length === 4, String(F.files.length));
-const em = F.mergePpen(F.files);
-assert('pk demo: merge matches disk merge structurally', em.controls.size === m.controls.size && em.courses.length === m.courses.length && em.bounds.left === m.bounds.left && em.bounds.top === m.bounds.top && em.bounds.right === m.bounds.right && em.bounds.bottom === m.bounds.bottom);
-assert('pk demo: generic title, no Pokaalijahti brand', em.title === 'Nuorten kisa', em.title);
-assert('pk demo: obfuscated course names', em.courses.map(c => c.name).join(',') === 'D16,D10,D12,D14,D10RR,D12TR', em.courses.map(c => c.name).join(','));
-const exml = F.buildIofXml(em.controls, em.courses, em.courseControls, em.scale, em.bounds, em.title, '2026-01-01T00:00:00Z', 'ppen_to_iof.html');
-assert('pk demo: XML has generic title, no branded names', exml.includes('<Name>Nuorten kisa</Name>') && !exml.includes('Pokaalijahti') && !exml.includes('HD16') && !exml.includes('hd12tr'), exml.match(/<Name>[^<]*<\/Name>/)[0]);
-const emCodes = [...exml.matchAll(/<Control type="Control">\s*<Id>([^<]*)<\/Id>/g)].map(x => x[1]);
-assert('pk demo: control order matches ground truth', emCodes.join(',') === codes.join(','));
+assert('pk demo: titles generic', F.files.every(f => f.title === 'Nuorten kisa'));
+assert('pk demo: no Pokaalijahti brand in demo data', F.files.every(f => !f.name.includes('Pokaalijahti') && !JSON.stringify(f.courses).includes('HD')));
 F.convert();
 const pprev = getEl('previewWrap').innerHTML;
 assert('pk demo: symbols stay base-size (k≈1 → r="1.75")', pprev.includes('r="1.75"'));
 assert('pk demo: obfuscated file-name labels', pprev.includes('nuorten_d16.ppen') && pprev.includes('nuorten_siimari.ppen'));
+
+// ── steps 2-4 hidden without files (like joukkuesuunnittelu tools) ──
+reset();
+F.convert();
+assert('steps: 2-4 hidden with no files', ['psStep2', 'psStep3', 'psStep4'].every(id => getEl(id).style.display === 'none'));
+real.forEach(([n, t]) => F.addPpenFile(n, t));
+assert('steps: 2-4 shown after loading files', ['psStep2', 'psStep3', 'psStep4'].every(id => getEl(id).style.display === ''));
+reset();
+F.convert();
+assert('steps: 2-4 hidden again after reset', ['psStep2', 'psStep3', 'psStep4'].every(id => getEl(id).style.display === 'none'));
 
 // ── convert() UI: title + map-bounds overrides, summary, preview, warnings ──
 reset();
@@ -339,10 +339,10 @@ assert('convert: title override + XML escaping', last.xml.includes('<Name>Testi 
 assert('convert: bounds override in XML', last.xml.includes('<MapPositionTopLeft x="1.0" y="2.0" />') && last.xml.includes('<MapPositionBottomRight x="3.0" y="4.0" />'));
 assert('convert: summary shows counts', getEl('summary').innerHTML.includes('rastia') && getEl('summary').innerHTML.includes('Testi &amp; &lt;kilpa&gt; 2026'), getEl('summary').innerHTML.slice(0, 200));
 assert('convert: xmlOut populated', getEl('xmlOut').value === last.xml);
-assert('convert: preview has svg + course legend', getEl('previewWrap').innerHTML.includes('<svg') && getEl('previewWrap').innerHTML.includes('HD16') && getEl('previewWrap').innerHTML.includes('<polyline'));
+assert('convert: preview has svg + course legend', getEl('previewWrap').innerHTML.includes('<svg') && getEl('previewWrap').innerHTML.includes('D16') && getEl('previewWrap').innerHTML.includes('<polyline'));
 const prev = getEl('previewWrap').innerHTML;
 assert('preview: start drawn as triangle polygon', prev.includes('<polygon'));
-assert('preview: file-name print-area labels', prev.includes('Pokaalijahti_hd16.ppen') && prev.includes('Pokaalijahti_suorat.ppen'));
+assert('preview: file-name print-area labels', prev.includes('nuorten_d16.ppen') && prev.includes('nuorten_suorat.ppen'));
 assert('preview: no S/F letter labels', !prev.includes('>S<') && !prev.includes('>F<'), prev.slice(0, 300));
 assert('convert: no warnings → hidden', getEl('warnings').style.display !== 'block');
 getEl('titleIn').value = '';
