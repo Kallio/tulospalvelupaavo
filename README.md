@@ -109,10 +109,25 @@ export; use at your own risk.
 
 ### Purple Pen → IOF Converter
 
-File: [`ppen_to_iof.py`](ppen_to_iof.py)
+File: [`ppen_to_iof.html`](ppen_to_iof.html) (browser) · CLI: [`ppen_to_iof.py`](ppen_to_iof.py)
 
 Converts Purple Pen (`.ppen`) course design files to IOF 3.0 CourseData XML
 format — control positions, course layouts, and leg lengths.
+
+The HTML tool runs offline in any browser: load one or more `.ppen` files
+(multiple files are merged into a single CourseData, chosen by print-area
+overlap), inspect the courses on an SVG preview with an optional map image, and
+download the XML — the XML is regenerated automatically as you change anything,
+so there is no separate convert step. Event title, map bounds, and the XML
+`creator` attribute are settable in Options. Preview symbols scale with the
+print-area size, use `fill="none"`, print-area rectangles are labeled with their
+source file, and clicking an area rect toggles it (and its file's courses) in
+the view — a hidden area stays clickable as a faint outline so it can always be
+brought back. The XML output is never changed by view toggles. A clear button
+resets files and options for a fresh start, and the FI/EN button toggles the UI
+language. A built-in demo button loads an obfuscated "Nuorten kisa" (youth race)
+example for testing without any files on disk. Example `.ppen` files are in
+[`exampledata/`](exampledata/). The Python CLI produces identical output.
 
 ### OBS Broadcast Overlays
 

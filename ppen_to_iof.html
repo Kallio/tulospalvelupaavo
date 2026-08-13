@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Purple Pen → IOF (radat)</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps:last-child { margin-top: auto; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+textarea, input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bp { background: #e94560; color: #fff; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; }
+.chk input { width: auto; }
+
+.file-row {
+  background: #0a2a50; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px;
+  border: 1px solid #224;
+}
+.file-row .chk { font-weight: bold; color: #ddd; }
+.file-meta { font-size: 10.5px; color: #8a9aaa; margin-top: 3px; display: block; }
+
+#main { padding: 16px; margin-left: 386px; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+#summary { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+#summary .ok  { color: #27ae60; font-weight: bold; }
+#summary .err { color: #e94560; font-weight: bold; }
+#summary .warn { color: #e67e22; font-weight: bold; }
+#summary .course-list { margin-top: 6px; font-size: 12px; color: #445; }
+#warnings { background: #fff7ec; border: 1px solid #e6c; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; }
+#warnings h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #e67e22; margin-bottom: 6px; }
+#warnings ul { margin-left: 18px; color: #a45; }
+#previewWrap { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin-bottom: 14px; }
+#previewWrap svg { width: 100%; height: auto; }
+.muted { color: #889; font-size: 12px; }
+.legend { font-size: 12px; color: #445; margin-top: 8px; line-height: 1.7; }
+.legend span { white-space: nowrap; margin-right: 10px; }
+#saveWrap { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+#saveStatus { font-size: 12px; color: #667; }
+#xmlOut { width: 100%; height: 220px; font-size: 11px; }
+.img-bounds { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps">
+    <h3><span data-i18n="step1">1. Tiedostot</span></h3>
+    <div class="muted" style="font-size:11px;color:#9aa;margin-bottom:6px;" data-i18n="step1hint"></div>
+    <label style="margin:0;color:#7ec8e3;"><input type="file" id="filesInput" accept=".ppen" multiple style="width:auto;"> <span data-i18n="loadBtn"></span></label>
+    <div class="row">
+      <button class="bg btn-sm" onclick="loadDemo()"><span data-i18n="demoBtn"></span></button>
+      <button class="bg btn-sm" style="margin-left:auto;" onclick="clearAll()"><span data-i18n="clearBtn"></span></button>
+      <button class="bg btn-sm" onclick="toggleLang()">FI / EN</button>
+    </div>
+    <div id="fileList"></div>
+  </div>
+
+  <div class="ps">
+    <h3><span data-i18n="step2">2. Asetukset</span></h3>
+    <label data-i18n="titleLabel"></label>
+    <input type="text" id="titleIn" placeholder="Demokisa 2026">
+    <label data-i18n="boundsLabel"></label>
+    <input type="text" id="boundsIn" placeholder="-154.6 25.4 -14.6 -172.5">
+    <label data-i18n="creatorLabel"></label>
+    <input type="text" id="creatorIn" placeholder="ppen_to_iof.html">
+  </div>
+
+  <div class="ps">
+    <h3><span data-i18n="step3">3. Esikatselu</span></h3>
+    <label style="margin:0;color:#7ec8e3;"><input type="file" id="mapImgInput" accept=".png,.jpg,.jpeg" style="width:auto;"> <span data-i18n="imgLabel"></span></label>
+    <div class="img-bounds" style="margin-top:6px;">
+      <label data-i18n="imgLeft"></label><input type="number" id="imgL">
+      <label data-i18n="imgTop"></label><input type="number" id="imgT">
+      <label data-i18n="imgRight"></label><input type="number" id="imgR">
+      <label data-i18n="imgBottom"></label><input type="number" id="imgB">
+    </div>
+  </div>
+
+  <div class="ps">
+    <h3><span data-i18n="step4">4. Lataa XML</span></h3>
+    <div id="saveWrap" style="margin-top:10px;display:block;">
+      <button class="bs" id="saveBtn" style="width:100%;" disabled onclick="download()"><span data-i18n="downloadBtn"></span></button>
+      <div id="saveStatus" style="margin-top:4px;font-size:11px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="summary"></div>
+  <div id="warnings" style="display:none;">
+    <h4><span data-i18n="warnHdr"></span></h4>
+    <ul id="warnList"></ul>
+  </div>
+  <div id="previewWrap"></div>
+  <div class="ps" style="background:#16213e;">
+    <h3 data-i18n="xmlHdr"></h3>
+    <textarea id="xmlOut" readonly></textarea>
+  </div>
+</div>
+
+<script>
+let lang = 'fi';
+let files = [];
+let lastResult = null;
+let mapImage = null;
+let fileSeq = 0;
+let hiddenAreas = new Set();
+
+const I18N = {
+  fi: {
+    title: 'Purple Pen → IOF (radat)',
+    step1: '1. Tiedostot',
+    step1hint: 'Valitse yksi tai useampi Purple Pen -tiedosto (.ppen). Useat tiedostot yhdistetään yhdeksi CourseData-XML:ksi; yhdistettävät valitaan print-alueiden mukaan.',
+    loadBtn: 'Lataa tiedostot',
+    demoBtn: 'Lataa esimerkki',
+    clearBtn: 'Tyhjennä',
+    step2: '2. Asetukset',
+    titleLabel: 'Tapahtuman nimi (tyhjä = tiedostosta)',
+    boundsLabel: 'Kartan rajat mm: left top right bottom (tyhjä = print-alue)',
+    creatorLabel: 'Luoja (XML creator, tyhjä = ppen_to_iof.html)',
+    step3: '3. Esikatselu',
+    imgLabel: 'Karttakuva (PNG/JPG, valinnainen)',
+    imgLeft: 'Left mm', imgTop: 'Top mm', imgRight: 'Right mm', imgBottom: 'Bottom mm',
+    step4: '4. Lataa XML',
+    downloadBtn: 'Lataa XML',
+    warnHdr: 'Huomautukset',
+    xmlHdr: 'IOF 3.0 CourseData -XML',
+    noFiles: 'Ei ladattuja tiedostoja.',
+    parseErr: 'Tiedoston jäsennys epäonnistui: ',
+    sumAccepted: 'tiedostoa mukana',
+    sumSkipped: 'ohitettu',
+    sumCourses: 'radat: ',
+    sumControls: 'rastia',
+    sumStart: 'lähtö',
+    sumFinish: 'maali',
+    sumLen: ' m',
+    previewHint: 'Lataa .ppen-tiedostoja tai esimerkki. Kursseja voi tarkastella esikatselussa; rasteja ja print-alueita voi säätää valitsemalla tiedostoja mukaan.',
+    legend: 'Selite',
+    areaTip: 'Klikkaa piilottaaksesi/näyttääksesi alue',
+  },
+  en: {
+    title: 'Purple Pen → IOF (courses)',
+    step1: '1. Files',
+    step1hint: 'Choose one or more Purple Pen files (.ppen). Multiple files are merged into a single CourseData XML; the ones to merge are chosen by print-area overlap.',
+    loadBtn: 'Load files',
+    demoBtn: 'Load demo',
+    clearBtn: 'Clear',
+    step2: '2. Options',
+    titleLabel: 'Event title (empty = from file)',
+    boundsLabel: 'Map bounds mm: left top right bottom (empty = print area)',
+    creatorLabel: 'Creator (XML creator, empty = ppen_to_iof.html)',
+    step3: '3. Preview',
+    imgLabel: 'Map image (PNG/JPG, optional)',
+    imgLeft: 'Left mm', imgTop: 'Top mm', imgRight: 'Right mm', imgBottom: 'Bottom mm',
+    step4: '4. Download XML',
+    downloadBtn: 'Download XML',
+    warnHdr: 'Warnings',
+    xmlHdr: 'IOF 3.0 CourseData XML',
+    noFiles: 'No files loaded.',
+    parseErr: 'Failed to parse file: ',
+    sumAccepted: 'files included',
+    sumSkipped: 'skipped',
+    sumCourses: 'courses: ',
+    sumControls: 'controls',
+    sumStart: 'starts',
+    sumFinish: 'finishes',
+    sumLen: ' m',
+    previewHint: 'Load .ppen files or the demo. Preview shows the courses; controls and print areas can be toggled per file.',
+    legend: 'Legend',
+    areaTip: 'Click to hide/show area',
+  },
+};
+
+function setLang(l) {
+  lang = l;
+  const t = I18N[lang];
+  document.title = t.title;
+  document.querySelectorAll('[data-i18n]').forEach(function (el) {
+    el.textContent = t[el.getAttribute('data-i18n')];
+  });
+  convert();
+}
+
+function toggleLang() {
+  setLang(lang === 'fi' ? 'en' : 'fi');
+}
+
+function getEl(id) { return document.getElementById(id); }
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function escTextXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escAttrXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function unescapeXml(s) {
+  return String(s)
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function miniParse(xml) {
+  let pos = 0;
+  const len = xml.length;
+  function skipWs() {
+    while (pos < len && (/\s/.test(xml[pos]) || xml.charCodeAt(pos) === 0xFEFF)) pos++;
+  }
+  function skipPi() {
+    if (pos < len && xml[pos] === '<' && (xml[pos + 1] === '?' || (xml[pos + 1] === '!' && xml.slice(pos, pos + 4) !== '<!--'))) {
+      const end = xml.indexOf('?>', pos);
+      pos = end === -1 ? len : end + 2;
+    } else if (xml.slice(pos, pos + 4) === '<!--') {
+      const end = xml.indexOf('-->', pos);
+      pos = end === -1 ? len : end + 3;
+    }
+  }
+  function parseAttrs() {
+    const attrs = {};
+    while (pos < len) {
+      skipWs();
+      if (xml[pos] === '>' || xml[pos] === '/') return attrs;
+      const m = /[^\s=/>]+/.exec(xml.slice(pos));
+      if (!m) return attrs;
+      const name = m[0];
+      pos += m[0].length;
+      skipWs();
+      let value = '';
+      if (xml[pos] === '=') {
+        pos++;
+        skipWs();
+        if (xml[pos] === '"' || xml[pos] === "'") {
+          const q = xml[pos];
+          pos++;
+          const end = xml.indexOf(q, pos);
+          if (end === -1) { pos = len; } else { value = xml.slice(pos, end); pos = end + 1; }
+        }
+      }
+      attrs[name] = unescapeXml(value);
+    }
+    return attrs;
+  }
+  function parseEl() {
+    const m = /^<([^\s/>]+)/.exec(xml.slice(pos));
+    const name = m[1];
+    pos += m[0].length;
+    const attrs = parseAttrs();
+    skipWs();
+    let children = [];
+    let text = '';
+    if (xml[pos] === '/') { pos += 2; return { name, attrs, children, text: '' }; }
+    pos++;
+    while (pos < len) {
+      if (xml[pos] === '<') {
+        if (xml.slice(pos, pos + 2) === '</') {
+          const end = xml.indexOf('>', pos);
+          pos = end === -1 ? len : end + 1;
+          return { name, attrs, children, text };
+        }
+        if (xml[pos + 1] === '?' || xml.slice(pos, pos + 4) === '<!--') { skipPi(); continue; }
+        children.push(parseEl());
+      } else {
+        const lt = xml.indexOf('<', pos);
+        const chunkEnd = lt === -1 ? len : lt;
+        text += xml.slice(pos, chunkEnd);
+        pos = chunkEnd;
+      }
+    }
+    return { name, attrs, children, text };
+  }
+  skipWs();
+  skipPi();
+  skipWs();
+  return parseEl();
+}
+
+function childrenNamed(parent, name) {
+  return (parent.children || []).filter(function (c) { return c.name === name; });
+}
+
+function childEl(parent, name) {
+  const cs = childrenNamed(parent, name);
+  return cs.length ? cs[0] : null;
+}
+
+function parsePpen(xmlText, name) {
+  xmlText = String(xmlText).replace(/^\uFEFF/, '');
+  const root = miniParse(xmlText);
+  const eventEl = childEl(root, 'event');
+  let mapEl = eventEl ? childEl(eventEl, 'event') : null;
+  if (!mapEl && eventEl) mapEl = childEl(eventEl, 'map');
+  const scale = mapEl ? parseInt(mapEl.attrs.scale || '15000', 10) : 15000;
+
+  const pa = eventEl ? childEl(eventEl, 'print-area') : null;
+  let bounds;
+  if (pa) {
+    bounds = {
+      left: parseFloat(pa.attrs.left || '0'),
+      top: parseFloat(pa.attrs.top || '0'),
+      right: parseFloat(pa.attrs.right || '0'),
+      bottom: parseFloat(pa.attrs.bottom || '0'),
+      present: true,
+    };
+  } else {
+    bounds = { left: 0, top: 600, right: 200, bottom: 0, present: false };
+  }
+
+  const titleEl = eventEl ? childEl(eventEl, 'title') : null;
+  const title = titleEl ? titleEl.text : null;
+
+  const controls = {};
+  childrenNamed(root, 'control').forEach(function (ctrl) {
+    const codeEl = childEl(ctrl, 'code');
+    const loc = childEl(ctrl, 'location');
+    controls[ctrl.attrs.id] = {
+      kind: ctrl.attrs.kind,
+      code: codeEl ? codeEl.text : null,
+      x: loc ? parseFloat(loc.attrs.x || '0') : 0,
+      y: loc ? parseFloat(loc.attrs.y || '0') : 0,
+    };
+  });
+
+  const courses = [];
+  childrenNamed(root, 'course').forEach(function (course) {
+    const nameEl = childEl(course, 'name');
+    const firstEl = childEl(course, 'first');
+    const labelsEl = childEl(course, 'labels');
+    const cpa = childEl(course, 'print-area');
+    courses.push({
+      name: nameEl ? nameEl.text : null,
+      first_cc: firstEl ? firstEl.attrs['course-control'] : null,
+      label_kind: labelsEl ? labelsEl.attrs['label-kind'] : null,
+      bounds: cpa ? {
+        left: parseFloat(cpa.attrs.left || '0'),
+        top: parseFloat(cpa.attrs.top || '0'),
+        right: parseFloat(cpa.attrs.right || '0'),
+        bottom: parseFloat(cpa.attrs.bottom || '0'),
+        present: true,
+      } : null,
+    });
+  });
+
+  const course_controls = {};
+  childrenNamed(root, 'course-control').forEach(function (cc) {
+    const nextEl = childEl(cc, 'next');
+    course_controls[cc.attrs.id] = {
+      control: cc.attrs.control,
+      next: nextEl ? nextEl.attrs['course-control'] : null,
+    };
+  });
+
+  return { path: name, title, scale, bounds, controls, courses, course_controls };
+}
+
+function rectArea(b) { return (b.right - b.left) * (b.top - b.bottom); }
+
+function rectOverlaps(a, b) {
+  return (Math.max(a.left, b.left) < Math.min(a.right, b.right) &&
+          Math.max(a.bottom, b.bottom) < Math.min(a.top, b.top));
+}
+
+function mergePpen(files) {
+  const warnings = [];
+  const active = files.filter(function (f) { return f.include; });
+  if (!active.length) {
+    return { controls: new Map(), courses: [], courseControls: new Map(), scale: 15000, bounds: null, title: null, accepted: [], skipped: [], warnings };
+  }
+  const withPa = active.filter(function (f) { return f.bounds.present; });
+  let biggest = null;
+  let maxArea = -Infinity;
+  withPa.forEach(function (f) {
+    const a = rectArea(f.bounds);
+    if (a > maxArea) { maxArea = a; biggest = f; }
+  });
+
+  let accepted;
+  if (biggest === null) {
+    accepted = active.slice();
+  } else {
+    accepted = [biggest];
+    let pending = active.filter(function (f) { return f !== biggest; });
+    let guard = 0;
+    while (guard++ < 100) {
+      const joining = pending.filter(function (f) {
+        return accepted.some(function (a) { return rectOverlaps(f.bounds, a.bounds); });
+      });
+      if (!joining.length) break;
+      accepted = accepted.concat(joining);
+      pending = pending.filter(function (f) { return joining.indexOf(f) === -1; });
+    }
+    pending.forEach(function (f) {
+      const reason = !f.bounds.present ? 'has no print-area' : 'print-area does not overlap the others';
+      warnings.push({ text: f.name + ': ' + reason + '; skipping' });
+    });
+  }
+  const skipped = active.filter(function (f) { return accepted.indexOf(f) === -1; });
+
+  const mapBounds = biggest ? { left: biggest.bounds.left, top: biggest.bounds.top, right: biggest.bounds.right, bottom: biggest.bounds.bottom, present: biggest.bounds.present } : { left: active[0].bounds.left, top: active[0].bounds.top, right: active[0].bounds.right, bottom: active[0].bounds.bottom, present: active[0].bounds.present };
+  const scale = accepted[0].scale;
+
+  let title = null;
+  accepted.forEach(function (f) {
+    if (title === null) title = f.title;
+    if (f.scale !== scale) warnings.push({ text: f.name + ': scale ' + f.scale + ', using ' + scale });
+  });
+
+  const controls = new Map();
+  const courseControls = new Map();
+  const courses = [];
+  const seenNames = {};
+  accepted.forEach(function (f) {
+    const fk = '#' + f.id;
+    const remap = {};
+    Object.keys(f.controls).forEach(function (cid) {
+      const ctrl = f.controls[cid];
+      const key = ctrl.kind === 'normal' ? 'normal\x1f' + ctrl.code : ctrl.kind;
+      if (!controls.has(key)) controls.set(key, { kind: ctrl.kind, code: ctrl.code, x: ctrl.x, y: ctrl.y });
+      remap[cid] = key;
+    });
+    Object.keys(f.course_controls).forEach(function (ccid) {
+      const cc = f.course_controls[ccid];
+      courseControls.set(fk + '/' + ccid, {
+        control: remap[cc.control],
+        next: cc.next ? fk + '/' + cc.next : null,
+      });
+    });
+    f.courses.forEach(function (course) {
+      if (seenNames[course.name]) {
+        warnings.push({ text: "duplicate course name '" + course.name + "' in " + f.name + '; skipping' });
+        return;
+      }
+      seenNames[course.name] = true;
+      courses.push({
+        name: course.name,
+        first_cc: fk + '/' + course.first_cc,
+        label_kind: course.label_kind,
+        bounds: course.bounds,
+        file: f.id,
+      });
+    });
+  });
+
+  return { controls, courses, courseControls, scale, bounds: mapBounds, title, accepted, skipped, warnings };
+}
+
+function fmtCoord(v) {
+  const s = String(Math.round(v * 100) / 100);
+  return s.indexOf('.') === -1 ? s + '.0' : s;
+}
+
+function legLengthM(c1, c2, scale) {
+  const dx = (c2.x - c1.x) * scale / 1000;
+  const dy = (c2.y - c1.y) * scale / 1000;
+  return Math.round(Math.hypot(dx, dy));
+}
+
+function traverseCourse(firstCc, courseControls, controls, scale) {
+  const ordered = [];
+  let ccid = firstCc;
+  let guard = 0;
+  while (ccid != null && guard++ < 500) {
+    const cc = courseControls.get(ccid);
+    if (!cc) break;
+    const ctrl = controls.get(cc.control);
+    ordered.push({ key: cc.control, ctrl: ctrl || { kind: 'normal', code: null, x: 0, y: 0 } });
+    ccid = cc.next;
+  }
+  const legs = [];
+  let total = 0;
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const d = legLengthM(ordered[i].ctrl, ordered[i + 1].ctrl, scale);
+    legs.push(d);
+    total += d;
+  }
+  return { ordered, legs, total };
+}
+
+function el(name, attrs, children, text) {
+  return { name, attrs: attrs || [], children: children || null, text: text != null ? String(text) : null };
+}
+
+function serializeXml(node, indent) {
+  const pad = '  '.repeat(indent);
+  const attrsStr = node.attrs.map(function (a) { return ' ' + a[0] + '="' + escAttrXml(a[1]) + '"'; }).join('');
+  if (!node.children || node.children.length === 0) {
+    if (node.text != null) return pad + '<' + node.name + attrsStr + '>' + escTextXml(node.text) + '</' + node.name + '>';
+    return pad + '<' + node.name + attrsStr + ' />';
+  }
+  const inner = node.children.map(function (c) { return serializeXml(c, indent + 1); }).join('\n');
+  return pad + '<' + node.name + attrsStr + '>\n' + inner + '\n' + pad + '</' + node.name + '>';
+}
+
+function nowIso() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+function buildIofXml(controls, courses, courseControls, scale, mapBounds, eventTitle, createTime, creator) {
+  const ns = 'http://www.orienteering.org/datastandard/3.0';
+  createTime = createTime || nowIso();
+  creator = creator || 'ppen_to_iof.html';
+
+  const iofIds = new Map();
+  let startN = 1;
+  let finishN = 1;
+  controls.forEach(function (ctrl, key) {
+    if (ctrl.kind === 'start') iofIds.set(key, 'STA' + startN++);
+    else if (ctrl.kind === 'finish') iofIds.set(key, 'FIN' + finishN++);
+    else iofIds.set(key, ctrl.code);
+  });
+
+  const rcd = [
+    el('Map', null, [
+      el('Scale', null, null, scale),
+      el('MapPositionTopLeft', [['x', fmtCoord(mapBounds.left)], ['y', fmtCoord(mapBounds.top)]]),
+      el('MapPositionBottomRight', [['x', fmtCoord(mapBounds.right)], ['y', fmtCoord(mapBounds.bottom)]]),
+    ]),
+  ];
+
+  const addControl = function (key, ctrl, type) {
+    rcd.push(el('Control', [['type', type]], [
+      el('Id', null, null, iofIds.get(key)),
+      el('MapPosition', [['x', fmtCoord(ctrl.x)], ['y', fmtCoord(ctrl.y)]]),
+    ]));
+  };
+
+  controls.forEach(function (ctrl, key) { if (ctrl.kind === 'start') addControl(key, ctrl, 'Start'); });
+  const seen = {};
+  controls.forEach(function (ctrl, key) {
+    if (ctrl.kind !== 'normal') return;
+    if (ctrl.code == null || seen[ctrl.code]) return;
+    seen[ctrl.code] = true;
+    addControl(key, ctrl, 'Control');
+  });
+  controls.forEach(function (ctrl, key) { if (ctrl.kind === 'finish') addControl(key, ctrl, 'Finish'); });
+
+  courses.forEach(function (course) {
+    const t = traverseCourse(course.first_cc, courseControls, controls, scale);
+    const ccs = [];
+    let controlNo = 0;
+    const useSequence = course.label_kind === 'sequence';
+    t.ordered.forEach(function (item, i) {
+      const kind = item.ctrl.kind;
+      const type = kind === 'start' ? 'Start' : kind === 'finish' ? 'Finish' : 'Control';
+      const children = [el('Control', null, null, iofIds.get(item.key))];
+      if (kind === 'normal') {
+        controlNo++;
+        if (useSequence) children.push(el('MapText', null, null, controlNo));
+      }
+      if (i > 0) children.push(el('LegLength', null, null, t.legs[i - 1]));
+      ccs.push(el('CourseControl', [['type', type]], children));
+    });
+    rcd.push(el('Course', null, [
+      el('Name', null, null, course.name),
+      el('Length', null, null, t.total),
+      el('Climb', null, null, 0),
+    ].concat(ccs)));
+  });
+
+  courses.forEach(function (course) {
+    rcd.push(el('ClassCourseAssignment', null, [
+      el('ClassName', null, null, course.name),
+      el('CourseName', null, null, course.name),
+    ]));
+  });
+
+  const root = el('CourseData', [['xmlns', ns], ['iofVersion', '3.0'], ['createTime', createTime], ['creator', creator]], [
+    el('Event', null, [el('Name', null, null, eventTitle)]),
+    el('RaceCourseData', null, rcd),
+  ]);
+
+  return "<?xml version='1.0' encoding='UTF-8'?>\n" + serializeXml(root, 0) + '\n';
+}
+
+const PALETTE = ['#e94560', '#27ae60', '#7ec8e3', '#f39c12', '#9b59b6', '#16a085', '#e67e22', '#2ecc71', '#8e44ad', '#d35400'];
+
+function toSvgRect(r) {
+  return { x: r.left, y: -r.top, w: r.right - r.left, h: r.top - r.bottom };
+}
+
+const MARK = { control: 1.75, start: 2.6, finishOuter: 2.1, finishInner: 1.3, stroke: 0.4 };
+
+function markerSvg(kind, k) {
+  const s = function (v) { return fmtCoord(v * k); };
+  if (kind === 'start') {
+    const r = MARK.start;
+    const pts = [];
+    for (let a = 0; a < 3; a++) {
+      const ang = Math.PI / 2 + a * 2 * Math.PI / 3;
+      pts.push(s(r * Math.cos(ang)) + ',' + s(r * Math.sin(ang)));
+    }
+    return '<polygon points="' + pts.join(' ') + '" fill="none" stroke="#333" stroke-width="' + s(MARK.stroke) + '" stroke-linejoin="round" />';
+  }
+  if (kind === 'finish') {
+    return '<circle r="' + s(MARK.finishOuter) + '" fill="none" stroke="#333" stroke-width="' + s(MARK.stroke) + '" /><circle r="' + s(MARK.finishInner) + '" fill="none" stroke="#333" stroke-width="' + s(MARK.stroke) + '" />';
+  }
+  return '<circle r="' + s(MARK.control) + '" fill="none" stroke="#333" stroke-width="' + s(MARK.stroke) + '" />';
+}
+
+function startRotation(ordered, i) {
+  if (i + 1 >= ordered.length) return '';
+  const a = ordered[i].ctrl;
+  const b = ordered[i + 1].ctrl;
+  const dx = b.x - a.x;
+  const dySvg = -(b.y - a.y);
+  const deg = Math.atan2(dySvg, dx) * 180 / Math.PI + 90;
+  return ' rotate(' + fmtCoord(deg) + ')';
+}
+
+function renderSvg(merge, bounds) {
+  const wrap = getEl('previewWrap');
+  if (!merge.courses.length) {
+    wrap.innerHTML = '<p class="muted">' + escHtml(I18N[lang].noFiles) + '</p>';
+    return;
+  }
+  const xs = [];
+  const ys = [];
+  const union = function (r) { xs.push(r.left, r.right); ys.push(r.top, r.bottom); };
+  union(bounds);
+  merge.accepted.forEach(function (f) {
+    union(f.bounds);
+    f.courses.forEach(function (c) { if (c.bounds) union(c.bounds); });
+  });
+
+  const img = mapImage && mapImage.dataUrl ? {
+    dataUrl: mapImage.dataUrl,
+    left: parseFloat(getEl('imgL').value || '0'),
+    top: parseFloat(getEl('imgT').value || '0'),
+    right: parseFloat(getEl('imgR').value || '0'),
+    bottom: parseFloat(getEl('imgB').value || '0'),
+  } : null;
+  if (img) union({ left: img.left, top: img.top, right: img.right, bottom: img.bottom });
+
+  const minX = Math.min.apply(null, xs);
+  const maxX = Math.max.apply(null, xs);
+  const minY = Math.min.apply(null, ys);
+  const maxY = Math.max.apply(null, ys);
+  const pad = (maxX - minX) * 0.05;
+  const vb = [minX - pad, -(maxY + pad), (maxX - minX) + pad * 2, (maxY - minY) + pad * 2]
+    .map(function (v) { return fmtCoord(v); }).join(' ');
+  const k = Math.min(4, Math.max(0.5, Math.min(maxX - minX, maxY - minY) / 140));
+  const s = function (v) { return fmtCoord(v * k); };
+
+  const pieces = ['<svg viewBox="' + vb + '" xmlns="http://www.w3.org/2000/svg">'];
+  pieces.push('<rect x="' + (minX - pad) + '" y="' + (-(maxY + pad)) + '" width="' + ((maxX - minX) + pad * 2) + '" height="' + ((maxY - minY) + pad * 2) + '" fill="#fff" />');
+
+  if (img) {
+    const r = toSvgRect({ left: img.left, top: img.top, right: img.right, bottom: img.bottom });
+    pieces.push('<image href="' + img.dataUrl + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" preserveAspectRatio="none" opacity="0.85" />');
+  }
+
+  const crsKey = function (name) { return 'crs:' + String(name).replace(/[^A-Za-z0-9._-]+/g, '_'); };
+  const hidden = function (key) { return hiddenAreas.has(key); };
+  const areaTip = ' title="' + escAttrXml(I18N[lang].areaTip) + '"';
+
+  merge.accepted.forEach(function (f, fi) {
+    if (hidden('evt:' + f.id)) return;
+    const er = toSvgRect(f.bounds);
+    const col = PALETTE[fi % PALETTE.length];
+    pieces.push('<rect data-area="evt:' + f.id + '" x="' + er.x + '" y="' + er.y + '" width="' + er.w + '" height="' + er.h + '" fill="rgba(150,150,150,0.08)" stroke="' + col + '" stroke-width="' + s(0.5) + '" stroke-dasharray="' + s(3) + ',' + s(2) + '" pointer-events="all" class="area" style="cursor:pointer"' + areaTip + ' onclick="toggleArea(\'evt:' + f.id + '\')" />');
+    pieces.push('<text x="' + s(er.x / k + 1.5) + '" y="' + s(er.y / k + (2 + fi * 3)) + '" font-size="' + s(2.5) + '" font-weight="bold" fill="#444" paint-order="stroke" stroke="#fff" stroke-width="' + s(0.4) + '">' + escTextXml(f.name) + '</text>');
+  });
+
+  let ci = 0;
+  merge.courses.forEach(function (course) {
+    const col = PALETTE[ci % PALETTE.length];
+    if (course.bounds && !hidden(crsKey(course.name))) {
+      const cr = toSvgRect(course.bounds);
+      pieces.push('<rect data-area="' + crsKey(course.name) + '" x="' + cr.x + '" y="' + cr.y + '" width="' + cr.w + '" height="' + cr.h + '" fill="' + col + '" opacity="0.12" pointer-events="all" class="area" style="cursor:pointer"' + areaTip + ' onclick="toggleArea(\'' + crsKey(course.name) + '\')" />');
+    }
+    ci++;
+  });
+
+  const mb = toSvgRect(bounds);
+  pieces.push('<rect x="' + mb.x + '" y="' + mb.y + '" width="' + mb.w + '" height="' + mb.h + '" fill="none" stroke="#2d6cdf" stroke-width="' + s(1) + '" />');
+
+  merge.accepted.forEach(function (f) {
+    if (!hidden('evt:' + f.id)) return;
+    const er = toSvgRect(f.bounds);
+    pieces.push('<rect data-area="evt:' + f.id + '" data-ghost="1" x="' + er.x + '" y="' + er.y + '" width="' + er.w + '" height="' + er.h + '" fill="none" stroke="#999" stroke-width="' + s(0.5) + '" stroke-dasharray="' + s(3) + ',' + s(2) + '" opacity="0.4" pointer-events="all" class="area" style="cursor:pointer"' + areaTip + ' onclick="toggleArea(\'evt:' + f.id + '\')" />');
+  });
+  merge.courses.forEach(function (course) {
+    if (!course.bounds || !hidden(crsKey(course.name))) return;
+    const cr = toSvgRect(course.bounds);
+    pieces.push('<rect data-area="' + crsKey(course.name) + '" data-ghost="1" x="' + cr.x + '" y="' + cr.y + '" width="' + cr.w + '" height="' + cr.h + '" fill="none" stroke="#999" stroke-width="' + s(0.5) + '" stroke-dasharray="' + s(3) + ',' + s(2) + '" opacity="0.4" pointer-events="all" class="area" style="cursor:pointer"' + areaTip + ' onclick="toggleArea(\'' + crsKey(course.name) + '\')" />');
+  });
+
+  const legend = [];
+  const drawn = {};
+  ci = 0;
+  merge.courses.forEach(function (course) {
+    const col = PALETTE[ci % PALETTE.length];
+    const courseHidden = hidden(crsKey(course.name)) || hidden('evt:' + course.file);
+    const t = traverseCourse(course.first_cc, merge.courseControls, merge.controls, merge.scale);
+    legend.push('<span style="color:' + col + (courseHidden ? ';opacity:.35' : '') + '">&#9632; ' + escHtml(course.name) + ' (' + t.total + ' m)</span>');
+    if (courseHidden) { ci++; return; }
+    const pts = t.ordered.map(function (o) { return fmtCoord(o.ctrl.x) + ',' + fmtCoord(-o.ctrl.y); });
+    pieces.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + col + '" stroke-width="' + s(0.5) + '" stroke-linejoin="round" stroke-linecap="round" opacity="0.6" />');
+    t.ordered.forEach(function (o, i) {
+      const key = o.key;
+      if (drawn[key]) return;
+      drawn[key] = true;
+      const c = o.ctrl;
+      const sx = fmtCoord(c.x);
+      const sy = fmtCoord(-c.y);
+      const rot = c.kind === 'start' ? startRotation(t.ordered, i) : '';
+      pieces.push('<g transform="translate(' + sx + ' ' + sy + ')' + rot + '">' + markerSvg(c.kind, k));
+      if (c.kind === 'normal' && c.code != null) {
+        pieces.push('<text y="' + s(-3.5) + '" text-anchor="middle" font-size="' + s(3) + '" font-weight="bold" fill="#222" paint-order="stroke" stroke="#fff" stroke-width="' + s(0.4) + '">' + escTextXml(c.code) + '</text>');
+      }
+      pieces.push('</g>');
+    });
+    ci++;
+  });
+  pieces.push('</svg>');
+  pieces.push('<div class="legend"><strong>' + escHtml(I18N[lang].legend) + ': </strong>' + legend.join('') + '</div>');
+  wrap.innerHTML = pieces.join('');
+}
+
+function renderSummary(merge, eventTitle, bounds) {
+  const t = I18N[lang];
+  const totalActive = files.filter(function (f) { return f.include; }).length;
+  const parts = [];
+  parts.push('<span class="ok">' + merge.accepted.length + ' ' + t.sumAccepted + '</span>');
+  if (merge.skipped.length) parts.push('<span class="warn">' + merge.skipped.length + ' ' + t.sumSkipped + '</span>');
+  let starts = 0, finishes = 0, normals = 0;
+  merge.controls.forEach(function (ctrl) {
+    if (ctrl.kind === 'start') starts++;
+    else if (ctrl.kind === 'finish') finishes++;
+    else if (ctrl.code != null) normals++;
+  });
+  parts.push(eventTitle ? '<b>' + escHtml(eventTitle) + '</b>' : '');
+  parts.push(merge.courses.length + ' ' + t.sumCourses);
+  parts.push(normals + ' ' + t.sumControls + ' · ' + starts + ' ' + t.sumStart + ' · ' + finishes + ' ' + t.sumFinish);
+  parts.push(t.sumLen);
+  parts.push(t.sumLen);
+  const boundsStr = fmtCoord(bounds.left) + ' ' + fmtCoord(bounds.top) + ' ' + fmtCoord(bounds.right) + ' ' + fmtCoord(bounds.bottom);
+  parts.push('mm: ' + boundsStr);
+  getEl('summary').innerHTML = parts.join(' · ');
+  getEl('saveStatus').textContent = totalActive ? '' : t.noFiles;
+}
+
+function convert() {
+  const totalActive = files.filter(function (f) { return f.include; }).length;
+  if (!totalActive) {
+    lastResult = null;
+    getEl('summary').innerHTML = '<span class="err">' + escHtml(I18N[lang].noFiles) + '</span>';
+    getEl('previewWrap').innerHTML = '<p class="muted">' + escHtml(I18N[lang].previewHint) + '</p>';
+    getEl('xmlOut').value = '';
+    getEl('saveBtn').disabled = true;
+    getEl('warnings').style.display = 'none';
+    return;
+  }
+  if (mapImage && mapImage.dataUrl) {
+    mapImage.left = parseFloat(getEl('imgL').value || '0');
+    mapImage.top = parseFloat(getEl('imgT').value || '0');
+    mapImage.right = parseFloat(getEl('imgR').value || '0');
+    mapImage.bottom = parseFloat(getEl('imgB').value || '0');
+  }
+  const merge = mergePpen(files);
+  let bounds = merge.bounds;
+  const override = parseBoundsOverride(getEl('boundsIn').value);
+  if (override === 'invalid') {
+    merge.warnings.push({ text: 'invalid map bounds override; using print area' });
+  } else if (override) {
+    bounds = { left: override.left, top: override.top, right: override.right, bottom: override.bottom };
+  }
+  const eventTitle = getEl('titleIn').value.trim() || merge.title || 'Event';
+  const creator = getEl('creatorIn').value.trim() || 'ppen_to_iof.html';
+  const xml = buildIofXml(merge.controls, merge.courses, merge.courseControls, merge.scale, bounds, eventTitle, undefined, creator);
+  lastResult = { xml, title: eventTitle, merge };
+  renderSummary(merge, eventTitle, bounds);
+  renderSvg(merge, bounds);
+  getEl('xmlOut').value = xml;
+  getEl('saveBtn').disabled = false;
+  const w = merge.warnings;
+  getEl('warnList').innerHTML = w.length
+    ? w.map(function (x) { return '<li>' + escHtml(x.text) + '</li>'; }).join('')
+    : '<li>&mdash;</li>';
+  getEl('warnings').style.display = w.length ? 'block' : 'none';
+}
+
+function parseBoundsOverride(s) {
+  s = (s || '').trim();
+  if (!s) return null;
+  const parts = s.split(/[\s,]+/).map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return 'invalid';
+  return { left: parts[0], top: parts[1], right: parts[2], bottom: parts[3] };
+}
+
+function renderFiles() {
+  const wrap = getEl('fileList');
+  wrap.innerHTML = '';
+  files.forEach(function (f, i) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    const title = f.title || '';
+    const meta = f.courses.length + ' rataa · ' + Object.keys(f.controls).length + ' rastia · 1:' + f.scale +
+      (title ? ' · ' + title : '');
+    row.innerHTML = '<label class="chk"><input type="checkbox" ' + (f.include ? 'checked' : '') +
+      ' onchange="setInclude(' + i + ', this.checked)"> ' + escHtml(f.name) + '</label>' +
+      '<span class="file-meta">' + escHtml(meta) + '</span>';
+    wrap.appendChild(row);
+  });
+}
+
+function toggleArea(key) {
+  if (hiddenAreas.has(key)) hiddenAreas.delete(key);
+  else hiddenAreas.add(key);
+  convert();
+}
+
+function addPpenFile(name, xmlText) {
+  hiddenAreas.clear();
+  let parsed;
+  try {
+    parsed = parsePpen(xmlText, name);
+  } catch (e) {
+    getEl('summary').innerHTML = '<span class="err">' + escHtml(I18N[lang].parseErr + (e && e.message || e)) + '</span>';
+    return;
+  }
+  files.push({ id: ++fileSeq, name, include: true, ...parsed });
+  renderFiles();
+  convert();
+}
+
+function setInclude(i, checked) {
+  if (files[i]) files[i].include = checked;
+  convert();
+}
+
+function loadDemo() {
+  Object.keys(POKAALIJAHTI_DEMO).forEach(function (n) { addPpenFile(n, POKAALIJAHTI_DEMO[n]); });
+}
+
+function clearAll() {
+  files.splice(0);
+  fileSeq = 0;
+  hiddenAreas.clear();
+  mapImage = null;
+  lastResult = null;
+  getEl('filesInput').value = '';
+  getEl('mapImgInput').value = '';
+  getEl('titleIn').value = '';
+  getEl('boundsIn').value = '';
+  getEl('creatorIn').value = '';
+  ['imgL', 'imgT', 'imgR', 'imgB'].forEach(function (id) { getEl(id).value = ''; });
+  renderFiles();
+  convert();
+}
+
+function setMapImage(dataUrl) {
+  mapImage = { dataUrl };
+  const b = lastResult && lastResult.merge ? lastResult.merge.bounds : null;
+  getEl('imgL').value = b ? String(b.left) : '';
+  getEl('imgT').value = b ? String(b.top) : '';
+  getEl('imgR').value = b ? String(b.right) : '';
+  getEl('imgB').value = b ? String(b.bottom) : '';
+  convert();
+}
+
+function download() {
+  if (!lastResult) return;
+  const blob = new Blob([lastResult.xml], { type: 'application/xml;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (lastResult.title || 'course-data').replace(/[^\w-]+/g, '_') + '.xml';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+const POKAALIJAHTI_DEMO = {
+  "nuorten_d16.ppen": "﻿<course-scribe-event>\r\n  <event id=\"1\">\r\n    <title>Nuorten kisa</title>\r\n    <map kind=\"OCAD\" scale=\"15000\" ignore-missing-fonts=\"false\" absolute-path=\"C:\\Users\\user\\Documents\\Suunnistus\\NuortenKisa 2026\\karttapohja_nuortenkisa_viitoitus.omap\">karttapohja_nuortenkisa_viitoitus.omap</map>\r\n    <standards map=\"2017\" description=\"2018\" />\r\n    <all-controls print-scale=\"10000\" description-kind=\"symbols\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-154.640259\" top=\"25.4121246\" right=\"-14.601593\" bottom=\"-172.538544\" page-width=\"827\" page-height=\"1169\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <numbering start=\"31\" disallow-invertible=\"false\" />\r\n    <punch-card rows=\"3\" columns=\"8\" left-to-right=\"true\" top-to-bottom=\"false\" />\r\n    <course-appearance scale-sizes=\"RelativeTo15000\" scale-sizes-circle-gaps=\"true\" number-font=\"Roboto\" auto-leg-gap-size=\"3.5\" blend-purple=\"true\" blend-style=\"blend\" />\r\n    <descriptions lang=\"fi\" color=\"black\" />\r\n    <ocad overprint-colors=\"false\" />\r\n  </event>\r\n  <control id=\"1\" kind=\"finish\">\r\n    <location x=\"-97.77825\" y=\"-133.4782\" />\r\n    <description box=\"all\" iof-2004-ref=\"14.3\" />\r\n  </control>\r\n  <control id=\"2\" kind=\"start\">\r\n    <location x=\"-104.522568\" y=\"-142.084671\" />\r\n  </control>\r\n  <control id=\"3\" kind=\"normal\">\r\n    <code>109</code>\r\n    <location x=\"-110.316383\" y=\"-129.51059\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1E\" />\r\n  </control>\r\n  <control id=\"4\" kind=\"normal\">\r\n    <code>48</code>\r\n    <location x=\"-120.249992\" y=\"-127.010292\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"E\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.15\" />\r\n  </control>\r\n  <control id=\"5\" kind=\"normal\">\r\n    <code>60</code>\r\n    <location x=\"-130.573608\" y=\"-108.058006\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <control id=\"6\" kind=\"normal\">\r\n    <code>100</code>\r\n    <location x=\"-103.89489\" y=\"-125.154091\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.9\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.11\" />\r\n  </control>\r\n  <control id=\"7\" kind=\"normal\">\r\n    <code>130</code>\r\n    <location x=\"-103.583305\" y=\"-94.46522\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.2SE\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"9\" kind=\"normal\">\r\n    <code>117</code>\r\n    <location x=\"-88.35625\" y=\"-70.98093\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"10\" kind=\"normal\">\r\n    <code>116</code>\r\n    <location x=\"-90.37539\" y=\"-63.9498177\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.1S\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"11\" kind=\"normal\">\r\n    <code>122</code>\r\n    <location x=\"-111.94989\" y=\"-67.59072\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.1N\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <control id=\"12\" kind=\"normal\">\r\n    <code>127</code>\r\n    <location x=\"-108.545357\" y=\"-81.64841\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.2\" />\r\n    <gaps scale=\"15000\">11111111111111110011111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">154.955017:184.955017</circle-gaps>\r\n  </control>\r\n  <control id=\"13\" kind=\"normal\">\r\n    <code>133</code>\r\n    <location x=\"-108.618843\" y=\"-108.805084\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <control id=\"14\" kind=\"normal\">\r\n    <code>40</code>\r\n    <location x=\"-126.944786\" y=\"-99.58496\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.2SW\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <course id=\"1\" kind=\"normal\" order=\"1\">\r\n    <name>D16</name>\r\n    <labels label-kind=\"sequence\" />\r\n    <first course-control=\"1\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-145.316681\" top=\"-15.7186127\" right=\"-46.5953445\" bottom=\"-155.757278\" page-width=\"583\" page-height=\"827\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <options print-scale=\"10000\" hide-from-reports=\"false\" description-kind=\"symbols\" />\r\n  </course>\r\n  <course-control id=\"1\" control=\"2\">\r\n    <next course-control=\"3\" />\r\n  </course-control>\r\n  <course-control id=\"2\" control=\"1\" />\r\n  <course-control id=\"3\" control=\"3\">\r\n    <next course-control=\"4\" />\r\n  </course-control>\r\n  <course-control id=\"4\" control=\"4\">\r\n    <next course-control=\"5\" />\r\n  </course-control>\r\n  <course-control id=\"5\" control=\"5\">\r\n    <next course-control=\"14\" />\r\n  </course-control>\r\n  <course-control id=\"6\" control=\"7\">\r\n    <next course-control=\"8\" />\r\n  </course-control>\r\n  <course-control id=\"13\" control=\"10\">\r\n    <next course-control=\"9\" />\r\n  </course-control>\r\n  <course-control id=\"8\" control=\"9\">\r\n    <next course-control=\"13\" />\r\n  </course-control>\r\n  <course-control id=\"9\" control=\"11\">\r\n    <next course-control=\"10\" />\r\n  </course-control>\r\n  <course-control id=\"10\" control=\"12\">\r\n    <next course-control=\"11\" />\r\n  </course-control>\r\n  <course-control id=\"11\" control=\"13\">\r\n    <next course-control=\"12\" />\r\n  </course-control>\r\n  <course-control id=\"12\" control=\"6\">\r\n    <next course-control=\"2\" />\r\n  </course-control>\r\n  <course-control id=\"14\" control=\"14\">\r\n    <next course-control=\"6\" />\r\n  </course-control>\r\n  <leg id=\"1\" start-control=\"6\" end-control=\"1\">\r\n    <gaps>\r\n      <gap start=\"2.3451488\" length=\"5.410922\" />\r\n    </gaps>\r\n  </leg>\r\n  <special-object id=\"1\" kind=\"descriptions\">\r\n    <location x=\"-73.92508\" y=\"-19.1268082\" />\r\n    <location x=\"-70.87699\" y=\"-19.1268082\" />\r\n    <courses>\r\n      <course course=\"1\" />\r\n    </courses>\r\n  </special-object>\r\n  <special-object id=\"2\" kind=\"white-out\">\r\n    <location x=\"-140.491623\" y=\"-19.2635555\" />\r\n    <location x=\"-77.50491\" y=\"-19.2635555\" />\r\n    <location x=\"-77.50491\" y=\"-30.6663227\" />\r\n    <location x=\"-140.129623\" y=\"-29.942337\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"3\" kind=\"text\">\r\n    <text>NuortenKisa 10.8.2026, HD16</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-138.861649\" y=\"-20.8010254\" />\r\n    <location x=\"-77.32392\" y=\"-25.5079288\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"4\" kind=\"text\">\r\n    <text>1:10000, kv 5m</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-138.318665\" y=\"-25.5974274\" />\r\n    <location x=\"-96.14753\" y=\"-29.942337\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n</course-scribe-event>",
+  "nuorten_suorat.ppen": "﻿<course-scribe-event>\r\n  <event id=\"1\">\r\n    <title>Nuorten kisa</title>\r\n    <map kind=\"OCAD\" scale=\"15000\" ignore-missing-fonts=\"false\" absolute-path=\"C:\\Users\\user\\Documents\\Suunnistus\\NuortenKisa 2026\\karttapohja_nuortenkisa_viitoitus.omap\">karttapohja_nuortenkisa_viitoitus.omap</map>\r\n    <standards map=\"2017\" description=\"2018\" />\r\n    <all-controls print-scale=\"7500\" description-kind=\"symbols\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-147.606064\" top=\"-48.3939667\" right=\"-73.56506\" bottom=\"-153.422974\" page-width=\"583\" page-height=\"827\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <numbering start=\"31\" disallow-invertible=\"false\" />\r\n    <punch-card rows=\"3\" columns=\"8\" left-to-right=\"true\" top-to-bottom=\"false\" />\r\n    <course-appearance scale-sizes=\"RelativeToMap\" scale-sizes-circle-gaps=\"true\" number-font=\"Roboto\" auto-leg-gap-size=\"3.5\" blend-purple=\"true\" blend-style=\"blend\" />\r\n    <descriptions lang=\"fi\" color=\"black\" />\r\n    <ocad overprint-colors=\"false\" />\r\n  </event>\r\n  <control id=\"1\" kind=\"start\">\r\n    <location x=\"-104.598778\" y=\"-142.015869\" />\r\n  </control>\r\n  <control id=\"2\" kind=\"finish\">\r\n    <location x=\"-97.84666\" y=\"-133.6493\" />\r\n    <description box=\"all\" iof-2004-ref=\"14.3\" />\r\n    <gaps scale=\"15000\">11111111000111000111111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">168.687775:198.687775,239.135773:269.135773</circle-gaps>\r\n  </control>\r\n  <control id=\"4\" kind=\"normal\" all-controls-code-angle=\"-125.149605\">\r\n    <code>58</code>\r\n    <location x=\"-115.151505\" y=\"-132.483261\" />\r\n    <description box=\"D\" iof-2004-ref=\"5.4\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.8E\" />\r\n  </control>\r\n  <control id=\"5\" kind=\"normal\" all-controls-code-angle=\"-141.374863\">\r\n    <code>72</code>\r\n    <location x=\"-118.959717\" y=\"-119.631622\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"6\" kind=\"normal\" all-controls-code-angle=\"119.466644\">\r\n    <code>62</code>\r\n    <location x=\"-123.805336\" y=\"-111.601738\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.9\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.11\" />\r\n  </control>\r\n  <control id=\"7\" kind=\"normal\">\r\n    <code>56</code>\r\n    <location x=\"-121.417786\" y=\"-103.212166\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.4\" />\r\n    <description box=\"F\">1,5</description>\r\n    <description box=\"G\" iof-2004-ref=\"11.1S\" />\r\n  </control>\r\n  <control id=\"8\" kind=\"normal\" all-controls-code-angle=\"-4.80983925\">\r\n    <code>129</code>\r\n    <location x=\"-114.313934\" y=\"-111.963547\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n    <gaps scale=\"15000\">11100111111111111111111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">300.431824:330.431824</circle-gaps>\r\n  </control>\r\n  <control id=\"9\" kind=\"normal\">\r\n    <code>100</code>\r\n    <location x=\"-103.834473\" y=\"-125.134872\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.9\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.11\" />\r\n  </control>\r\n  <control id=\"10\" kind=\"normal\">\r\n    <code>34</code>\r\n    <location x=\"-108.283165\" y=\"-134.319061\" />\r\n    <description box=\"D\" iof-2004-ref=\"5.2\" />\r\n    <description box=\"E\" iof-2004-ref=\"5.2\" />\r\n    <description box=\"F\" iof-2004-ref=\"10.2\" />\r\n  </control>\r\n  <control id=\"11\" kind=\"normal\">\r\n    <code>32</code>\r\n    <location x=\"-121.946892\" y=\"-114.629555\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <control id=\"15\" kind=\"normal\">\r\n    <code>40</code>\r\n    <location x=\"-126.966652\" y=\"-99.45226\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.2SW\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"14\" kind=\"normal\">\r\n    <code>60</code>\r\n    <location x=\"-130.6181\" y=\"-108.057182\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <control id=\"16\" kind=\"normal\">\r\n    <code>113</code>\r\n    <location x=\"-113.827644\" y=\"-100.175514\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1SE\" />\r\n    <gaps scale=\"15000\">11111100000011111111111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">227.067627:287.066528</circle-gaps>\r\n  </control>\r\n  <control id=\"17\" kind=\"normal\">\r\n    <code>78</code>\r\n    <location x=\"-114.790596\" y=\"-120.423042\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1W\" />\r\n  </control>\r\n  <control id=\"18\" kind=\"normal\">\r\n    <code>143</code>\r\n    <location x=\"-104.541168\" y=\"-119.395683\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"19\" kind=\"normal\">\r\n    <code>64</code>\r\n    <location x=\"-130.720261\" y=\"-103.87989\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.9\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1E\" />\r\n  </control>\r\n  <control id=\"20\" kind=\"normal\">\r\n    <code>46</code>\r\n    <location x=\"-120.859711\" y=\"-88.01303\" />\r\n    <description box=\"D\" iof-2004-ref=\"5.2\" />\r\n    <description box=\"E\" iof-2004-ref=\"5.2\" />\r\n    <description box=\"F\" iof-2004-ref=\"10.2\" />\r\n  </control>\r\n  <control id=\"21\" kind=\"normal\" all-controls-code-angle=\"-48.52143\">\r\n    <code>75</code>\r\n    <location x=\"-113.943474\" y=\"-84.187294\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"22\" kind=\"normal\">\r\n    <code>48</code>\r\n    <location x=\"-120.280571\" y=\"-127.033493\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"E\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.15\" />\r\n  </control>\r\n  <control id=\"23\" kind=\"normal\">\r\n    <code>74</code>\r\n    <location x=\"-117.38163\" y=\"-72.66223\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.1N\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"24\" kind=\"normal\">\r\n    <code>127</code>\r\n    <location x=\"-108.44352\" y=\"-81.5890961\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.2\" />\r\n    <gaps scale=\"15000\">10001111111111111111111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">319.95163:349.95163</circle-gaps>\r\n  </control>\r\n  <control id=\"25\" kind=\"normal\">\r\n    <code>114</code>\r\n    <location x=\"-109.165359\" y=\"-115.545982\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <course id=\"1\" kind=\"normal\" order=\"1\">\r\n    <name>D10</name>\r\n    <labels label-kind=\"sequence\" />\r\n    <first course-control=\"1\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-147.606064\" top=\"-48.3939667\" right=\"-73.56506\" bottom=\"-153.422974\" page-width=\"583\" page-height=\"827\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <options print-scale=\"7500\" hide-from-reports=\"false\" description-kind=\"symbols\" />\r\n  </course>\r\n  <course id=\"2\" kind=\"normal\" order=\"2\">\r\n    <name>D12</name>\r\n    <labels label-kind=\"sequence\" />\r\n    <first course-control=\"14\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-147.606064\" top=\"-48.3939667\" right=\"-73.56506\" bottom=\"-153.422974\" page-width=\"583\" page-height=\"827\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <options print-scale=\"7500\" hide-from-reports=\"false\" description-kind=\"symbols\" />\r\n  </course>\r\n  <course id=\"3\" kind=\"normal\" order=\"3\">\r\n    <name>D14</name>\r\n    <labels label-kind=\"sequence\" />\r\n    <first course-control=\"27\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-147.606064\" top=\"-48.3939667\" right=\"-73.56506\" bottom=\"-153.422974\" page-width=\"583\" page-height=\"827\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <options print-scale=\"7500\" hide-from-reports=\"false\" description-kind=\"symbols\" />\r\n  </course>\r\n  <course-control id=\"1\" control=\"1\">\r\n    <next course-control=\"39\" />\r\n  </course-control>\r\n  <course-control id=\"2\" control=\"2\" />\r\n  <course-control id=\"39\" control=\"10\">\r\n    <next course-control=\"5\" />\r\n  </course-control>\r\n  <course-control id=\"5\" control=\"5\">\r\n    <next course-control=\"6\" />\r\n  </course-control>\r\n  <course-control id=\"6\" control=\"6\">\r\n    <next course-control=\"7\" />\r\n  </course-control>\r\n  <course-control id=\"7\" control=\"7\">\r\n    <next course-control=\"8\" />\r\n  </course-control>\r\n  <course-control id=\"8\" control=\"8\">\r\n    <next course-control=\"9\" />\r\n  </course-control>\r\n  <course-control id=\"9\" control=\"9\">\r\n    <next course-control=\"2\" />\r\n  </course-control>\r\n  <course-control id=\"14\" control=\"1\">\r\n    <next course-control=\"40\" />\r\n  </course-control>\r\n  <course-control id=\"15\" control=\"2\" />\r\n  <course-control id=\"17\" control=\"11\">\r\n    <next course-control=\"24\" />\r\n  </course-control>\r\n  <course-control id=\"19\" control=\"16\">\r\n    <next course-control=\"20\" />\r\n  </course-control>\r\n  <course-control id=\"20\" control=\"8\">\r\n    <next course-control=\"23\" />\r\n  </course-control>\r\n  <course-control id=\"22\" control=\"9\">\r\n    <next course-control=\"15\" />\r\n  </course-control>\r\n  <course-control id=\"23\" control=\"18\">\r\n    <next course-control=\"22\" />\r\n  </course-control>\r\n  <course-control id=\"24\" control=\"19\">\r\n    <next course-control=\"25\" />\r\n  </course-control>\r\n  <course-control id=\"25\" control=\"20\">\r\n    <next course-control=\"26\" />\r\n  </course-control>\r\n  <course-control id=\"26\" control=\"21\">\r\n    <next course-control=\"19\" />\r\n  </course-control>\r\n  <course-control id=\"27\" control=\"1\">\r\n    <next course-control=\"30\" />\r\n  </course-control>\r\n  <course-control id=\"28\" control=\"2\" />\r\n  <course-control id=\"30\" control=\"22\">\r\n    <next course-control=\"31\" />\r\n  </course-control>\r\n  <course-control id=\"31\" control=\"14\">\r\n    <next course-control=\"32\" />\r\n  </course-control>\r\n  <course-control id=\"32\" control=\"20\">\r\n    <next course-control=\"33\" />\r\n  </course-control>\r\n  <course-control id=\"33\" control=\"23\">\r\n    <next course-control=\"34\" />\r\n  </course-control>\r\n  <course-control id=\"34\" control=\"24\">\r\n    <next course-control=\"35\" />\r\n  </course-control>\r\n  <course-control id=\"35\" control=\"16\">\r\n    <next course-control=\"36\" />\r\n  </course-control>\r\n  <course-control id=\"36\" control=\"25\">\r\n    <next course-control=\"38\" />\r\n  </course-control>\r\n  <course-control id=\"37\" control=\"9\">\r\n    <next course-control=\"28\" />\r\n  </course-control>\r\n  <course-control id=\"38\" control=\"17\">\r\n    <next course-control=\"37\" />\r\n  </course-control>\r\n  <course-control id=\"40\" control=\"4\">\r\n    <next course-control=\"17\" />\r\n  </course-control>\r\n  <leg id=\"2\" start-control=\"16\" end-control=\"25\">\r\n    <gaps>\r\n      <gap start=\"4.28510952\" length=\"2.00000381\" />\r\n    </gaps>\r\n  </leg>\r\n  <leg id=\"3\" start-control=\"25\" end-control=\"17\">\r\n    <gaps>\r\n      <gap start=\"3.508647\" length=\"2.00000286\" />\r\n    </gaps>\r\n  </leg>\r\n  <leg id=\"4\" start-control=\"9\" end-control=\"2\">\r\n    <flagging kind=\"all\" />\r\n    <gaps>\r\n      <gap start=\"2.10954285\" length=\"5.500308\" />\r\n    </gaps>\r\n  </leg>\r\n  <special-object id=\"1\" kind=\"descriptions\">\r\n    <location x=\"-100.128479\" y=\"-60.9559021\" />\r\n    <location x=\"-97.09803\" y=\"-60.9559021\" />\r\n    <courses>\r\n      <course course=\"1\" />\r\n    </courses>\r\n  </special-object>\r\n  <special-object id=\"2\" kind=\"descriptions\">\r\n    <location x=\"-94.69696\" y=\"-50.00023\" />\r\n    <location x=\"-92.29722\" y=\"-50.00023\" />\r\n    <courses>\r\n      <course course=\"2\" />\r\n    </courses>\r\n  </special-object>\r\n  <special-object id=\"3\" kind=\"descriptions\">\r\n    <location x=\"-95.98147\" y=\"-49.5166321\" />\r\n    <location x=\"-93.37928\" y=\"-49.5166321\" />\r\n    <courses>\r\n      <course course=\"3\" />\r\n    </courses>\r\n  </special-object>\r\n  <special-object id=\"4\" kind=\"white-out\">\r\n    <location x=\"-143.030945\" y=\"-50.6406822\" />\r\n    <location x=\"-107.645218\" y=\"-50.2198\" />\r\n    <location x=\"-107.5843\" y=\"-60.2110519\" />\r\n    <location x=\"-143.016724\" y=\"-60.454628\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"5\" kind=\"text\">\r\n    <text>NuortenKisa 10.8.2026</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-141.223663\" y=\"-50.9030342\" />\r\n    <location x=\"-108.802185\" y=\"-55.0014038\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"6\" kind=\"text\">\r\n    <text>1:7500, kv 5m</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-133.974426\" y=\"-55.18211\" />\r\n    <location x=\"-114.409653\" y=\"-58.51227\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n</course-scribe-event>",
+  "nuorten_siimari.ppen": "﻿<course-scribe-event>\n  <event id=\"1\">\n    <title>Nuorten kisa</title>\n    <map kind=\"OCAD\" scale=\"15000\" ignore-missing-fonts=\"false\" absolute-path=\"/Users/phyvarin/Downloads/siimarihahmotelma_2.omap\">siimarihahmotelma_2.omap</map>\n    <standards map=\"2017\" description=\"2018\" />\n    <all-controls print-scale=\"7500\" description-kind=\"symbols\" />\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-134.6599\" top=\"-79.31137\" right=\"-89.32089\" bottom=\"-146.24037\" page-width=\"413\" page-height=\"583\" page-margins=\"28\" page-landscape=\"false\" />\n    <numbering start=\"31\" disallow-invertible=\"false\" />\n    <punch-card rows=\"3\" columns=\"8\" left-to-right=\"true\" top-to-bottom=\"false\" />\n    <course-appearance scale-sizes=\"RelativeToMap\" scale-sizes-circle-gaps=\"true\" number-font=\"Roboto\" auto-leg-gap-size=\"3.5\" blend-purple=\"true\" blend-style=\"blend\" />\n    <descriptions lang=\"fi\" color=\"black\" />\n    <ocad overprint-colors=\"false\" />\n  </event>\n  <control id=\"1\" kind=\"finish\">\n    <location x=\"-97.85543\" y=\"-133.31705\" />\n    <description box=\"all\" iof-2004-ref=\"14.3\" />\n    <gaps scale=\"15000\">11111111111000001111111111111111</gaps>\n    <circle-gaps scale=\"15000\">174.90427:204.90427,207.7687:237.7687</circle-gaps>\n  </control>\n  <control id=\"2\" kind=\"start\">\n    <location x=\"-104.88719\" y=\"-141.7656\" />\n  </control>\n  <control id=\"4\" kind=\"normal\">\n    <code>79</code>\n    <location x=\"-112.57284\" y=\"-130.45407\" />\n  </control>\n  <control id=\"5\" kind=\"normal\">\n    <code>87</code>\n    <location x=\"-123.24994\" y=\"-116.01912\" />\n  </control>\n  <control id=\"6\" kind=\"normal\">\n    <code>90</code>\n    <location x=\"-121.119675\" y=\"-101.27626\" />\n  </control>\n  <control id=\"7\" kind=\"normal\">\n    <code>93</code>\n    <location x=\"-111.25188\" y=\"-111.04911\" />\n  </control>\n  <control id=\"8\" kind=\"normal\">\n    <code>94</code>\n    <location x=\"-103.79277\" y=\"-125.047615\" />\n  </control>\n  <control id=\"9\" kind=\"normal\">\n    <code>78</code>\n    <location x=\"-104.86401\" y=\"-130.59676\" />\n  </control>\n  <course id=\"1\" kind=\"normal\" order=\"1\">\n    <name>D10RR</name>\n    <labels label-kind=\"sequence\" />\n    <first course-control=\"1\" />\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-134.6599\" top=\"-79.31137\" right=\"-89.32089\" bottom=\"-146.24037\" page-width=\"413\" page-height=\"583\" page-margins=\"28\" page-landscape=\"false\" />\n    <options print-scale=\"7500\" hide-from-reports=\"false\" description-kind=\"symbols\" />\n  </course>\n  <course-control id=\"1\" control=\"2\">\n    <next course-control=\"3\" />\n  </course-control>\n  <course-control id=\"2\" control=\"1\" />\n  <course-control id=\"3\" control=\"9\">\n    <next course-control=\"4\" />\n  </course-control>\n  <course-control id=\"4\" control=\"4\">\n    <next course-control=\"5\" />\n  </course-control>\n  <course-control id=\"5\" control=\"5\">\n    <next course-control=\"6\" />\n  </course-control>\n  <course-control id=\"6\" control=\"6\">\n    <next course-control=\"7\" />\n  </course-control>\n  <course-control id=\"7\" control=\"7\">\n    <next course-control=\"8\" />\n  </course-control>\n  <course-control id=\"8\" control=\"8\">\n    <next course-control=\"2\" />\n  </course-control>\n  <leg id=\"3\" start-control=\"4\" end-control=\"5\">\n    <gaps>\n      <gap start=\"2.6829755\" length=\"12.831567\" />\n    </gaps>\n  </leg>\n  <leg id=\"4\" start-control=\"5\" end-control=\"6\">\n    <gaps>\n      <gap start=\"2.776918\" length=\"9.654711\" />\n    </gaps>\n  </leg>\n  <leg id=\"5\" start-control=\"6\" end-control=\"7\">\n    <gaps>\n      <gap start=\"2.73316\" length=\"8.58982\" />\n    </gaps>\n  </leg>\n  <special-object id=\"1\" kind=\"white-out\">\n    <location x=\"-133.07246\" y=\"-80.81703\" />\n    <location x=\"-133.1104\" y=\"-88.13968\" />\n    <location x=\"-97.104225\" y=\"-87.949974\" />\n    <location x=\"-96.91452\" y=\"-80.589386\" />\n    <location x=\"-133.1863\" y=\"-80.77909\" />\n    <courses all=\"true\" />\n  </special-object>\n  <special-object id=\"2\" kind=\"text\">\n    <text>NuortenKisa 10.8.2026</text>\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\n    <appearance color=\"purple\" />\n    <location x=\"-133.11038\" y=\"-81.3482\" />\n    <location x=\"-103.40255\" y=\"-84.45171\" />\n    <courses all=\"true\" />\n  </special-object>\n  <special-object id=\"3\" kind=\"text\">\n    <text>1:7500, kv 5m</text>\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\n    <appearance color=\"purple\" />\n    <location x=\"-132.54036\" y=\"-84.53426\" />\n    <location x=\"-117.706375\" y=\"-87.874084\" />\n    <courses all=\"true\" />\n  </special-object>\n  <special-object id=\"6\" kind=\"line\">\n    <appearance line-kind=\"single\" color=\"0.00,0.00,1.00,0.00\" line-width=\"0.35\" />\n    <location x=\"-104.6899\" y=\"-142.03381\" />\n    <location x=\"-105.79382\" y=\"-139.44653\" />\n    <location x=\"-104.31642\" y=\"-136.77498\" />\n    <location x=\"-99.92586\" y=\"-136.66888\" />\n    <location x=\"-99.64492\" y=\"-133.96329\" />\n    <location x=\"-102.90016\" y=\"-131.72339\" />\n    <location x=\"-102.90016\" y=\"-130.15178\" />\n    <location x=\"-104.13067\" y=\"-130.18947\" />\n    <location x=\"-105.42563\" y=\"-130.58145\" />\n    <location x=\"-104.26618\" y=\"-132.08926\" />\n    <location x=\"-108.36424\" y=\"-133.87239\" />\n    <location x=\"-112.61401\" y=\"-130.07808\" />\n    <location x=\"-114.38029\" y=\"-132.11406\" />\n    <location x=\"-115.62005\" y=\"-129.00325\" />\n    <location x=\"-112.815956\" y=\"-126.829445\" />\n    <location x=\"-114.83904\" y=\"-124.560455\" />\n    <location x=\"-114.86151\" y=\"-122.29114\" />\n    <location x=\"-117.9439\" y=\"-122.740974\" />\n    <location x=\"-119.09972\" y=\"-121.466835\" />\n    <location x=\"-121.39481\" y=\"-121.25927\" />\n    <location x=\"-124.09413\" y=\"-115.38866\" />\n    <location x=\"-123.452934\" y=\"-114.29829\" />\n    <location x=\"-122.74464\" y=\"-110.499344\" />\n    <location x=\"-126.637115\" y=\"-106.86334\" />\n    <location x=\"-127.94166\" y=\"-106.53547\" />\n    <location x=\"-128.46751\" y=\"-103.574715\" />\n    <location x=\"-129.5407\" y=\"-102.04542\" />\n    <location x=\"-128.89189\" y=\"-100.19156\" />\n    <courses all=\"true\" />\n  </special-object>\n</course-scribe-event>",
+  "nuorten_tukireitti.ppen": "﻿<course-scribe-event>\r\n  <event id=\"1\">\r\n    <title>Nuorten kisa</title>\r\n    <map kind=\"OCAD\" scale=\"15000\" ignore-missing-fonts=\"false\" absolute-path=\"C:\\Users\\user\\Documents\\Suunnistus\\NuortenKisa 2026\\siimari_ei_rasteja.omap\">siimari_ei_rasteja.omap</map>\r\n    <standards map=\"2017\" description=\"2018\" />\r\n    <all-controls print-scale=\"7500\" description-kind=\"symbols\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-140.8377\" top=\"-75.74292\" right=\"-88.3867\" bottom=\"-149.78392\" page-width=\"413\" page-height=\"583\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <numbering start=\"31\" disallow-invertible=\"false\" />\r\n    <punch-card rows=\"3\" columns=\"8\" left-to-right=\"true\" top-to-bottom=\"false\" />\r\n    <course-appearance scale-sizes=\"RelativeToMap\" scale-sizes-circle-gaps=\"true\" number-font=\"Roboto\" auto-leg-gap-size=\"3.5\" blend-purple=\"true\" blend-style=\"blend\" />\r\n    <descriptions lang=\"fi\" color=\"black\" />\r\n    <ocad overprint-colors=\"false\" />\r\n  </event>\r\n  <control id=\"1\" kind=\"start\">\r\n    <location x=\"-104.609734\" y=\"-141.876785\" />\r\n  </control>\r\n  <control id=\"2\" kind=\"finish\">\r\n    <location x=\"-97.687355\" y=\"-133.44136\" />\r\n    <description box=\"all\" iof-2004-ref=\"14.3\" />\r\n    <gaps scale=\"15000\">11111111110000000111111111111111</gaps>\r\n    <circle-gaps scale=\"15000\">167.82695:242.973557</circle-gaps>\r\n  </control>\r\n  <control id=\"3\" kind=\"normal\">\r\n    <code>58</code>\r\n    <location x=\"-115.273911\" y=\"-132.5013\" />\r\n    <description box=\"D\" iof-2004-ref=\"5.4\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.8E\" />\r\n  </control>\r\n  <control id=\"4\" kind=\"normal\">\r\n    <code>78</code>\r\n    <location x=\"-114.651962\" y=\"-120.399635\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1W\" />\r\n  </control>\r\n  <control id=\"5\" kind=\"normal\">\r\n    <code>40</code>\r\n    <location x=\"-126.902519\" y=\"-99.61381\" />\r\n    <description box=\"C\" iof-2004-ref=\"0.2SW\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"6\" kind=\"normal\">\r\n    <code>113</code>\r\n    <location x=\"-113.801056\" y=\"-100.250465\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1SE\" />\r\n  </control>\r\n  <control id=\"7\" kind=\"normal\" all-controls-code-angle=\"54.2150269\">\r\n    <code>100</code>\r\n    <location x=\"-103.880524\" y=\"-125.2705\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.11\" />\r\n  </control>\r\n  <control id=\"8\" kind=\"normal\">\r\n    <code>143</code>\r\n    <location x=\"-104.5458\" y=\"-119.659081\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.1\" />\r\n  </control>\r\n  <control id=\"9\" kind=\"normal\">\r\n    <code>56</code>\r\n    <location x=\"-121.4498\" y=\"-103.346695\" />\r\n    <description box=\"D\" iof-2004-ref=\"2.4\" />\r\n    <description box=\"F\">1,5</description>\r\n    <description box=\"G\" iof-2004-ref=\"11.1S\" />\r\n  </control>\r\n  <control id=\"10\" kind=\"normal\">\r\n    <code>32</code>\r\n    <location x=\"-121.858986\" y=\"-114.67749\" />\r\n    <description box=\"D\" iof-2004-ref=\"1.10\" />\r\n    <description box=\"G\" iof-2004-ref=\"11.1N\" />\r\n  </control>\r\n  <course id=\"1\" kind=\"normal\" order=\"1\">\r\n    <name>D12TR</name>\r\n    <labels label-kind=\"sequence\" />\r\n    <first course-control=\"1\" />\r\n    <print-area automatic=\"false\" restrict-to-page-size=\"true\" left=\"-136.846176\" top=\"-72.6190948\" right=\"-84.39517\" bottom=\"-146.6601\" page-width=\"413\" page-height=\"583\" page-margins=\"0\" page-landscape=\"false\" />\r\n    <options print-scale=\"7500\" hide-from-reports=\"false\" description-kind=\"symbols\" />\r\n  </course>\r\n  <course-control id=\"1\" control=\"1\">\r\n    <next course-control=\"3\" />\r\n  </course-control>\r\n  <course-control id=\"2\" control=\"2\" />\r\n  <course-control id=\"3\" control=\"3\">\r\n    <next course-control=\"4\" />\r\n  </course-control>\r\n  <course-control id=\"4\" control=\"4\">\r\n    <next course-control=\"10\" />\r\n    <number-location x=\"-5.83443451\" y=\"-3.368515\" />\r\n  </course-control>\r\n  <course-control id=\"9\" control=\"9\">\r\n    <next course-control=\"6\" />\r\n  </course-control>\r\n  <course-control id=\"6\" control=\"6\">\r\n    <next course-control=\"7\" />\r\n  </course-control>\r\n  <course-control id=\"7\" control=\"8\">\r\n    <next course-control=\"8\" />\r\n  </course-control>\r\n  <course-control id=\"8\" control=\"7\">\r\n    <next course-control=\"2\" />\r\n  </course-control>\r\n  <course-control id=\"10\" control=\"10\">\r\n    <next course-control=\"9\" />\r\n  </course-control>\r\n  <special-object id=\"1\" kind=\"descriptions\">\r\n    <location x=\"-101.573433\" y=\"-74.4984\" />\r\n    <location x=\"-99.68118\" y=\"-74.4984\" />\r\n    <courses>\r\n      <course course=\"1\" />\r\n    </courses>\r\n  </special-object>\r\n  <special-object id=\"2\" kind=\"white-out\">\r\n    <location x=\"-103.7737\" y=\"-74.61409\" />\r\n    <location x=\"-134.780426\" y=\"-74.671936\" />\r\n    <location x=\"-134.780426\" y=\"-81.90298\" />\r\n    <location x=\"-103.8894\" y=\"-81.49804\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"3\" kind=\"text\">\r\n    <text>NuortenKisa 10.8.2026, HD12 TR</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-134.200928\" y=\"-75.30727\" />\r\n    <location x=\"-104.525726\" y=\"-78.14283\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n  <special-object id=\"4\" kind=\"text\">\r\n    <text>1:7500, kv 5m</text>\r\n    <font name=\"Arial\" bold=\"true\" italic=\"false\" />\r\n    <appearance color=\"purple\" />\r\n    <location x=\"-127.9533\" y=\"-78.25753\" />\r\n    <location x=\"-109.616379\" y=\"-80.63031\" />\r\n    <courses all=\"true\" />\r\n  </special-object>\r\n</course-scribe-event>",
+};
+
+function init() {
+  setLang('fi');
+  getEl('filesInput').addEventListener('change', function () {
+    Array.from(this.files || []).forEach(function (f) {
+      if (!/\.ppen$/i.test(f.name)) return;
+      const reader = new FileReader();
+      reader.onload = function () { addPpenFile(f.name, String(reader.result)); };
+      reader.readAsText(f);
+    });
+  });
+  getEl('mapImgInput').addEventListener('change', function () {
+    const f = (this.files || [])[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = function () { setMapImage(String(reader.result)); };
+    reader.readAsDataURL(f);
+  });
+  getEl('titleIn').addEventListener('input', convert);
+  getEl('boundsIn').addEventListener('input', convert);
+  ['imgL', 'imgT', 'imgR', 'imgB'].forEach(function (id) {
+    getEl(id).addEventListener('input', convert);
+  });
+}
+init();
+</script>
+</body>
+</html>

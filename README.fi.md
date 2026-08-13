@@ -114,10 +114,27 @@ API:sta, mutta ne eivät ole virallinen liiton tieto; käyttö omalla vastuulla.
 
 ### Purple Pen → IOF -muunnin
 
-Tiedosto: [`ppen_to_iof.py`](ppen_to_iof.py)
+Tiedosto: [`ppen_to_iof.html`](ppen_to_iof.html) (selain) · CLI: [`ppen_to_iof.py`](ppen_to_iof.py)
 
 Muuntaa Purple Pen (`.ppen`) -radansuunnittelutiedostot IOF 3.0 CourseData XML
 -muotoon — rastien sijainnit, ratojen asettelut ja välimatkat.
+
+HTML-työkalu toimii offline selaimessa: lataa yksi tai useampi `.ppen`-tiedosto
+(useat tiedostot yhdistetään yhdeksi CourseData-XML:ksi print-alueiden
+päällekkäisyyden mukaan), tarkastele ratoja SVG-esikatselussa (valinnainen
+karttakuva) ja lataa XML. XML päivittyy automaattisesti kaikista muutoksista,
+joten erillistä muunnospainiketta ei ole. Asetuksissa voi määrittää tapahtuman
+nimen, kartan rajat ja XML:n `creator`-attribuutin. Symbolit skaalautuvat
+print-alueen koon mukaan, käyttävät `fill="none"`-täyttöä ja print-alueiden
+suorakulmiot on nimetty lähdetiedoston mukaan. Aluetta klikkaamalla se (ja sen
+tiedoston radat) voidaan piilottaa esikatselusta; piilotettu alue jää näkyviin
+haaleana katkoviivana, jota klikkaamalla se palautetaan. XML ei muutu
+näkymävalinnoista. Tyhjennä-painike nollaa tiedostot ja asetukset alkuun, ja
+FI/EN-painike vaihtaa käyttöliittymän kielen. Yksi sisäänrakennettu
+demopainike lataa nimetön (obfuskoitu) "Nuorten kisa" -esimerkin ilman levykkeitä.
+Esimerkki-`.ppen`-tiedostot löytyvät
+[`exampledata/`](exampledata/)-kansiosta. Python-CLI tuottaa identtisen
+tulosteen.
 
 ### OBS-lähetysgrafiikat
 
