@@ -2,7 +2,8 @@
 
 [English](README.md) · **Suomi**
 
-**Tulospalvelupaavo** on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tulospalvelun, kuten [Navisport](#navisport), ominaisuuksia ja näkymiä tulospalvelun toteutukseen, streamaukseen sekä osallistujille. Osa työkaluista on täysimittaisia HTML-sovelluksia, toiset taas nopeita kertakäyttöscriptejä. HTML-tiedostojen käyttö on helppoa. Lataa tiedosto koneellesi ja käytä paikallisesti.
+**Tulospalvelupaavo**
+on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tulospalvelun, kuten [Navisport](#navisport), ominaisuuksia ja näkymiä tulospalvelun toteutukseen, streamaukseen sekä osallistujille. Osa työkaluista on täysimittaisia HTML-sovelluksia, toiset taas nopeita kertakäyttöscriptejä. HTML-tiedostojen käyttö on helppoa. Lataa tiedosto koneellesi ja käytä paikallisesti.
 ---
 
 ## Päätyökalut
@@ -198,6 +199,20 @@ Käyttö: navigoi vanhalle Pirilä-tyyliselle lähtölistasivulle ja klikkaa kir
 | **Suunnistava Uusimaa** | [suunnistavauusimaa.fi](https://suunnistavauusimaa.fi) | Uudenmaan piirin suunnistus |
 | **Purple Pen** | [purplepen.com](https://purplepen.com) | Radansuunnitteluohjelmisto (.ppen) |
 | **Suunnistusliitto** | [suunnistusliitto.fi](https://suunnistusliitto.fi) | Suomen Suunnistusliitto |
+
+---
+
+## 🛠 Miksi nimi "Tulospalvelupaavo"?
+
+Jokaisessa kisaorganisaatiossa on se tietty "Joku" — luottotyyppi, jonka pakista löytyy aina sopiva työkalu, kaapeli tai kikka yllättävään haasteeseen. **Tulospalvelupaavo** on tämän luottotyypin digitaalinen vastine: joustava työkalupakki, joka tuo nopeasti uusia näkymiä ja toimintavarmuutta tulospalveluun, striimaukseen ja kisaympäristöön.
+
+Nimi toimii myös laitteisto- ja ohjelmistohenkisenä akronyyminä:
+
+* **P**aikallinen
+* **A**pujärjestelmä
+* **A**joitukseen,
+* **V**iestintään ja
+* **O**ptimointiin
 
 ## Lisenssi
 

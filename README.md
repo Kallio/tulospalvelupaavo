@@ -191,6 +191,21 @@ Usage: navigate to an old Pirilä-style start list page and click the bookmark �
 | **Suunnistava Uusimaa** | [suunnistavauusimaa.fi](https://suunnistavauusimaa.fi) | Uusimaa district orienteering |
 | **Purple Pen** | [purplepen.com](https://purplepen.com) | Course design software (.ppen) |
 | **Suunnistusliitto** | [suunnistusliitto.fi](https://suunnistusliitto.fi) | Finnish Orienteering Federation |
+---
+
+## 🛠 Behind the Name: Why "Tulospalvelupaavo"?
+
+In Finnish event culture, a *"Someone"* (literally "everyplace Paavo") is the ultimate go-to handyman — the reliable helper who always has the right tool in their kit to fix any unexpected issue.
+
+**Tulospalvelupaavo** (*Results Service Paavo*) is the digital counterpart to that trusty helper: a practical toolbox of offline-ready HTML apps and quick scripts designed to effortlessly expand timing systems, live stream overlays, and participant views right on location.
+
+The name **P.A.A.V.O.** also serves as a fitting acronym for what the toolkit does:
+
+* **P**ractical
+* **A**uxiliary
+* **A**pplication for
+* **V**isualization and
+* **O**perations
 
 ## Licence
 
