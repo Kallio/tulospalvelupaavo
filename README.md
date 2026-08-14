@@ -20,6 +20,7 @@ quick one-off scripts.
 - [IRMA Club Registry Fetcher](#irma-club-registry-fetcher)
 - [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts)
 - [Purple Pen → IOF Converter](#purple-pen--iof-converter)
+- [Map Merger](#map-merger)
 - [OBS Broadcast Overlays](#obs-broadcast-overlays)
 - [Pokaalijahti WordPress Plugin](#pokaalijahti-wordpress-plugin)
 - [Press Results Formatter](#press-results-formatter)
@@ -143,6 +144,51 @@ resets files and options for a fresh start, and the FI/EN button toggles the UI
 language. A built-in demo button loads an obfuscated "Nuorten kisa" (youth race)
 example for testing without any files on disk. The Python CLI produces identical
 output.
+
+### Map Merger
+
+Directory: [`map_merger/`](map_merger/) · open [`index.html`](map_merger/index.html)
+
+Combines children's orienteering map PDFs/images into print-ready A4 sheets
+for a printing service (e.g. Crano). Every PDF page or image becomes one map;
+two maps are placed on each A4 page (210×297 mm, no gaps or margins) as two
+stacked A5-landscape cells. Runs fully in the browser via pdf.js (pinned to
+3.11.174) + pdf-lib, loaded from CDN as classic scripts — no build step, and
+it works when opened straight from disk (`file://`).
+
+- Whitespace detection removes surrounding white margins (pixels with
+  R,G,B > 245 count as background), with the detected crop box previewed.
+- Options: auto-crop, bleed margin (mm), an unprintable printer margin
+  (default 5 mm — this never changes the layout or scaling, it only clips
+  away whatever map content extends past the printer's edge), rotate portrait
+  pages 90° so they fill the landscape A5 cell instead of being scaled down,
+  keep original size (1:1, placed centered — maps larger than the sheet are
+  cut at the edges and flagged with a warning), and a per-image paper-size
+  picker (A5/A6/A7) on every bitmap page — the image's longest side is matched
+  to the chosen format's long edge, so its physical size is set without DPI
+  tuning and can be changed per image without reloading.
+  Preview shows original, crop box, the printable area, and the final
+  A4 arrangement; the output PDF is generated client-side.
+- The sidebar reveals each step only when its prerequisite is met: "2.
+  Options" appears once files are loaded, and "3. Summary" / "4. Download PDF"
+  (and the A4-sheet preview) once pages exist — matching the other tools in
+  this repo.
+- Repeat mode tiles a single selected (or first) map as 1:1 copies across one
+  A4 in the best-fitting grid (e.g. 4 × A6 → one A4), instead of the default
+  two stacked A5 cells. The copy count is capped so every copy fits on the
+  sheet at 1:1 — e.g. at most 2 A5 maps per A4 (the input field clamps and
+  warns).
+- Easter egg: "duplex shine-through" appends a horizontally mirrored copy of
+  every A4 page, so that double-sided printing makes the back page align with
+  the front when held up to a light (e.g. control points on one side, course
+  lines on the other). Suited to short-edge/left-flip duplex binding. A
+  "print only the mirrored pages" variant is available for kids.
+
+  The mirror options are hidden by default (the options panel stays clean).
+  Reveal them either by opening the page with `?easteregg=1` appended to the
+  URL (e.g. `index.html?easteregg=1`), or by clicking the "2. Options"
+  heading five times in quick succession (the same five clicks hide them
+  again). They are not persisted — hidden again on the next load.
 
 ### OBS Broadcast Overlays
 

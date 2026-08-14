@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Map Merger — karttalehtien yhdistäjä</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps:last-child { margin-top: auto; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+input[type="number"] { width: 84px; }
+select { width: 84px; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; margin-top: 5px; }
+.chk input { width: auto; }
+.hint { font-size: 10.5px; color: #667; margin: 2px 0 0 22px; }
+.ps > .hint { margin-left: 0; }
+
+#dropZone {
+  background: #0a2a50; border: 1.5px dashed #345; border-radius: 6px;
+  padding: 12px; text-align: center; color: #8a9aaa; font-size: 12px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+#dropZone.dragover { border-color: #27ae60; background: #0e3555; color: #cfd; }
+#fileInput { display: none; }
+
+.file-row {
+  background: #0a2a50; border-radius: 6px; padding: 5px 8px; margin-bottom: 5px;
+  border: 1px solid #224; display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #ddd;
+}
+.file-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#summary { font-size: 12px; color: #9aa; }
+#summary.warn { color: #e67e22; }
+#status { font-size: 11.5px; color: #7ec8e3; margin-top: 6px; min-height: 14px; }
+#status.err { color: #e94560; }
+#status.warn { color: #e67e22; }
+
+#main { padding: 16px; margin-left: 386px; }
+.panel {
+  background: #fff; border: 1px solid #ccc; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #1a1a2e; margin-bottom: 8px; }
+.empty-hint { color: #889; font-size: 12px; padding: 8px 0; }
+
+#pageList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.page-item {
+  position: relative;
+  border: 2px solid #e3e3e3; border-radius: 6px; padding: 6px; cursor: pointer; background: #fafafa;
+  display: flex; flex-direction: column; gap: 4px; transition: border-color .12s;
+}
+.page-item:hover { border-color: #7ec8e3; }
+.page-item.selected { border-color: #e94560; }
+.page-item canvas { width: 100%; height: auto; background: #fff; }
+.page-cap { font-size: 10px; color: #445; word-break: break-all; }
+.page-cap.warn { color: #e67e22; font-weight: bold; }
+.page-remove {
+  position: absolute; top: 4px; right: 4px;
+  width: 18px; height: 18px; line-height: 15px; padding: 0;
+  background: #e94560; color: #fff; border: none; border-radius: 50%;
+  cursor: pointer; font-size: 13px; font-weight: bold; text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.page-remove:hover { background: #c2294a; }
+
+#sheetList { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.sheet-item { display: flex; flex-direction: column; gap: 4px; }
+.sheet-item canvas { width: 420px; height: auto; max-width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,.15); background: #fff; }
+.sheet-cap { font-size: 11px; color: #445; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps">
+    <h3 data-i18n="filesHdr"></h3>
+    <div id="filesHint" class="hint" style="margin:0 0 8px;color:#8a9aaa;"></div>
+    <div id="dropZone">
+      <div><button class="bg" id="loadBtn" type="button"></button></div>
+      <div style="margin-top:4px;" id="dropHint"></div>
+      <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.bmp,.webp" multiple>
+    </div>
+    <div id="fileList" style="margin-top:8px;"></div>
+    <div class="row">
+      <button class="bg btn-sm" id="clearBtn" type="button" data-i18n="clearBtn"></button>
+      <button class="bg btn-sm" id="langBtn" type="button" data-i18n="langBtn" style="margin-left:auto;"></button>
+    </div>
+  </div>
+
+  <div class="ps" id="stepOptions">
+    <h3 data-i18n="optionsHdr" id="optionsHdr"></h3>
+    <label class="chk"><input type="checkbox" id="optAutoCrop" checked> <span data-i18n="autoCrop"></span></label>
+    <label style="margin-top:8px;" data-i18n="bleed"></label>
+    <input type="number" id="optBleed" min="0" max="20" step="0.5" value="0">
+    <div class="hint" id="bleedHint"></div>
+    <label style="margin-top:8px;" data-i18n="margin"></label>
+    <input type="number" id="optMargin" min="0" max="20" step="0.5" value="5">
+    <div class="hint" id="marginHint"></div>
+    <label class="chk"><input type="checkbox" id="optRotate"> <span data-i18n="rotateToFit"></span></label>
+    <div class="hint" id="rotateToFitHint"></div>
+    <label class="chk"><input type="checkbox" id="optKeepOriginal"> <span data-i18n="keepOriginal"></span></label>
+    <div class="hint" id="keepOriginalHint"></div>
+    <div id="easterEggBlock" hidden>
+      <label class="chk"><input type="checkbox" id="optMirror"> <span data-i18n="mirror"></span></label>
+      <div class="hint" id="mirrorHint"></div>
+      <label class="chk"><input type="checkbox" id="optMirrorOnly"> <span data-i18n="mirrorOnly"></span></label>
+      <div class="hint" id="mirrorOnlyHint"></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="optRepeat"> <span data-i18n="repeat"></span></label>
+    <div class="hint" id="repeatHint"></div>
+    <label style="margin-top:8px;" data-i18n="repeatN"></label>
+    <input type="number" id="optRepeatN" min="1" max="24" step="1" value="4">
+  </div>
+
+  <div class="ps" id="stepSummary">
+    <h3 data-i18n="summaryHdr"></h3>
+    <div id="summary"></div>
+  </div>
+
+  <div class="ps" id="stepDownload">
+    <h3 data-i18n="downloadHdr"></h3>
+    <button class="bs" id="downloadBtn" style="width:100%;" type="button" disabled data-i18n="downloadBtn"></button>
+    <div id="status"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div class="panel">
+    <h2 data-i18n="pagesHdr"></h2>
+    <div id="pageList"></div>
+  </div>
+  <div class="panel" id="mainSheets">
+    <h2 data-i18n="sheetsHdr"></h2>
+    <div id="sheetList"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@latest/dist/pdf-lib.min.js"></script>
+<script src="crop.js"></script>
+<script src="pdf-export.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

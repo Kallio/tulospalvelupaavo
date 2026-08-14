@@ -18,6 +18,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 - [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija)
 - [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen)
 - [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin)
+- [Map Merger](#map-merger)
 - [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat)
 - [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen)
 - [Lehdistötulokset](#lehdistötulokset)
@@ -146,8 +147,56 @@ tiedoston radat) voidaan piilottaa esikatselusta; piilotettu alue jää näkyvii
 haaleana katkoviivana, jota klikkaamalla se palautetaan. XML ei muutu
 näkymävalinnoista. Tyhjennä-painike nollaa tiedostot ja asetukset alkuun, ja
 FI/EN-painike vaihtaa käyttöliittymän kielen. Yksi sisäänrakennettu
-demopainike lataa nimetön (obfuskoitu) "Nuorten kisa" -esimerkin ilman levykkeitä.
+demopainike lataa nimetön (obfuskoitu) "Nuorten kisa" -esimerkin ilman tiedostoja.
 Python-CLI tuottaa identtisen tulosteen.
+
+### Map Merger
+
+Hakemisto: [`map_merger/`](map_merger/) · avaa [`index.html`](map_merger/index.html)
+
+Yhdistää lasten suunnistuskarttojen PDF:t/kuvat painovalmiksi A4-arkeiksi
+painolaitokselle (esim. Grano). Jokainen PDF-sivu tai kuva tulee yhdeksi
+kartaksi; jokaiseen A4-sivuun (210×297 mm, ilman rakoja tai marginaaleja)
+asetetaan kaksi karttaa (oletuksena skaalattu arkkisoluun, vaihtoehtoisesti
+1:1-koossa).
+Toimii täysin selaimessa pdf.js:n (kiinnitetty versioon 3.11.174) ja
+pdf-lib:n avulla, ladattu CDN:ltä tavallisina skripteinä — ei rakennusvaihetta,
+ja toimii myös suoraan levyltä avattuna (`file://`).
+
+- Valkoisen tilan tunnistus poistaa ympäröivät marginaalit (pikselit, joissa
+  R,G,B > 245, katsotaan taustaksi), ja tunnistettu rajausalue näkyy esikatselussa.
+- Asetukset: automaattinen rajaus, leikkuuvara (mm), tulostumaton
+  reunamarginaali (oletus 5 mm — se ei muuta asettelua eikä skaalausta, vaan
+  leikkaa pois vain sen kartan osan, joka menee tulostimen reunan yli),
+  pysty-sivujen kääntö 90° (jotta ne täyttävät vaaka-A5-arkin skaalaamisen
+  sijaan), alkuperäisen koon säilytys (1:1, sijoitetaan keskelle — arkkia
+  suuremmat kartat leikkaantuvat reunoista ja niistä varoitetaan) ja
+  kuvakohtainen paperikokovalitsin (A5/A6/A7) jokaisella bittikarttasivulla —
+  kuvan pisin sivu asetetaan valitun koon pidemmäksi sivuksi, jolloin fyysinen
+  koko määräytyy ilman DPI-säätöä ja sen voi vaihtaa kuvalle uudelleen
+  lataamatta. Esikatselu näyttää alkuperäisen, rajausalueen,
+  tulostettavan alueen ja lopullisen A4-asettelun; tulostettava PDF luodaan
+  selaimessa.
+- Sivupalkki näyttää kunkin vaiheen vasta, kun sen edellytys on täyttynyt:
+  "2. Asetukset" tulee näkyviin, kun tiedostoja on ladattu, ja "3. Yhteenveto"
+  / "4. Lataa PDF" (sekä A4-arkkien esikatselu), kun sivuja on — kuten muissa
+  tämän repon työkaluissa.
+- Toistotila ruuduttaa yhden valitun (tai ensimmäisen) kartan 1:1-kopioina
+  yhdelle A4-arkille parhaiten sopivaan ruudukkoon (esim. 4 × A6 → yksi A4)
+  tavallisen kahden pinotun A5-kennon sijaan. Kopioiden määrä rajataan niin,
+  että jokainen kopio mahtuu arkille 1:1-koossa — esim. enintään 2 A5-karttaa
+  per A4 (kenttä rajaa määrän ja varoittaa).
+- Easter egg: "duplex-valoläpäisy" lisää jokaisen A4-sivun perään vaakasuunnassa
+  peilatun kopion, jolloin kaksipuolisesti tulostettuna takapuoli kohdistuu
+  etusivun kanssa valoa vasten katsottaessa (esim. rastit toisella puolella,
+  reitinviivat toisella). Soveltuu lyhytsärmä/vasemmalle kääntyvään
+  duplex-sidontaan. Lapsille on tarjolla "tulosta vain peilatut sivut" -versio.
+
+  Peilausasetukset ovat oletuksena piilossa (asetuspaneeli pysyy siistinä).
+  Ne voi paljastaa joko avaamalla sivun `?easteregg=1` -parametrilla (esim.
+  `index.html?easteregg=1`) tai klikkaamalla "2. Asetukset" -otsikkoa viisi
+  kertaa nopeasti (sama viiden klikkauksen sarja piilottaa ne uudelleen).
+  Valintaa ei säilytetä — asetukset ovat seuraavalla latauksella taas piilossa.
 
 ### OBS-lähetysgrafiikat
 
