@@ -168,7 +168,7 @@ assert('index.html loads pdf-lib CDN', html.includes('pdf-lib'));
 assert('index.html loads main.js as classic script', html.includes('src="main.js"') && !html.includes('type="module"'));
 assert('index.html loads pdf.js CDN (classic/UMD)', html.includes('pdfjs-dist@3.11.174/build/pdf.min.js'));
 assert('index.html lang button has data-i18n (visible text)', /id="langBtn"[^>]*data-i18n="langBtn"/.test(html));
-['fileInput', 'dropZone', 'optAutoCrop', 'optBleed', 'optMargin', 'optRotate', 'optKeepOriginal', 'optMirror', 'optMirrorOnly', 'optRepeat', 'optRepeatN', 'clearBtn', 'downloadBtn', 'langBtn', 'fileList', 'summary', 'status', 'pageList', 'sheetList', 'stepOptions', 'stepSummary', 'stepDownload', 'mainSheets'].forEach(id => {
+['fileInput', 'dropZone', 'optAutoCrop', 'optBleed', 'optMargin', 'optAutoRotate', 'optKeepOriginal', 'optMirror', 'optMirrorOnly', 'optRepeat', 'optRepeatN', 'clearBtn', 'downloadBtn', 'langBtn', 'fileList', 'summary', 'status', 'pageList', 'sheetList', 'stepOptions', 'stepSummary', 'stepDownload', 'mainSheets'].forEach(id => {
   assert('index.html has #' + id, html.includes('id="' + id + '"'));
 });
 assert('index.html new hints present', html.includes('id="keepOriginalHint"') && html.includes('id="mirrorOnlyHint"') && html.includes('id="repeatHint"'));
@@ -194,6 +194,8 @@ assert('main.js has progressive step panels', main.includes('function updateStep
 assert('index.html easter-egg block exists and starts hidden', html.includes('<div id="easterEggBlock" hidden>') && html.includes('id="optMirror"') && html.includes('id="optMirrorOnly"'));
 assert('index.html options heading has secret-click trigger id', /<h3 data-i18n="optionsHdr" id="optionsHdr">/.test(html));
 assert('main.js has showEasterEgg + secretClick + URL param reveal', main.includes('function showEasterEgg') && main.includes('function secretClick') && main.includes("get('easteregg')") && main.includes('easterEggBlock'));
+assert('autoRotate is content-aware and defaults on', main.includes('autoRotate: true') && main.includes('content0') && main.includes('detectContentBBox(data0') && !main.includes('rotateToFit') && !main.includes('optRotate'));
+assert('index.html autoRotate checkbox is checked by default', /id="optAutoRotate" checked/.test(html) && html.includes('data-i18n="autoRotate"'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

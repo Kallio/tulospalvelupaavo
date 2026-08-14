@@ -168,8 +168,11 @@ ja toimii myös suoraan levyltä avattuna (`file://`).
 - Asetukset: automaattinen rajaus, leikkuuvara (mm), tulostumaton
   reunamarginaali (oletus 5 mm — se ei muuta asettelua eikä skaalausta, vaan
   leikkaa pois vain sen kartan osan, joka menee tulostimen reunan yli),
-  pysty-sivujen kääntö 90° (jotta ne täyttävät vaaka-A5-arkin skaalaamisen
-  sijaan), alkuperäisen koon säilytys (1:1, sijoitetaan keskelle — arkkia
+  sisältötietoinen automaattikääntö (oletuksena päällä — kääntää kartan 90°,
+  kun sen rajatun sisällön suunta on pystysuuntainen, jotta se täyttää
+  vaaka-A5-arkin skaalaamisen sijaan; päätös perustuu sisällön suuntaan, ei
+  sivun mittoihin, joten esim. pystyä sivua, jonka kartta on vaakasuuntainen,
+  ei käännetä), alkuperäisen koon säilytys (1:1, sijoitetaan keskelle — arkkia
   suuremmat kartat leikkaantuvat reunoista ja niistä varoitetaan) ja
   kuvakohtainen paperikokovalitsin (A5/A6/A7) jokaisella bittikarttasivulla —
   kuvan pisin sivu asetetaan valitun koon pidemmäksi sivuksi, jolloin fyysinen

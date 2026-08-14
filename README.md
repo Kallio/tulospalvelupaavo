@@ -160,8 +160,11 @@ it works when opened straight from disk (`file://`).
   R,G,B > 245 count as background), with the detected crop box previewed.
 - Options: auto-crop, bleed margin (mm), an unprintable printer margin
   (default 5 mm — this never changes the layout or scaling, it only clips
-  away whatever map content extends past the printer's edge), rotate portrait
-  pages 90° so they fill the landscape A5 cell instead of being scaled down,
+  away whatever map content extends past the printer's edge), content-aware
+  auto-rotate (on by default — rotates a map 90° when its cropped content is
+  portrait so it fills the landscape A5 cell instead of being scaled down;
+  the decision is based on the content orientation, not the page dimensions,
+  so e.g. a portrait page holding a landscape map is left alone),
   keep original size (1:1, placed centered — maps larger than the sheet are
   cut at the edges and flagged with a warning), and a per-image paper-size
   picker (A5/A6/A7) on every bitmap page — the image's longest side is matched

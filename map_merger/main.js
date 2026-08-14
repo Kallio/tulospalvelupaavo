@@ -21,7 +21,7 @@ const state = {
   options: {
     autoCrop: true,
     bleedMm: 0,
-    rotateToFit: false,
+    autoRotate: true,
     keepOriginal: false,
     mirror: false,
     mirrorOnly: false,
@@ -47,8 +47,8 @@ const I18N = {
     bleedHint: 'Laajentaa rajatun alueen joka sivulta annetun marginaalin verran.',
     margin: 'Tulostimien reunamarginaali (mm)',
     marginHint: 'Ei vaikuta skaalaukseen — leikkaa vain pois kartan osan, joka menee tulostimen tulostumattoman reunan (yleensä n. 5 mm) yli.',
-    rotateToFit: 'Käännä pysty-sivut 90° (arkkiin sopiviksi)',
-    rotateToFitHint: 'Kääntää pysty (korkeamman kuin leveän) sivut 90°, jotta ne täyttävät vaaka-A5-arkin skaalaamisen sijaan.',
+    autoRotate: 'Käännä kartta automaattisesti (sisällön mukaan)',
+    autoRotateHint: 'Kiertää kartan 90°, jos rajatun sisällön suunta on pystysuuntainen, jotta se täyttää vaaka-A5-arkin skaalaamisen sijaan. Päätös perustuu sisällön suuntaan, ei sivun mittoihin.',
     keepOriginal: 'Säilytä alkuperäinen koko (1:1)',
     keepOriginalHint: 'Sijoittaa kartan alkuperäisessä koossaan arkin keskelle. Reunamarginaali ei skaalaa, vaan leikkaa vain reunoja.',
     mirror: 'Duplex-valoläpäisy (peilaa taustasivut)',
@@ -102,8 +102,8 @@ const I18N = {
     bleedHint: 'Expands the cropped area by the given margin on every side.',
     margin: 'Unprintable printer margin (mm)',
     marginHint: 'Does not affect scaling — it only cuts away the part of the map that extends past the printer\'s unprintable edge (usually ~5 mm).',
-    rotateToFit: 'Rotate portrait pages 90° (to fit cell)',
-    rotateToFitHint: 'Rotates portrait (taller-than-wide) pages 90° so they fill the landscape A5 cell instead of being scaled down.',
+    autoRotate: 'Auto-rotate map (by content)',
+    autoRotateHint: 'Rotates the map 90° when the cropped content is portrait so it fills the landscape A5 cell instead of being scaled down. The decision is based on the content orientation, not the page dimensions.',
     keepOriginal: 'Keep original size (1:1)',
     keepOriginalHint: 'Places the map at its original size, centered. The margin does not scale it — it only cuts away the edges.',
     mirror: 'Duplex shine-through (mirror back pages)',
@@ -163,7 +163,7 @@ function applyLang() {
   el('dropHint').textContent = t('dropHint');
   el('bleedHint').textContent = t('bleedHint');
   el('marginHint').textContent = t('marginHint');
-  el('rotateToFitHint').textContent = t('rotateToFitHint');
+  el('autoRotateHint').textContent = t('autoRotateHint');
   el('keepOriginalHint').textContent = t('keepOriginalHint');
   el('mirrorHint').textContent = t('mirrorHint');
   el('mirrorOnlyHint').textContent = t('mirrorOnlyHint');
@@ -306,18 +306,30 @@ function processRenderedCanvas(canvas, wmm, hmm, meta) {
 function recomputePage(p) {
   let canvas = p.original;
   let wmm = p.wmm, hmm = p.hmm;
+  // Detect content once on the original canvas; the rotation decision is based
+  // on the content's orientation (not the raw page dimensions) so that e.g. a
+  // portrait page holding a landscape map with side margins is not rotated.
+  const data0 = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const content0 = MapMergerCrop.detectContentBBox(data0, canvas.width, canvas.height);
   let rotated = false;
-  if (state.options.rotateToFit && canvas.width < canvas.height) {
-    canvas = MapMergerCrop.rotateCanvas90(canvas, true);
-    const tmp = wmm; wmm = hmm; hmm = tmp;
-    rotated = true;
+  if (state.options.autoRotate) {
+    const cw = content0 ? (content0.x1 - content0.x0) : canvas.width;
+    const ch = content0 ? (content0.y1 - content0.y0) : canvas.height;
+    if (cw < ch) {
+      canvas = MapMergerCrop.rotateCanvas90(canvas, true);
+      const tmp = wmm; wmm = hmm; hmm = tmp;
+      rotated = true;
+    }
   }
   const pxPerMm = canvas.width / wmm;
   const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
-  const content = state.options.autoCrop
-    ? MapMergerCrop.detectContentBBox(data, canvas.width, canvas.height)
-    : null;
-  const base = content || { x0: 0, y0: 0, x1: canvas.width, y1: canvas.height };
+  let base;
+  if (state.options.autoCrop) {
+    base = rotated ? MapMergerCrop.detectContentBBox(data, canvas.width, canvas.height) : content0;
+    if (!base) base = { x0: 0, y0: 0, x1: canvas.width, y1: canvas.height };
+  } else {
+    base = { x0: 0, y0: 0, x1: canvas.width, y1: canvas.height };
+  }
   const bleedPx = Math.round((Number(state.options.bleedMm) || 0) * pxPerMm);
   const finalBox = MapMergerCrop.expandBBox(base, bleedPx, bleedPx, bleedPx, bleedPx, canvas.width, canvas.height);
   const cropCanvas = MapMergerCrop.cropCanvasTo(canvas, finalBox);
@@ -733,7 +745,7 @@ function init() {
   el('optAutoCrop').addEventListener('change', e => { state.options.autoCrop = e.target.checked; redoCrops(); });
   el('optBleed').addEventListener('change', e => { state.options.bleedMm = Number(e.target.value) || 0; redoCrops(); });
   el('optMargin').addEventListener('change', e => { state.options.marginMm = Number(e.target.value); renderSheets(); updateSummary(); });
-  el('optRotate').addEventListener('change', e => { state.options.rotateToFit = e.target.checked; redoCrops(); });
+  el('optAutoRotate').addEventListener('change', e => { state.options.autoRotate = e.target.checked; redoCrops(); });
   el('optKeepOriginal').addEventListener('change', e => { state.options.keepOriginal = e.target.checked; renderAll(); updateSummary(); });
   el('optMirror').addEventListener('change', e => {
     state.options.mirror = e.target.checked;

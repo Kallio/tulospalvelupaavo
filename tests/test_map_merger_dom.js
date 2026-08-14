@@ -17,21 +17,43 @@ function makeCtx() {
     setLineDash() {}, fillRect() {}, strokeRect() {}, drawImage() {},
     beginPath() {}, rect() {}, clip() {}, save() {}, restore() {},
     fill() {}, stroke() {}, translate() {}, scale() {}, rotate() {},
-    getImageData() { return { data: new Uint8ClampedArray(1) }; },
   };
 }
 function makeEl(tag) {
   const el = {
     tag, value: '', checked: false, disabled: false, textContent: '', innerHTML: '',
     className: '', title: '', style: {}, files: [], children: [], hidden: true,
-    width: 0, height: 0, __handlers: {},
+    width: 0, height: 0, __handlers: {}, _data: null,
     appendChild(c) { this.children.push(c); return c; },
     addEventListener(type, fn) { (this.__handlers[type] = this.__handlers[type] || []).push(fn); },
     dispatch(type) { (this.__handlers[type] || []).forEach(fn => fn({ type, target: this })); },
-    getContext() { return makeCtx(); }, toBlob() {},
+    getContext() {
+      const ctx = makeCtx();
+      ctx.getImageData = () => {
+        const w = this.width, h = this.height;
+        let data = this._data;
+        if (!data) {
+          data = new Uint8ClampedArray(Math.max(1, w) * Math.max(1, h) * 4);
+          for (let i = 0; i < data.length; i += 4) { data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 255; }
+        }
+        return { data };
+      };
+      return ctx;
+    }, toBlob() {},
     querySelectorAll() { return []; },
   };
   return el;
+}
+
+// solid RGBA data (default full ink); bandY0/bandY1 make a horizontal ink band
+function inkData(w, h, bandY0, bandY1) {
+  const d = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    const ink = (bandY0 === undefined) || (y >= bandY0 && y < bandY1);
+    d[i] = ink ? 0 : 255; d[i + 1] = ink ? 0 : 255; d[i + 2] = ink ? 0 : 255; d[i + 3] = 255;
+  }
+  return d;
 }
 const store = {};
 global.document = {
@@ -167,6 +189,49 @@ assert('setImageFormat A7 landscape → 105×78.75 mm', Math.abs(ip.origWmm - 10
 let ipErr = null;
 try { eval('renderPages')(); } catch (e) { ipErr = e; }
 assert('renderPages() no throw with an image page + format select', ipErr === null, ipErr && ipErr.stack);
+
+// ── content-aware auto-rotation ──
+function imgPage(id, pxW, pxH, cw, ch) {
+  const p = { id, srcId: 3, srcName: 'rot.png', pageNo: 1, kind: 'image', pxW, pxH, imageFormat: 'A5', original: document.createElement('canvas') };
+  p.original.width = cw; p.original.height = ch;
+  return p;
+}
+const A5_PORTRAIT = { w: 105, h: 210 };   // 1600×3200 px, longest side anchored to 210 mm
+const A5_LANDSCAPE = { w: 210, h: 105 };  // 3200×1600 px
+
+st.options.autoRotate = true; st.options.autoCrop = true;
+let rp = imgPage(50, 1600, 3200, 400, 800);
+rp.wmm = A5_PORTRAIT.w; rp.hmm = A5_PORTRAIT.h;
+eval('recomputePage')(rp);
+assert('autoRotate rotates a portrait page (full-ink content)',
+  rp.rotated === true && Math.abs(rp.origWmm - 210) < 1e-9 && Math.abs(rp.origHmm - 105) < 1e-9,
+  JSON.stringify({ r: rp.rotated, w: rp.origWmm, h: rp.origHmm }));
+
+let rl = imgPage(51, 3200, 1600, 800, 400);
+rl.wmm = A5_LANDSCAPE.w; rl.hmm = A5_LANDSCAPE.h;
+eval('recomputePage')(rl);
+assert('autoRotate leaves a landscape page untouched',
+  rl.rotated === false && Math.abs(rl.origWmm - 210) < 1e-9 && Math.abs(rl.origHmm - 105) < 1e-9,
+  JSON.stringify({ r: rl.rotated, w: rl.origWmm, h: rl.origHmm }));
+
+// portrait page whose CONTENT is a landscape band → must NOT rotate
+let rb = imgPage(52, 1600, 3200, 400, 800);
+rb.wmm = A5_PORTRAIT.w; rb.hmm = A5_PORTRAIT.h;
+rb.original._data = inkData(400, 800, 350, 451);
+eval('recomputePage')(rb);
+assert('autoRotate skips a portrait page whose content is landscape (band)',
+  rb.rotated === false && rb.cropWmm > rb.cropHmm,
+  JSON.stringify({ r: rb.rotated, cw: rb.cropWmm, ch: rb.cropHmm }));
+
+// autoRotate off → portrait page stays portrait
+st.options.autoRotate = false;
+rp = imgPage(53, 1600, 3200, 400, 800);
+rp.wmm = A5_PORTRAIT.w; rp.hmm = A5_PORTRAIT.h;
+eval('recomputePage')(rp);
+assert('autoRotate off → portrait page not rotated',
+  rp.rotated === false && Math.abs(rp.origWmm - 105) < 1e-9 && Math.abs(rp.origHmm - 210) < 1e-9,
+  JSON.stringify({ r: rp.rotated, w: rp.origWmm, h: rp.origHmm }));
+st.options.autoRotate = true;
 
 // ── easter-egg reveal: fresh isolated eval per scenario ──
 function runMain(search) {
