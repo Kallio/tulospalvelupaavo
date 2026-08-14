@@ -30,7 +30,7 @@ global.URL = { createObjectURL: () => 'blob:x' };
 
 let threw = null;
 try {
-  eval(code + '; global.__fn = { parsePpen, mergePpen, buildIofXml, traverseCourse, legLengthM, fmtCoord, miniParse, addPpenFile, files, convert, setInclude, loadDemo, setLang, toggleLang, clearAll, toggleArea, hiddenAreas, POKAALIJAHTI_DEMO }; global.__last = () => lastResult;');
+  eval(code + '; global.__fn = { parsePpen, mergePpen, buildIofXml, traverseCourse, legLengthM, fmtCoord, miniParse, addPpenFile, files, convert, setInclude, loadDemo, setLang, toggleLang, clearAll, toggleArea, hiddenAreas, validateIofXml, checkWellFormedXml, POKAALIJAHTI_DEMO }; global.__last = () => lastResult;');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 let pass = 0, fail = 0;
@@ -441,6 +441,20 @@ assert('fmtCoord: trailing-zero collapse', F.fmtCoord(-14.601593) === '-14.6', F
 // ── miniParse handles self-closing, prolog, entities ──
 const parsedMini = F.miniParse('<?xml version="1.0"?>\n<a x="1&amp;2"><b>hi</b><c /></a>');
 assert('miniParse: prolog + attrs + entities', parsedMini.name === 'a' && parsedMini.attrs.x === '1&2' && parsedMini.children[0].name === 'b' && parsedMini.children[0].text === 'hi' && parsedMini.children[1].name === 'c');
+
+// ── IOF 3.0 CourseData validation ──
+const V = F.validateIofXml;
+assert('validate: demo xml is valid', V(dxml).length === 0, JSON.stringify(V(dxml)));
+assert('validate: real merged xml is valid', V(xml).length === 0, JSON.stringify(V(xml)));
+assert('validate: convert() surfaces no IOF warnings', !global.__last().merge.warnings.some(w => w.text.indexOf('IOF validation:') === 0), JSON.stringify(global.__last().merge.warnings));
+const mut = (s, from, to) => s.split(from).join(to);
+assert('validate: missing xmlns flagged', V(mut(dxml, 'xmlns="http://www.orienteering.org/datastandard/3.0"', 'xmlns="http://example.org"')).some(e => e.includes('xmlns')));
+assert('validate: wrong iofVersion flagged', V(mut(dxml, 'iofVersion="3.0"', 'iofVersion="2.0"')).some(e => e.includes('iofVersion')));
+assert('validate: unknown control ref flagged', V(mut(dxml, '<Control>STA1</Control>', '<Control>NOPE</Control>')).some(e => e.includes('unknown control')));
+assert('validate: first CourseControl must be Start flagged', V(mut(dxml, '<CourseControl type="Start">', '<CourseControl type="Control">')).some(e => e.includes('first CourseControl')));
+assert('validate: duplicate course name flagged', V(mut(dxml, '<Name>Rata A</Name>', '<Name>Rata B</Name>')).some(e => e.includes('duplicate Course')));
+assert('validate: unclosed tag flagged', V('<CourseData xmlns="http://www.orienteering.org/datastandard/3.0"><Event><Name>x</Name></Event>').some(e => e.includes('unclosed')));
+assert('validate: mismatched close tag flagged', V(mut(dxml, '</RaceCourseData>', '</RaceCourseDataX>')).some(e => e.includes('mismatched')));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

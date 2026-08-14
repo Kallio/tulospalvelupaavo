@@ -605,6 +605,203 @@ function buildIofXml(controls, courses, courseControls, scale, mapBounds, eventT
   return "<?xml version='1.0' encoding='UTF-8'?>\n" + serializeXml(root, 0) + '\n';
 }
 
+/* ============================================================
+   IOF 3.0 CourseData VALIDATION
+   Well-formedness + structural conformance to the official
+   IOF CourseData schema (datastandard-v3, IOF.xsd).
+   Returns an array of human-readable error strings (empty = valid).
+   ============================================================ */
+
+function checkWellFormedXml(xml) {
+  const errors = [];
+  const stack = [];
+  let pos = 0;
+  const len = xml.length;
+  function findTagEnd(from) {
+    let i = from + 1;
+    let q = null;
+    while (i < len) {
+      const c = xml[i];
+      if (q) { if (c === q) q = null; }
+      else if (c === '"' || c === "'") q = c;
+      else if (c === '>') return i;
+      i++;
+    }
+    return -1;
+  }
+  while (pos < len) {
+    const lt = xml.indexOf('<', pos);
+    if (lt === -1) break;
+    if (xml.slice(lt, lt + 4) === '<!--') {
+      const end = xml.indexOf('-->', lt);
+      if (end === -1) { errors.push('unclosed comment'); break; }
+      pos = end + 3; continue;
+    }
+    if (xml.slice(lt, lt + 2) === '<?') {
+      const end = xml.indexOf('?>', lt);
+      if (end === -1) { errors.push('unclosed processing instruction'); break; }
+      pos = end + 2; continue;
+    }
+    if (xml.slice(lt, lt + 2) === '<!') {
+      const end = xml.indexOf('>', lt);
+      if (end === -1) { errors.push('unclosed declaration'); break; }
+      pos = end + 1; continue;
+    }
+    const gt = findTagEnd(lt);
+    if (gt === -1) { errors.push('unclosed tag'); break; }
+    const raw = xml.slice(lt, gt + 1);
+    const m = /^<\s*(\/?)\s*([^\s/>]+)([\s\S]*?)\s*(\/?)>$/.exec(raw);
+    if (!m) { errors.push('malformed tag: ' + raw.slice(0, 40)); pos = gt + 1; continue; }
+    const closing = m[1] === '/';
+    const name = m[2];
+    const selfClose = m[4] === '/';
+    if (closing) {
+      const top = stack.pop();
+      if (top !== name) errors.push('mismatched </' + name + '> (expected </' + (top || '') + '>)');
+    } else if (!selfClose) {
+      stack.push(name);
+    }
+    pos = gt + 1;
+  }
+  if (stack.length) errors.push('unclosed tag <' + stack[stack.length - 1] + '>');
+  return errors;
+}
+
+function assertChildOrder(children, allowed, errors, ctx) {
+  let a = 0;
+  for (const c of children) {
+    while (a < allowed.length && allowed[a].name !== c.name) a++;
+    if (a >= allowed.length) {
+      errors.push(ctx + ': unexpected <' + c.name + '>');
+      return;
+    }
+    if (!allowed[a].repeat) a++;
+  }
+}
+
+function isNum(v) { return v !== '' && isFinite(Number(v)); }
+
+function validateIofXml(xml) {
+  const errors = [];
+  errors.push.apply(errors, checkWellFormedXml(xml));
+  if (errors.length) return errors;
+
+  const root = miniParse(xml);
+  if (root.name !== 'CourseData') {
+    errors.push('root element must be <CourseData>, got <' + root.name + '>');
+    return errors;
+  }
+  const NS = 'http://www.orienteering.org/datastandard/3.0';
+  if (root.attrs.xmlns !== NS) errors.push('root xmlns must be "' + NS + '"');
+  if (root.attrs.iofVersion !== '3.0') errors.push('iofVersion must be "3.0"');
+  if (!root.attrs.createTime) errors.push('missing createTime attribute');
+  if (root.attrs.creator == null) errors.push('missing creator attribute');
+
+  assertChildOrder(root.children, [{ name: 'Event' }, { name: 'RaceCourseData', repeat: true }], errors, 'CourseData');
+
+  const eventEl = childEl(root, 'Event');
+  if (!eventEl) {
+    errors.push('CourseData requires an <Event> element');
+  } else if (!childEl(eventEl, 'Name')) {
+    errors.push('Event requires a <Name> element');
+  }
+
+  const rcds = childrenNamed(root, 'RaceCourseData');
+  if (!rcds.length) errors.push('CourseData requires at least one <RaceCourseData> element');
+
+  const courseNames = [];
+  const ctrlIds = new Set();
+  const assignments = [];
+
+  rcds.forEach(function (rcd, r) {
+    const ctx = 'RaceCourseData' + (rcds.length > 1 ? ' #' + (r + 1) : '');
+    assertChildOrder(rcd.children, [
+      { name: 'Map', repeat: true },
+      { name: 'Control', repeat: true },
+      { name: 'Course', repeat: true },
+      { name: 'ClassCourseAssignment', repeat: true },
+    ], errors, ctx);
+
+    childrenNamed(rcd, 'Map').forEach(function (map) {
+      assertChildOrder(map.children, [
+        { name: 'Scale' }, { name: 'MapPositionTopLeft' }, { name: 'MapPositionBottomRight' },
+      ], errors, ctx + '/Map');
+      const scale = childEl(map, 'Scale');
+      if (scale && !isNum(scale.text)) errors.push(ctx + '/Map: <Scale> must be a number');
+      ['MapPositionTopLeft', 'MapPositionBottomRight'].forEach(function (pn) {
+        const p = childEl(map, pn);
+        if (p) {
+          if (!isNum(p.attrs.x) || !isNum(p.attrs.y)) errors.push(ctx + '/Map: <' + pn + '> requires numeric x/y attributes');
+        } else {
+          errors.push(ctx + '/Map: missing <' + pn + '>');
+        }
+      });
+    });
+
+    childrenNamed(rcd, 'Control').forEach(function (c) {
+      const type = c.attrs.type || 'Control';
+      if (['Start', 'Control', 'Finish', 'CrossingPoint', 'EndOfMarkedRoute'].indexOf(type) === -1) {
+        errors.push(ctx + ': invalid Control type "' + type + '"');
+      }
+      const id = childEl(c, 'Id');
+      if (!id) errors.push(ctx + ': Control missing <Id>');
+      else if (ctrlIds.has(id.text)) errors.push(ctx + ': duplicate Control <Id>' + id.text);
+      else ctrlIds.add(id.text);
+      const mp = childEl(c, 'MapPosition');
+      if (mp && (!isNum(mp.attrs.x) || !isNum(mp.attrs.y))) errors.push(ctx + ': <MapPosition> requires numeric x/y attributes');
+    });
+
+    childrenNamed(rcd, 'Course').forEach(function (course) {
+      const cctx = ctx + '/Course "' + (childEl(course, 'Name') || {}).text + '"';
+      assertChildOrder(course.children, [
+        { name: 'Name' }, { name: 'Length' }, { name: 'Climb' }, { name: 'CourseControl', repeat: true },
+      ], errors, cctx);
+      const nm = childEl(course, 'Name');
+      if (nm) {
+        if (!nm.text) errors.push(cctx + ': <Name> must not be empty');
+        else if (courseNames.indexOf(nm.text) !== -1) errors.push('duplicate Course <Name>: ' + nm.text);
+        else courseNames.push(nm.text);
+      } else {
+        errors.push(cctx + ': missing <Name>');
+      }
+      const lenEl = childEl(course, 'Length');
+      if (lenEl && (!isNum(lenEl.text) || Number(lenEl.text) < 0)) errors.push(cctx + ': <Length> must be a non-negative number');
+      const climb = childEl(course, 'Climb');
+      if (climb && (!isNum(climb.text) || Number(climb.text) < 0)) errors.push(cctx + ': <Climb> must be a non-negative number');
+
+      const ccs = childrenNamed(course, 'CourseControl');
+      if (ccs.length < 2) errors.push(cctx + ': needs at least 2 <CourseControl> elements');
+      ccs.forEach(function (cc, i) {
+        const ctrl = childEl(cc, 'Control');
+        if (!ctrl) errors.push(cctx + ': CourseControl missing <Control>');
+        else if (!ctrlIds.has(ctrl.text)) errors.push(cctx + ': CourseControl references unknown control "' + ctrl.text + '"');
+        const type = cc.attrs.type || 'Control';
+        if (i === 0 && type !== 'Start') errors.push(cctx + ': first CourseControl must be type Start');
+        if (i === ccs.length - 1 && type !== 'Finish') errors.push(cctx + ': last CourseControl must be type Finish');
+        if (i > 0 && i < ccs.length - 1 && type !== 'Control') errors.push(cctx + ': middle CourseControl ' + (i + 1) + ' must be type Control');
+        if (i > 0) {
+          const ll = childEl(cc, 'LegLength');
+          if (ll && (!isNum(ll.text) || Number(ll.text) < 0)) errors.push(cctx + ': <LegLength> must be a non-negative number');
+        }
+      });
+    });
+
+    childrenNamed(rcd, 'ClassCourseAssignment').forEach(function (a) {
+      const cls = childEl(a, 'ClassName');
+      const crs = childEl(a, 'CourseName');
+      if (!cls) errors.push(ctx + ': ClassCourseAssignment missing <ClassName>');
+      if (!crs) errors.push(ctx + ': ClassCourseAssignment missing <CourseName>');
+      if (crs && crs.text) assignments.push(crs.text);
+    });
+  });
+
+  assignments.forEach(function (n) {
+    if (courseNames.indexOf(n) === -1) errors.push('ClassCourseAssignment references unknown course "' + n + '"');
+  });
+
+  return errors;
+}
+
 const PALETTE = ['#e94560', '#27ae60', '#7ec8e3', '#f39c12', '#9b59b6', '#16a085', '#e67e22', '#2ecc71', '#8e44ad', '#d35400'];
 
 function toSvgRect(r) {
@@ -809,6 +1006,8 @@ function convert() {
   const eventTitle = getEl('titleIn').value.trim() || merge.title || 'Event';
   const creator = getEl('creatorIn').value.trim() || 'ppen_to_iof.html';
   const xml = buildIofXml(merge.controls, merge.courses, merge.courseControls, merge.scale, bounds, eventTitle, undefined, creator);
+  const verr = validateIofXml(xml);
+  if (verr.length) merge.warnings.push({ text: 'IOF validation: ' + verr.join('; ') });
   lastResult = { xml, title: eventTitle, merge };
   renderSummary(merge, eventTitle, bounds);
   renderSvg(merge, bounds);
