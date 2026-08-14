@@ -166,9 +166,12 @@ ja toimii myös suoraan levyltä avattuna (`file://`).
 - Valkoisen tilan tunnistus poistaa ympäröivät marginaalit (pikselit, joissa
   R,G,B > 245, katsotaan taustaksi), ja tunnistettu rajausalue näkyy esikatselussa.
 - Asetukset: automaattinen rajaus, leikkuuvara (mm), tulostumaton
-  reunamarginaali (oletus 5 mm — se ei muuta asettelua eikä skaalausta, vaan
-  leikkaa pois vain sen kartan osan, joka menee tulostimen reunan yli),
-  sisältötietoinen automaattikääntö (oletuksena päällä — kääntää kartan 90°,
+  reunamarginaali (oletus 5 mm — jokainen kartta skaalataan ja keskitetään
+  kennonsa tulostusalueelle, jolloin saman arkin kartat vedetään yhteen arkin
+  keskustaan eivätkä ulotu tulostumattomalle reunamarginaalille; mitään ei
+  leikata pois paitsi 1:1-karttoja, jotka ovat fyysisesti tulostusaluetta
+  suurempia), sisältötietoinen automaattikääntö (oletuksena päällä — kääntää
+  kartan 90°,
   kun sen rajatun sisällön suunta on pystysuuntainen, jotta se täyttää
   vaaka-A5-arkin skaalaamisen sijaan; päätös perustuu sisällön suuntaan, ei
   sivun mittoihin, joten esim. pystyä sivua, jonka kartta on vaakasuuntainen,
@@ -184,11 +187,13 @@ ja toimii myös suoraan levyltä avattuna (`file://`).
   "2. Asetukset" tulee näkyviin, kun tiedostoja on ladattu, ja "3. Yhteenveto"
   / "4. Lataa PDF" (sekä A4-arkkien esikatselu), kun sivuja on — kuten muissa
   tämän repon työkaluissa.
-- Toistotila ruuduttaa yhden valitun (tai ensimmäisen) kartan 1:1-kopioina
-  yhdelle A4-arkille parhaiten sopivaan ruudukkoon (esim. 4 × A6 → yksi A4)
-  tavallisen kahden pinotun A5-kennon sijaan. Kopioiden määrä rajataan niin,
-  että jokainen kopio mahtuu arkille 1:1-koossa — esim. enintään 2 A5-karttaa
-  per A4 (kenttä rajaa määrän ja varoittaa).
+- Toistotila ruuduttaa **jokaisen** ladatun sivun 1:1-kopioina omalle
+  A4-arkilleen parhaiten sopivaan ruudukkoon (esim. jokainen sivu 4 × A6 →
+  yksi A4 per sivu) tavallisen kahden pinotun A5-kennon sijaan. Näin
+  useamman kartan tapauksessa jokainen kartta saa oman toistoarkkinsa, ja
+  arkin otsikko kertoo lähdekartan. Kopioiden määrä rajataan karttakohtaisesti
+  niin, että jokainen kopio mahtuu arkille 1:1-koossa — esim. enintään
+  2 A5-karttaa per A4 (kenttä rajaa määrän ja varoittaa).
 - Easter egg: "duplex-valoläpäisy" lisää jokaisen A4-sivun perään vaakasuunnassa
   peilatun kopion, jolloin kaksipuolisesti tulostettuna takapuoli kohdistuu
   etusivun kanssa valoa vasten katsottaessa (esim. rastit toisella puolella,

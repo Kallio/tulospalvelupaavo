@@ -55,8 +55,8 @@ const I18N = {
     mirrorHint: 'Easter egg: lisää jokaisen A4-sivun jälkeen peilatun kopion, jotta kaksipuolisesti tulostettuna takapuoli näkyy läpi ja kohdistuu etusivun kanssa.',
     mirrorOnly: 'Tulosta vain peilatut (tausta)sivut',
     mirrorOnlyHint: 'Easter egg, "lapsille": tulostaa vain peilatut taustasivut ilman etusivuja.',
-    repeat: 'Toista yksi kartta useana kopiona yhdellä A4-arkilla',
-    repeatHint: 'Ruuduttaa valitun (tai ensimmäisen) sivun 1:1-kopioina arkin täydeltä (esim. 4 × A6). Määrä rajataan niin, että jokainen kopio mahtuu arkille (esim. enintään 2 × A5).',
+    repeat: 'Toista kartat: jokainen kartta kopioina omalla A4-arkilla',
+    repeatHint: 'Ruuduttaa jokaisen sivun erikseen 1:1-kopioina omalle arkeilleen (esim. jokainen sivu 4 × A6). Määrä rajataan niin, että jokainen kopio mahtuu arkille (esim. enintään 2 × A5).',
     repeatN: 'Kopioiden määrä',
     repeatCap: '{n} kopiota · {cols}×{rows} ruudukko',
     repeatMax: 'Arkille mahtuu tässä koossa enintään {max} kopiota (1:1).',
@@ -110,8 +110,8 @@ const I18N = {
     mirrorHint: 'Easter egg: appends a mirrored copy after every A4 page so that when printed double-sided the back shows through and aligns with the front.',
     mirrorOnly: 'Print only the mirrored (back) pages',
     mirrorOnlyHint: 'Easter egg, "for kids": prints only the mirrored back pages, without the fronts.',
-    repeat: 'Repeat one map as copies on a single A4 sheet',
-    repeatHint: 'Tiles the selected (or first) page as 1:1 copies across the sheet (e.g. 4 × A6). The count is capped so every copy fits on the page at 1:1 (e.g. at most 2 × A5).',
+    repeat: 'Repeat maps: each map as copies on its own A4 sheet',
+    repeatHint: 'Tiles every page separately as 1:1 copies on its own A4 sheet (e.g. each page 4 × A6). The count is capped so every copy fits at 1:1 (e.g. at most 2 × A5).',
     repeatN: 'Number of copies',
     repeatCap: '{n} copies · {cols}×{rows} grid',
     repeatMax: 'At this size an A4 sheet fits at most {max} copies (1:1).',
@@ -402,30 +402,27 @@ function mirrorSheet(sheet) {
   };
 }
 
-function repeatSource() {
-  return state.pages.find(p => p.id === state.selectedId) || state.pages[0] || null;
-}
-
 function maxRepeatN() {
-  const src = repeatSource();
-  if (!src) return 24;
-  return MapMergerExport.maxRepeatCopies(src.cropWmm, src.cropHmm);
+  if (!state.options.repeat || !state.pages.length) return 24;
+  return Math.min(...state.pages.map(p => MapMergerExport.maxRepeatCopies(p.cropWmm, p.cropHmm)));
 }
 
 function buildSheetModel() {
   if (!state.pages.length) return [];
   if (state.options.repeat) {
-    const src = repeatSource();
-    const aspect = src.cropWmm / src.cropHmm;
-    const maxN = MapMergerExport.maxRepeatCopies(src.cropWmm, src.cropHmm);
-    const n = Math.min(maxN, Math.max(1, Math.floor(Number(state.options.repeatN)) || 1));
-    const cell = { canvas: src.cropCanvas, wmm: src.cropWmm, hmm: src.cropHmm, pageId: src.id, mirrored: false };
-    const cells = [];
-    for (let i = 0; i < n; i++) cells.push(cell);
-    const front = { cells, layout: 'grid', count: n, aspect, mapW: src.cropWmm, mapH: src.cropHmm };
-    if (state.options.mirror && state.options.mirrorOnly) return [mirrorSheet(front)];
-    if (state.options.mirror) return [front, mirrorSheet(front)];
-    return [front];
+    const sheets = [];
+    state.pages.forEach(p => {
+      const maxN = MapMergerExport.maxRepeatCopies(p.cropWmm, p.cropHmm);
+      const n = Math.min(maxN, Math.max(1, Math.floor(Number(state.options.repeatN)) || 1));
+      const cell = { canvas: p.cropCanvas, wmm: p.cropWmm, hmm: p.cropHmm, pageId: p.id, mirrored: false };
+      const cells = [];
+      for (let i = 0; i < n; i++) cells.push(cell);
+      const front = { cells, layout: 'grid', count: n, aspect: p.cropWmm / p.cropHmm, mapW: p.cropWmm, mapH: p.cropHmm };
+      if (state.options.mirror && state.options.mirrorOnly) sheets.push(mirrorSheet(front));
+      else if (state.options.mirror) sheets.push(front, mirrorSheet(front));
+      else sheets.push(front);
+    });
+    return sheets;
   }
   const pairs = MapMergerExport.chunkPages(state.pages, 2);
   const sheets = [];
@@ -445,10 +442,16 @@ function buildSheetModel() {
   return sheets;
 }
 
+function sheetSourceLabel(pageId) {
+  const p = state.pages.find(p => p.id === pageId);
+  if (!p) return '';
+  return p.kind === 'pdf' ? p.srcName + ' · ' + p.pageNo : p.srcName;
+}
+
 function countSheets() {
   const n = state.pages.length;
   if (!n) return 0;
-  if (state.options.repeat) return (state.options.mirror && !state.options.mirrorOnly) ? 2 : 1;
+  if (state.options.repeat) return n * (state.options.mirror && !state.options.mirrorOnly ? 2 : 1);
   const pairs = Math.ceil(n / 2);
   if (state.options.mirror) return pairs * (state.options.mirrorOnly ? 1 : 2);
   return pairs;
@@ -592,13 +595,13 @@ function renderSheets() {
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(gx, gy, gw, gh);
       if (!cell) return;
-      const r = MapMergerExport.computeCellPlacement(cell.wmm, cell.hmm, { w: g.w, h: g.h }, { keepOriginal: oneToOne });
-      ctx.save();
       const clip = MapMergerExport.clipRectFor(g, state.options.marginMm);
+      const r = MapMergerExport.computeCellPlacement(cell.wmm, cell.hmm, { w: clip.w, h: clip.h }, { keepOriginal: oneToOne });
+      ctx.save();
       ctx.beginPath();
       ctx.rect(clip.x * pxPerMm, clip.y * pxPerMm, clip.w * pxPerMm, clip.h * pxPerMm);
       ctx.clip();
-      ctx.drawImage(cell.canvas, (g.x + r.x) * pxPerMm, (g.y + r.y) * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
+      ctx.drawImage(cell.canvas, (clip.x + r.x) * pxPerMm, (clip.y + r.y) * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
       ctx.restore();
       if (cell.pageId === state.selectedId) {
         ctx.strokeStyle = '#e94560';
@@ -618,6 +621,7 @@ function renderSheets() {
       gridInfo = ' · ' + t('repeatCap', { n: sheet.count, cols: gd.cols, rows: gd.rows });
     }
     cap.textContent = t('sheetCaption', { n: si + 1, total: sheets.length }) +
+      (sheet.layout === 'grid' && sheet.cells[0] ? ' · ' + sheetSourceLabel(sheet.cells[0].pageId) : '') +
       gridInfo +
       (sheet.cells.some(c => c && c.mirrored) ? t('sheetBack') : '');
     wrap.appendChild(cv);

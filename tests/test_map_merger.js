@@ -79,7 +79,7 @@ assert('keepOriginal on small map stays 1:1, centered', small.scale === 1 && Mat
 const guard = E.computeCellPlacement(0, 0, cell, {});
 assert('zero-size guard returns full cell', guard.w === cell.w && guard.h === cell.h);
 
-// ── printableRect / clipRectFor / gridDims / cellGeom (clip-only margin) ─
+// ── printableRect / clipRectFor / gridDims / cellGeom (inset margin) ─────
 const pr0 = E.printableRect(0);
 assert('printableRect(0) → full A4 210×297', pr0.x === 0 && pr0.y === 0 && pr0.w === 210 && pr0.h === 297, JSON.stringify(pr0));
 const pr5 = E.printableRect(5);
@@ -130,15 +130,18 @@ const gr2 = E.cellGeom(2, 'grid', 4, 105 / 148, 105, 148);
 assert('cellGeom grid 2×2 cell size 105×148.5', gr0.x === 0 && gr0.y === 0 && gr0.w === 105 && Math.abs(gr0.h - 148.5) < 1e-9, JSON.stringify(gr0));
 assert('cellGeom grid row-major order', gr1.x === 105 && gr1.y === 0 && gr2.x === 0 && Math.abs(gr2.y - 148.5) < 1e-9, JSON.stringify([gr1, gr2]));
 
-// ── computeCellRect (clip-only margin, stack + grid) ─────────────────
+// ── computeCellRect (inset margin: maps centered in printable ∩ cell) ───
 const r00 = E.computeCellRect(210, 148.5, 0, { layout: 'stack', count: 2 }, 0, {});
 assert('cellRect margin0 top: at origin, full cell', r00.x === 0 && r00.y === 0 && r00.w === 210 && r00.h === 148.5 && r00.clipX === 0 && r00.clipW === 210, JSON.stringify(r00));
 
 const r05 = E.computeCellRect(210, 148.5, 0, { layout: 'stack', count: 2 }, 5, {});
-assert('cellRect margin5: layout NOT inset (scale 1), only clip shrinks', r05.w === 210 && r05.h === 148.5 && r05.x === 0 && r05.y === 0 && r05.clipX === 5 && r05.clipW === 200 && Math.abs(r05.clipH - 143.5) < 1e-9, JSON.stringify(r05));
+assert('cellRect margin5 top: scaled to printable 200 wide, centered in it',
+  Math.abs(r05.x - 5) < 1e-9 && Math.abs(r05.w - 200) < 1e-9 && Math.abs(r05.h - 141.42857) < 1e-4 && Math.abs(r05.y - 6.03571) < 1e-4 && r05.clipX === 5 && r05.clipW === 200 && Math.abs(r05.clipH - 143.5) < 1e-9, JSON.stringify(r05));
+assert('cellRect margin5 top: map is fully inside printable (no clipping)', r05.x >= r05.clipX - 1e-9 && r05.x + r05.w <= r05.clipX + r05.clipW + 1e-9 && r05.y >= r05.clipY - 1e-9 && r05.y + r05.h <= r05.clipY + r05.clipH + 1e-9, JSON.stringify(r05));
 
 const r15 = E.computeCellRect(210, 148.5, 1, { layout: 'stack', count: 2 }, 5, {});
-assert('cellRect margin5 bottom: y at row1, clip spans to printable bottom', Math.abs(r15.y - 148.5) < 1e-9 && Math.abs(r15.clipY - 148.5) < 1e-9 && Math.abs(r15.clipY + r15.clipH - (297 - 5)) < 1e-9, JSON.stringify(r15));
+assert('cellRect margin5 bottom: adjacent to top map at the center seam', Math.abs(r15.y - (148.5 + 1.03571)) < 1e-4 && Math.abs(r15.clipY - 148.5) < 1e-9 && Math.abs(r15.clipY + r15.clipH - (297 - 5)) < 1e-9, JSON.stringify(r15));
+assert('cellRect margin5: maps centered symmetrically about the sheet center', Math.abs((r05.y + r05.h / 2 + r15.y + r15.h / 2) / 2 - 148.5) < 1e-9 && r15.y >= r05.y + r05.h, JSON.stringify([r05, r15]));
 
 const rko = E.computeCellRect(148, 210, 0, { layout: 'stack', count: 2 }, 5, { keepOriginal: true });
 assert('cellRect keepOriginal portrait: 1:1 centered, overflows top, clip at 5', rko.w === 148 && rko.h === 210 && rko.x === 31 && rko.y < 0 && rko.clipY === 5 && rko.clipX === 5, JSON.stringify(rko));
@@ -196,6 +199,9 @@ assert('index.html options heading has secret-click trigger id', /<h3 data-i18n=
 assert('main.js has showEasterEgg + secretClick + URL param reveal', main.includes('function showEasterEgg') && main.includes('function secretClick') && main.includes("get('easteregg')") && main.includes('easterEggBlock'));
 assert('autoRotate is content-aware and defaults on', main.includes('autoRotate: true') && main.includes('content0') && main.includes('detectContentBBox(data0') && !main.includes('rotateToFit') && !main.includes('optRotate'));
 assert('index.html autoRotate checkbox is checked by default', /id="optAutoRotate" checked/.test(html) && html.includes('data-i18n="autoRotate"'));
+assert('repeat builds one grid sheet per page and ignores selection', main.includes('state.pages.forEach(p => {') && main.includes('maxRepeatCopies(p.cropWmm, p.cropHmm)') && !main.includes('repeatSource'));
+assert('countSheets counts repeat sheets per page', main.includes('return n * (state.options.mirror && !state.options.mirrorOnly ? 2 : 1);'));
+assert('repeat grid sheets carry a source label in the caption', main.includes('sheetSourceLabel') && main.includes("'grid' && sheet.cells[0] ? ' · ' + sheetSourceLabel"));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

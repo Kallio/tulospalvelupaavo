@@ -107,21 +107,23 @@ let sheets = mm.buildSheetModel();
 assert('default: 3 pages → 2 stack sheets', sheets.length === 2 && sheets.every(s => s.layout === 'stack'), JSON.stringify(sheets));
 assert('stack sheet 0 has 2 cells, sheet 1 has [page3, null]', sheets[0].cells.length === 2 && sheets[1].cells[0] && sheets[1].cells[0].pageId === 3 && sheets[1].cells[1] === null);
 
-// repeat grid
+// repeat grid: one A4 sheet per page, each tiled with copies of that map only
 st.options.repeat = true;
-st.selectedId = 3; // the A6 portrait page → 4 copies fit on A4
+st.selectedId = 3; // selection no longer picks the repeat source
 sheets = mm.buildSheetModel();
-assert('repeat: 1 grid sheet of 4 copies', sheets.length === 1 && sheets[0].layout === 'grid' && sheets[0].count === 4 && sheets[0].cells.length === 4);
+assert('repeat: one grid sheet per page (3 pages → 3 sheets)', sheets.length === 3 && sheets.every(s => s.layout === 'grid') && sheets.every(s => s.cells.length === s.count));
+assert('repeat per-page counts: A5→2, A5p→1, A6→4 copies', sheets[0].count === 2 && sheets[1].count === 1 && sheets[2].count === 4, JSON.stringify(sheets.map(s => s.count)));
+assert('each repeat sheet tiles only its own page', sheets[0].cells.every(c => c.pageId === 1) && sheets[1].cells.every(c => c.pageId === 2) && sheets[2].cells.every(c => c.pageId === 3));
 const gd = E.gridDims(4, 105 / 148);
 assert('repeat grid is 2×2 for A6 portrait', gd.cols === 2 && gd.rows === 2, JSON.stringify(gd));
 
 // repeat + mirror (interleaved front+back) and repeat + mirrorOnly
 st.options.mirror = true; st.options.mirrorOnly = false;
 sheets = mm.buildSheetModel();
-assert('repeat + mirror → front + mirrored back (2 sheets)', sheets.length === 2 && sheets[1].cells[0].mirrored === true);
+assert('repeat + mirror → front + mirrored back per page (6 sheets)', sheets.length === 6 && sheets[1].cells[0].mirrored === true && sheets[3].cells[0].mirrored === true);
 st.options.mirrorOnly = true;
 sheets = mm.buildSheetModel();
-assert('repeat + mirrorOnly → only the mirrored back (1 sheet)', sheets.length === 1 && sheets[0].cells[0].mirrored === true && sheets[0].cells.length === 4);
+assert('repeat + mirrorOnly → only the mirrored backs (3 sheets)', sheets.length === 3 && sheets.every(s => s.cells[0].mirrored === true));
 
 // stack + mirrorOnly
 st.options.repeat = false; st.options.mirror = true; st.options.mirrorOnly = true;

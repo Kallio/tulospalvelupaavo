@@ -159,8 +159,10 @@ it works when opened straight from disk (`file://`).
 - Whitespace detection removes surrounding white margins (pixels with
   R,G,B > 245 count as background), with the detected crop box previewed.
 - Options: auto-crop, bleed margin (mm), an unprintable printer margin
-  (default 5 mm — this never changes the layout or scaling, it only clips
-  away whatever map content extends past the printer's edge), content-aware
+  (default 5 mm — each map is scaled to fit and centered within the printable
+  area of its cell, so maps on one sheet are pulled together toward the sheet
+  center and never run into the unprintable edge margin; nothing is cut off
+  except 1:1 maps physically larger than the printable area), content-aware
   auto-rotate (on by default — rotates a map 90° when its cropped content is
   portrait so it fills the landscape A5 cell instead of being scaled down;
   the decision is based on the content orientation, not the page dimensions,
@@ -176,11 +178,12 @@ it works when opened straight from disk (`file://`).
   Options" appears once files are loaded, and "3. Summary" / "4. Download PDF"
   (and the A4-sheet preview) once pages exist — matching the other tools in
   this repo.
-- Repeat mode tiles a single selected (or first) map as 1:1 copies across one
-  A4 in the best-fitting grid (e.g. 4 × A6 → one A4), instead of the default
-  two stacked A5 cells. The copy count is capped so every copy fits on the
-  sheet at 1:1 — e.g. at most 2 A5 maps per A4 (the input field clamps and
-  warns).
+- Repeat mode tiles **every** loaded page as 1:1 copies on its own A4 in the
+  best-fitting grid (e.g. each page 4 × A6 → one A4 per page), instead of the
+  default two stacked A5 cells. So with several maps you get one repeat sheet
+  per map, and the sheet caption names the source map. The copy count is capped
+  per map so every copy fits on the sheet at 1:1 — e.g. at most 2 A5 maps per
+  A4 (the input field clamps and warns).
 - Easter egg: "duplex shine-through" appends a horizontally mirrored copy of
   every A4 page, so that double-sided printing makes the back page align with
   the front when held up to a light (e.g. control points on one side, course

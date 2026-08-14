@@ -86,7 +86,9 @@
    *     counts top → bottom (y = cellIdx * CELL.h).
    *   layout 'grid':  a gridDims grid across the full page (mapW/mapH keep the
    *     grid large enough for 1:1 copies).
-   * The margin is NOT applied here (it is clip-only); see clipRectFor. */
+   * The margin is NOT applied to the cell rect itself (the grid/stack is laid
+   * out over the full page); it insets the placement target instead — see
+   * clipRectFor. */
   function cellGeom(cellIdx, layout, count, aspect, mapW, mapH) {
     layout = layout || 'stack';
     if (layout === 'grid') {
@@ -103,8 +105,11 @@
   }
 
   /* clipRectFor(cell, marginMm) — { x, y, w, h } in mm of the intersection
-   * between a cell rect and the printable area. Everything outside it is cut
-   * away (the printer simply cannot mark there). */
+   * between a cell rect and the printable area. This is both the clipping
+   * region AND the placement target: every map is scaled to fit inside it and
+   * centered there, so maps are pulled toward the center of the sheet and the
+   * unprintable edge margin stays clean — nothing is cut off (except 1:1 maps
+   * physically larger than the printable area). */
   function clipRectFor(cell, marginMm) {
     var p = printableRect(marginMm);
     var x0 = Math.max(cell.x, p.x), y0 = Math.max(cell.y, p.y);
@@ -115,11 +120,12 @@
   /* computeCellPlacement(imgW, imgH, cell, opts)
    *
    * imgW, imgH: map size in mm (after crop/rotation)
-   * cell: { w, h } target cell in mm (defaults to CELL)
+   * cell: { w, h } target rect in mm (defaults to CELL) — callers pass the
+   *   printable portion of the cell (printableRect ∩ cell) so maps are
+   *   centered within the printable area, never in the unprintable margin.
    * opts.keepOriginal: place at original size (scale 1), centered.
    *   Default is contain: scale down to fit inside the cell preserving aspect,
-   *   centered. There is no cover mode anymore — the printer margin is
-   *   clip-only and must never change the scaling.
+   *   centered.
    *
    * Returns { x, y, w, h } in mm relative to the cell top-left.
    */
@@ -139,25 +145,28 @@
   /* computeCellRect(imgW, imgH, cellIdx, sheet, marginMm, opts)
    *
    * Absolute placement of one map in mm from the page top-left, together with
-   * its full cell rect and the clip rect (printable ∩ cell).
+   * its full cell rect and the target/clip rect (printable ∩ cell).
    * sheet: { layout, count, aspect, mapW, mapH } (stack | grid).
+   * The map is centered within printable ∩ cell, so maps on one sheet are
+   * pulled together toward the sheet center and never run into the
+   * unprintable edge margin.
    * Returns { x, y, w, h, cell, clipX, clipY, clipW, clipH, marginMm }.
    */
   function computeCellRect(imgW, imgH, cellIdx, sheet, marginMm, opts) {
     sheet = sheet || {};
     var cell = cellGeom(cellIdx, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
-    var place = computeCellPlacement(imgW, imgH, cell, opts);
-    var clip = clipRectFor(cell, marginMm);
+    var target = clipRectFor(cell, marginMm);
+    var place = computeCellPlacement(imgW, imgH, target, opts);
     return {
-      x: cell.x + place.x,
-      y: cell.y + place.y,
+      x: target.x + place.x,
+      y: target.y + place.y,
       w: place.w,
       h: place.h,
       cell: cell,
-      clipX: clip.x,
-      clipY: clip.y,
-      clipW: clip.w,
-      clipH: clip.h,
+      clipX: target.x,
+      clipY: target.y,
+      clipW: target.w,
+      clipH: target.h,
       marginMm: normalizeMargin(marginMm),
     };
   }
@@ -197,8 +206,11 @@
    *   layout 'stack' → two stacked CELL rows; 'grid' → a gridDims grid.
    * opts.keepOriginal: place maps at original size (1:1), centered.
    * opts.marginMm: unprintable printer margin on all sides (default MARGIN_MM).
-   *   The layout is computed against the FULL page/cells — the margin is only
-   *   used to clip away map content at the edges (clip-only, no scaling).
+   *   Each map is scaled to fit and centered within the printable portion of
+   *   its cell (printable ∩ cell), so maps on a sheet are pulled together
+   *   toward the center and never extend into the unprintable edge margin —
+   *   nothing is cut off (the clip operator is kept as a safety net for 1:1
+   *   maps physically larger than the printable area).
    *
    * Note: bleed is handled at crop time (the crop box already includes the
    * bleed margin), so nothing extra is needed here.
@@ -233,26 +245,28 @@
       cells.forEach(function (cell, idx) {
         if (!cell) return;
         var g = cellGeom(idx, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
-        // Clip to printable ∩ cell so margin (and cell-boundary) overflow is
-        // cut away (pdf-lib y is measured from the page bottom).
-        var clip = clipRectFor(g, marginMm);
+        // Target & clip: printable ∩ cell. Maps are centered inside this, so
+        // they never run into the unprintable margin (pdf-lib y is measured
+        // from the page bottom).
+        var target = clipRectFor(g, marginMm);
         page.pushOperators(
           PDFLib.pushGraphicsState(),
           PDFLib.rectangle(
-            clip.x * PT_PER_MM,
-            (A4.h - clip.y - clip.h) * PT_PER_MM,
-            clip.w * PT_PER_MM,
-            clip.h * PT_PER_MM
+            target.x * PT_PER_MM,
+            (A4.h - target.y - target.h) * PT_PER_MM,
+            target.w * PT_PER_MM,
+            target.h * PT_PER_MM
           ),
           PDFLib.clip(),
           PDFLib.endPath()
         );
-        // Absolute rect in mm from page top-left (margin included).
-        var r = computeCellPlacement(cell.wmm, cell.hmm, { w: g.w, h: g.h }, { keepOriginal: keepOriginal });
-        var xPt = (g.x + r.x) * PT_PER_MM;
+        // Placement in mm from the page top-left, centered in the printable
+        // portion of the cell.
+        var r = computeCellPlacement(cell.wmm, cell.hmm, { w: target.w, h: target.h }, { keepOriginal: keepOriginal });
+        var xPt = (target.x + r.x) * PT_PER_MM;
         var wPt = Math.max(1, r.w * PT_PER_MM);
         var hPt = Math.max(1, r.h * PT_PER_MM);
-        var yPt = (A4.h - (g.y + r.y) - r.h) * PT_PER_MM;
+        var yPt = (A4.h - (target.y + r.y) - r.h) * PT_PER_MM;
         page.drawImage(cell.img, { x: xPt, y: yPt, width: wPt, height: hPt });
         page.pushOperators(PDFLib.popGraphicsState());
       });
