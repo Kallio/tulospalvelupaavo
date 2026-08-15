@@ -9,7 +9,7 @@ function makeEl(tag) {
     children: [], style: {}, files: [], _q: q, checked: false, disabled: false,
     dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     appendChild(c) { this.children.push(c); return c; },
-    addEventListener() {}, remove() {}, removeChild() {}, select() {},
+    addEventListener() {}, remove() {}, removeChild() {}, select() {}, click() {},
     querySelector(sel) { if (!q[sel]) q[sel] = makeEl(sel); return q[sel]; },
     querySelectorAll() { return []; },
   };
@@ -22,10 +22,11 @@ function makeEl(tag) {
 const store = {};
 function getEl(id) { if (!store[id]) store[id] = makeEl('#' + id); return store[id]; }
 const body = makeEl('body');
+const created = [];
 global.document = {
   getElementById: getEl,
   querySelectorAll() { return []; },
-  createElement: tag => makeEl(tag),
+  createElement: tag => { const el = makeEl(tag); created.push(el); return el; },
   body,
   addEventListener() {},
 };
@@ -33,10 +34,11 @@ global.window = { history: { replaceState() {} }, location: { search: '' }, addE
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 global.requestAnimationFrame = cb => cb();
 global.fetch = () => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null) });
+global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, getSponsor }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, LEG_COLORS: () => LEG_COLORS, layout: () => layout };');
+  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, getSponsor, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -230,5 +232,296 @@ assert('createBib single: barcode no leg suffix', card2.children.find(c => c.dat
 assert('esc: basic', typeof P.esc('x') === 'string');
 assert('escA: quotes escaped', P.escA('a"b') === 'a&quot;b');
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+// ── HTML: bundle feature present ──
+assert('html: JSZip CDN script tag', /jszip/i.test(html), 'no JSZip tag');
+assert('html: Download ZIP button', html.includes('onclick="exportBundle()"'));
+
+// ── mimeToExt ──
+assert('mimeToExt: png', P.mimeToExt('image/png') === 'png');
+assert('mimeToExt: jpeg', P.mimeToExt('image/jpeg') === 'jpg');
+assert('mimeToExt: svg', P.mimeToExt('image/svg+xml') === 'svg');
+assert('mimeToExt: webp/gif/bmp/avif', P.mimeToExt('image/webp') === 'webp' && P.mimeToExt('image/gif') === 'gif' && P.mimeToExt('image/bmp') === 'bmp' && P.mimeToExt('image/avif') === 'avif');
+assert('mimeToExt: unknown → bin', P.mimeToExt('application/pdf') === 'bin' && P.mimeToExt('') === 'bin');
+
+// ── dataURLInfo ──
+const dPng = 'data:image/png;base64,aGVsbG8=';
+const dSvg = 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=';
+assert('dataURLInfo: png', P.dataURLInfo(dPng).mime === 'image/png' && P.dataURLInfo(dPng).ext === 'png' && P.dataURLInfo(dPng).base64 === 'aGVsbG8=');
+assert('dataURLInfo: svg ext', P.dataURLInfo(dSvg).ext === 'svg');
+assert('dataURLInfo: non-data URL → null', P.dataURLInfo('https://x/y.png') === null);
+assert('dataURLInfo: non-base64 data → null', P.dataURLInfo('data:text/plain,hello') === null);
+assert('dataURLInfo: non-string → null', P.dataURLInfo(null) === null && P.dataURLInfo(undefined) === null);
+
+// ── sanitizeFileName ──
+assert('sanitizeFileName: strips slashes/spaces', P.sanitizeFileName('a/b\\c:d.png', 'x', 'png') === 'a_b_c_d.png');
+assert('sanitizeFileName: empty → fallback', P.sanitizeFileName('', 'event-logo', 'png') === 'event-logo.png');
+assert('sanitizeFileName: missing ext appended', P.sanitizeFileName('logo', 'x', 'jpg') === 'logo.jpg');
+assert('sanitizeFileName: keeps existing ext', P.sanitizeFileName('logo.svg', 'x', 'jpg') === 'logo.svg');
+
+// ── buildBundleContent: empty state ──
+S.setEventLogoSrc(null); S.setSponsorLogos([]); S.setCustomFont(null);
+const bc0 = P.buildBundleContent();
+assert('bundle: file list = 2 layouts + data + manifest', bc0.files.length === 4, String(bc0.files.length));
+assert('bundle: data.json present', bc0.files.some(f => f.path === 'data.json'));
+assert('bundle: bib-layout.json text matches layout', bc0.files.find(f => f.path === 'bib-layout.json').text === JSON.stringify(S.layout(), null, 2));
+assert('bundle: sticker-layout.json text matches bundle', bc0.files.find(f => f.path === 'sticker-layout.json').text === JSON.stringify({ template: S.stickerLayout(), groupPos: S.stickerGroupPos() }, null, 2));
+assert('bundle: empty images + no font', JSON.stringify(bc0.manifest.images) === '[]' && bc0.manifest.font === null);
+assert('bundle: manifest layouts', JSON.stringify(bc0.manifest.layouts) === '["bib-layout.json","sticker-layout.json"]');
+assert('bundle: manifest exportedAt ISO', /^\d{4}-\d{2}-\d{2}T/.test(bc0.manifest.exportedAt), bc0.manifest.exportedAt);
+assert('bundle: generator', bc0.manifest.generator === 'bibgenerator.html');
+
+// ── buildBundleContent: with event logo + sponsors ──
+S.setEventLogoSrc(dPng); S.setEventLogoName('my logo.png');
+S.setSponsorLogos([
+  { src: dSvg, name: 'sponsor-a.svg', parts: new Set(['1', '2']) },
+  { src: dPng, name: '', parts: null },
+]);
+const bc1 = P.buildBundleContent();
+const bc1Paths = bc1.files.map(f => f.path);
+assert('bundle: event logo file', bc1Paths.includes('images/my_logo.png'), JSON.stringify(bc1Paths));
+const ev = bc1.files.find(f => f.path === 'images/my_logo.png');
+assert('bundle: event logo is base64 entry', ev.base64 === 'aGVsbG8=' && ev.opts && ev.opts.base64 === true);
+assert('bundle: sponsor named file', bc1Paths.includes('images/sponsor-a.svg'));
+assert('bundle: sponsor unnamed fallback', bc1Paths.includes('images/sponsor-2.png'));
+const sp = bc1.files.find(f => f.path === 'images/sponsor-a.svg');
+assert('bundle: sponsor svg base64', sp.base64 === 'PHN2Zz48L3N2Zz4=');
+const evM = bc1.manifest.images.find(i => i.role === 'event-logo');
+const spM = bc1.manifest.images.find(i => i.role === 'sponsor' && i.file === 'images/sponsor-a.svg');
+const spM2 = bc1.manifest.images.find(i => i.role === 'sponsor' && i.file === 'images/sponsor-2.png');
+assert('bundle: manifest event-logo role', evM && evM.file === 'images/my_logo.png');
+assert('bundle: manifest sponsor parts array', spM && JSON.stringify(spM.parts) === '["1","2"]');
+assert('bundle: manifest default sponsor parts []', spM2 && JSON.stringify(spM2.parts) === '[]');
+
+// ── buildBundleContent: with custom font ──
+S.setCustomFont({ fileName: 'Fancy Font.ttf', family: 'Fancy_Font', src: 'data:font/ttf;base64,dGZmb250' });
+const bc2 = P.buildBundleContent();
+assert('bundle: font file added', bc2.files.some(f => f.path === 'fonts/Fancy_Font.ttf'), JSON.stringify(bc2.files.map(f => f.path)));
+assert('bundle: font base64', bc2.files.find(f => f.path === 'fonts/Fancy_Font.ttf').base64 === 'dGZmb250');
+assert('bundle: manifest font', bc2.manifest.font.file === 'fonts/Fancy_Font.ttf' && bc2.manifest.font.family === 'Fancy_Font');
+
+// ── buildStateData / data.json: full working state capture ──
+getEl('navisportUrl').value = 'https://navisport.com/events/test-event';
+getEl('eventTitle').value = 'Test Event';
+getEl('eventSubtitle').value = '12.8.2026';
+getEl('filterNumbers').value = '1-3';
+getEl('filterParts').value = '1';
+getEl('filterSarja').value = 'H21';
+getEl('pageSize').value = 'A4 portrait';
+getEl('fontFamilySelect').value = 'Impact, sans-serif';
+S.setShowBarcode(false); S.setColorLegs(false); S.setUseClassPrefix(true); S.setShowClub(true); S.setShowStickerName(false);
+S.setStickerConfig({ cols: 4, rows: 6, marginTop: 5, marginLeft: 8 });
+S.setRawCsvText('a,b\n1,2\n3,4');
+const sd = P.buildStateData();
+assert('state: source=csv when rawCsvText', sd.source === 'csv' && sd.csv === 'a,b\n1,2\n3,4');
+assert('state: navisportUrl captured', sd.navisportUrl === 'https://navisport.com/events/test-event');
+assert('state: title/subtitle captured', sd.eventTitle === 'Test Event' && sd.eventSubtitle === '12.8.2026');
+assert('state: filters captured', sd.filters.numbers === '1-3' && sd.filters.parts === '1' && sd.filters.sarja === 'H21');
+assert('state: options captured', sd.options.showBarcode === false && sd.options.colorLegs === false && sd.options.useClassPrefix === true && sd.options.showClub === true && sd.options.showStickerName === false);
+assert('state: pageSize/font captured', sd.pageSize === 'A4 portrait' && sd.fontFamily === 'Impact, sans-serif');
+assert('state: stickerConfig captured', JSON.stringify(sd.stickerConfig) === '{"cols":4,"rows":6,"marginTop":5,"marginLeft":8}');
+const bcD = P.buildBundleContent();
+assert('bundle: manifest data entry', bcD.manifest.data === 'data.json');
+assert('bundle: data.json matches buildStateData', JSON.parse(bcD.files.find(f => f.path === 'data.json').text).csv === sd.csv && JSON.parse(bcD.files.find(f => f.path === 'data.json').text).options.showBarcode === false);
+const rtD = P.parseBundle(Object.fromEntries(Object.entries(bcD.files).map(([, v]) => [v.path, v.text !== undefined ? { text: v.text } : { base64: v.base64 }])));
+assert('parseBundle: data round-trips', JSON.stringify(rtD.data) === JSON.stringify(sd));
+
+// ── buildStateData: source logic ──
+S.setRawCsvText(null); S.setCsvTeams([{ kilpailunumero: '1', sarja: 'X', joukkue: '', seura: '', runners: [] }]);
+assert('state: source=navisport when URL + teams, no csv', P.buildStateData().source === 'navisport');
+S.setCsvTeams([]);
+assert('state: source=null without data', P.buildStateData().source === null);
+
+// ── applyStateData: CSV restores teams offline ──
+const csvStr = [header.join(','), t1.join(','), t2.join(',')].join('\r\n');
+S.setCsvTeams([]); S.setRawCsvText(null);
+P.applyStateData({ csv: csvStr, eventTitle: 'Imported Title', filters: { numbers: '101' }, options: { showBarcode: false } });
+assert('applyStateData: csv → csvTeams', S.csvTeams().length === 2 && S.csvTeams()[0].runners.length === 3, String(S.csvTeams().length));
+assert('applyStateData: rawCsvText set', S.rawCsvText() === csvStr);
+assert('applyStateData: bibCount updated', /2 teams/.test(getEl('bibCount').textContent), getEl('bibCount').textContent);
+assert('applyStateData: sarja filter populated', getEl('filterSarja').innerHTML.split('<option').length - 1 === 3, getEl('filterSarja').innerHTML);
+assert('applyStateData: title + filter inputs restored', getEl('eventTitle').value === 'Imported Title' && getEl('filterNumbers').value === '101');
+assert('applyStateData: checkbox restored', getEl('showBarcode').checked === false && S.showBarcode() === false);
+P.applyStateData({ navisportUrl: 'my-url', source: 'navisport', csv: null });
+assert('applyStateData: navisportUrl input restored', getEl('navisportUrl').value === 'my-url');
+P.applyStateData({ pageSize: 'A5 landscape', fontFamily: 'Arial, sans-serif', stickerConfig: { cols: 2 } });
+assert('applyStateData: pageSize applied', getEl('pageSize').value === 'A5 landscape' && getEl('page-style').textContent.includes('210mm'));
+assert('applyStateData: font applied', getEl('font-style').textContent.includes('Arial'));
+assert('applyStateData: stickerConfig merged', S.stickerConfig().cols === 2 && S.stickerConfig().rows === 8, JSON.stringify(S.stickerConfig()));
+assert('applyStateData: no data → no-op', (() => { const before = S.csvTeams().length; P.applyStateData(null); return S.csvTeams().length === before; })());
+
+// ── applyImportedBundle: data + needsNavisport flag ──
+const resCsv = P.applyImportedBundle({ layout: null, stickerLayout: null, stickerGroupPos: null, images: [], font: null, data: { source: 'csv', csv: csvStr } });
+assert('applyImportedBundle: csv source → needsNavisport false', resCsv.needsNavisport === false && S.csvTeams().length === 2);
+const resNav = P.applyImportedBundle({ layout: null, stickerLayout: null, stickerGroupPos: null, images: [], font: null, data: { source: 'navisport', navisportUrl: 'https://navisport.com/events/foo', csv: null } });
+assert('applyImportedBundle: navisport source → needsNavisport true', resNav.needsNavisport === true);
+
+// ── extToMime ──
+assert('extToMime: round-trips mimeToExt', P.extToMime('png') === 'image/png' && P.extToMime('jpg') === 'image/jpeg' && P.extToMime('svg') === 'image/svg+xml' && P.extToMime('webp') === 'image/webp' && P.extToMime('avif') === 'image/avif');
+assert('extToMime: dotted + case-insensitive', P.extToMime('.JPG') === 'image/jpeg');
+assert('extToMime: unknown → octet-stream', P.extToMime('pdf') === 'application/octet-stream' && P.extToMime('') === 'application/octet-stream');
+
+// ── parseBundle: round-trip from buildBundleContent ──
+S.setEventLogoSrc(dPng); S.setEventLogoName('my logo.png');
+S.setSponsorLogos([
+  { src: dSvg, name: 'sponsor-a.svg', parts: new Set(['1', '2']) },
+  { src: dPng, name: '', parts: null },
+]);
+S.setCustomFont({ fileName: 'Fancy Font.ttf', family: 'Fancy_Font', src: 'data:font/ttf;base64,dGZmb250' });
+const rtFiles = {};
+P.buildBundleContent().files.forEach(f => {
+  rtFiles[f.path] = f.text !== undefined ? { text: f.text } : { base64: f.base64 };
+});
+const rt = P.parseBundle(rtFiles);
+assert('parseBundle: has manifest', rt.hasManifest === true);
+assert('parseBundle: layout parsed', JSON.stringify(rt.layout) === JSON.stringify(S.layout()));
+assert('parseBundle: sticker parsed', JSON.stringify(rt.stickerLayout) === JSON.stringify(S.stickerLayout()) && JSON.stringify(rt.stickerGroupPos) === JSON.stringify(S.stickerGroupPos()));
+assert('parseBundle: event logo', rt.images[0].role === 'event-logo' && rt.images[0].name === 'my_logo.png' && rt.images[0].src === dPng, JSON.stringify(rt.images));
+assert('parseBundle: sponsors with parts', rt.images[1].role === 'sponsor' && JSON.stringify(rt.images[1].parts) === '["1","2"]', JSON.stringify(rt.images));
+assert('parseBundle: default sponsor parts []', JSON.stringify(rt.images[2].parts) === '[]');
+assert('parseBundle: font from manifest', rt.font.fileName === 'Fancy_Font.ttf' && rt.font.family === 'Fancy_Font' && rt.font.src === 'data:font/ttf;base64,dGZmb250', JSON.stringify(rt.font));
+
+// ── parseBundle: no-manifest heuristic fallback ──
+const noManifest = {
+  'images/event-logo.png': { base64: 'aGVsbG8=' },
+  'images/sponsor-a.png': { base64: 'aGVsbG8=' },
+  'bib-layout.json': { text: '{}' },
+  'sticker-layout.json': { text: '{"template":{},"groupPos":{"1-1":{"cx":50}}}' },
+  'fonts/MyFont.otf': { base64: 'dHlwZW9mZg==' },
+};
+const hm = P.parseBundle(noManifest);
+assert('parseBundle fallback: no manifest flag', hm.hasManifest === false);
+assert('parseBundle fallback: event-logo name heuristic', hm.images[0].role === 'event-logo' && hm.images[0].name === 'event-logo.png');
+assert('parseBundle fallback: remaining images are sponsors', hm.images[1].role === 'sponsor' && JSON.stringify(hm.images[1].parts) === '[]');
+assert('parseBundle fallback: sticker groupPos', JSON.stringify(hm.stickerGroupPos) === '{"1-1":{"cx":50}}');
+assert('parseBundle fallback: font from fonts/ dir', hm.font.fileName === 'MyFont.otf' && hm.font.src === 'data:font/otf;base64,dHlwZW9mZg==', JSON.stringify(hm.font));
+
+// ── parseBundle: malformed JSON tolerated ──
+const bad = P.parseBundle({ 'bib-layout.json': { text: '{nope' }, 'manifest.json': { text: '[' }, 'images/x.png': { base64: 'a' } });
+assert('parseBundle: malformed layout → null', bad.layout === null);
+assert('parseBundle: malformed manifest → heuristic fallback', bad.hasManifest === false && bad.images.length === 1 && bad.images[0].role === 'event-logo');
+
+// ── applyImportedBundle ──
+S.setEventLogoSrc(null); S.setEventLogoName(null); S.setSponsorLogos([]); S.setCustomFont(null);
+const parsedForApply = {
+  layout: { eventTitle: { cx: 60, y: 2 } },
+  stickerLayout: { stickerName: { fontSize: 3.2 } },
+  stickerGroupPos: { '1-1': { cx: 45 } },
+  images: [
+    { role: 'event-logo', name: 'ev.png', src: dPng, parts: null },
+    { role: 'sponsor', name: 'sp.svg', src: dSvg, parts: ['1', '3'] },
+  ],
+  font: { fileName: 'F.ttf', family: 'F', src: 'data:font/ttf;base64,Zm9udA==' },
+};
+const fontRet = P.applyImportedBundle(parsedForApply);
+assert('applyImportedBundle: returns font', fontRet.font.fileName === 'F.ttf' && fontRet.needsNavisport === false, JSON.stringify(fontRet));
+assert('applyImportedBundle: layout merged', S.layout().eventTitle.cx === 60 && S.layout().eventTitle.y === 2 && S.layout().eventLogo && S.layout().eventLogo.cx === 50, JSON.stringify(S.layout().eventTitle));
+assert('applyImportedBundle: sticker layout merged', S.stickerLayout().stickerName.fontSize === 3.2 && S.stickerLayout().stickerBarcode.h === 46);
+assert('applyImportedBundle: sticker groupPos', JSON.stringify(S.stickerGroupPos()) === '{"1-1":{"cx":45}}');
+assert('applyImportedBundle: event logo applied', S.eventLogoSrc() === dPng && S.eventLogoName() === 'ev.png');
+assert('applyImportedBundle: sponsors applied', S.sponsorLogos().length === 1 && S.sponsorLogos()[0].name === 'sp.svg' && S.sponsorLogos()[0].parts.has('1') && S.sponsorLogos()[0].parts.has('3') && !S.sponsorLogos()[0].parts.has('2'), JSON.stringify([...S.sponsorLogos()[0].parts]));
+
+// ── numberArea survives bundle export → import, and edit mode shows true width ──
+S.setLayout(P.deepClone(S.layout()));
+S.layout().numberArea = { cx: 41, y: 27, fontSize: 51, w: 92, maxW: 55, letterSpacing: 1.5 };
+const naBundle = P.buildBundleContent();
+const naFiles = {};
+naBundle.files.forEach(f => { naFiles[f.path] = f.text !== undefined ? { text: f.text } : { base64: f.base64 }; });
+P.applyImportedBundle(P.parseBundle(naFiles));
+assert('import: numberArea round-trips', JSON.stringify(S.layout().numberArea) === '{"cx":41,"y":27,"fontSize":51,"w":92,"maxW":55,"letterSpacing":1.5}', JSON.stringify(S.layout().numberArea));
+const naEl = makeEl('div');
+P.applyPos(naEl, 'numberArea');
+assert('edit mode: numberArea renders at true w, no maxW cap', naEl.style.width === '92%' && (naEl.style.maxWidth === undefined || naEl.style.maxWidth === ''), JSON.stringify(naEl.style));
+
+
+(async () => {
+  // ── exportBundle end-to-end with mocked JSZip ──
+  class MockZip {
+    constructor() { this.files = {}; MockZip.instances.push(this); }
+    file(path, content, opts) { this.files[path] = { content, opts }; return this; }
+    async generateAsync(opts) { this.opts = opts; return { __mock: true, files: this.files }; }
+  }
+  MockZip.instances = [];
+  global.JSZip = MockZip;
+
+  S.setEventLogoSrc(dPng); S.setEventLogoName('my logo.png');
+  S.setSponsorLogos([{ src: dSvg, name: 'sponsor-a.svg', parts: new Set(['1']) }]);
+  S.setCustomFont(null);
+  const before = created.length;
+  await P.exportBundle();
+  const inst = MockZip.instances[0];
+  assert('exportBundle: did not throw', true);
+  assert('exportBundle: downloaded bib-design-bundle.zip', created.slice(before).some(el => el.download === 'bib-design-bundle.zip'), JSON.stringify(created.slice(before).map(el => el.download)));
+  assert('exportBundle: generateAsync blob type', inst.opts && inst.opts.type === 'blob');
+
+  const paths = Object.keys(inst.files);
+  assert('exportBundle: zip contains layouts + data + manifest', paths.includes('bib-layout.json') && paths.includes('sticker-layout.json') && paths.includes('data.json') && paths.includes('manifest.json'), JSON.stringify(paths));
+  assert('exportBundle: zip contains event logo', paths.includes('images/my_logo.png'), JSON.stringify(paths));
+  assert('exportBundle: zip contains sponsor logo', paths.includes('images/sponsor-a.svg'), JSON.stringify(paths));
+  const mf = JSON.parse(inst.files['manifest.json'].content);
+  assert('exportBundle: manifest images roles', mf.images.length === 2 && mf.images[0].role === 'event-logo' && mf.images[1].role === 'sponsor' && JSON.stringify(mf.images[1].parts) === '["1"]', JSON.stringify(mf.images));
+  assert('exportBundle: event logo base64 in zip', inst.files['images/my_logo.png'].content === 'aGVsbG8=' && inst.files['images/my_logo.png'].opts.base64 === true);
+
+  // exportBundle without any assets still works (layout-only bundle)
+  S.setEventLogoSrc(null); S.setSponsorLogos([]); S.setCustomFont(null);
+  await P.exportBundle();
+  const inst2 = MockZip.instances[1];
+  assert('exportBundle: layout-only bundle ok', Object.keys(inst2.files).length === 4, JSON.stringify(Object.keys(inst2.files)));
+
+  // ── importBundleFromZip end-to-end with mocked JSZip.loadAsync ──
+  MockZip.loadAsync = async file => ({
+    files: Object.fromEntries(Object.entries(file).map(([path, entry]) => [path, { dir: false, async: async type => entry[type] }])),
+  });
+  S.setEventLogoSrc(dPng); S.setEventLogoName('my logo.png');
+  S.setSponsorLogos([
+    { src: dSvg, name: 'sponsor-a.svg', parts: new Set(['1', '2']) },
+    { src: dPng, name: '', parts: null },
+  ]);
+  S.setCustomFont({ fileName: 'Fancy Font.ttf', family: 'Fancy_Font', src: 'data:font/ttf;base64,dGZmb250' });
+  S.setCsvTeams([]); S.setRawCsvText(null);
+  const impFiles = {};
+  P.buildBundleContent().files.forEach(f => { impFiles[f.path] = f.text !== undefined ? { string: f.text } : { base64: f.base64 }; });
+  const impParsed = await P.importBundleFromZip(impFiles);
+  assert('importBundleFromZip: parsed returned', impParsed.hasManifest === true && impParsed.images.length === 3, JSON.stringify(impParsed.images));
+  assert('importBundleFromZip: event logo applied', S.eventLogoSrc() === dPng && S.eventLogoName() === 'my_logo.png');
+  assert('importBundleFromZip: sponsors applied', S.sponsorLogos().length === 2 && S.sponsorLogos()[0].name === 'sponsor-a.svg' && JSON.stringify([...S.sponsorLogos()[0].parts]) === '["1","2"]', JSON.stringify(S.sponsorLogos().map(s => s.name)));
+  assert('importBundleFromZip: font returned', impParsed.font && impParsed.font.fileName === 'Fancy_Font.ttf', JSON.stringify(impParsed.font));
+
+  // importBundleFromZip throws on missing JSZip
+  const savedJ = global.JSZip;
+  global.JSZip = undefined;
+  let threwMissing = false;
+  try { await P.importBundleFromZip({}); } catch (e) { threwMissing = /JSZip/.test(e.message); }
+  global.JSZip = savedJ;
+  assert('importBundleFromZip: no JSZip → throws', threwMissing === true);
+
+  // ── importBundleFromZip: navisport source reloads from the API ──
+  S.setEventLogoSrc(dPng); S.setEventLogoName('my logo.png'); S.setSponsorLogos([]); S.setCustomFont(null);
+  S.setCsvTeams([{ kilpailunumero: '1', sarja: 'X', joukkue: '', seura: '', runners: [] }]); // marks source=navisport on export
+  S.setRawCsvText(null);
+  getEl('navisportUrl').value = 'test-event';
+  getEl('eventTitle').value = 'Bundle Title';
+  const navFiles = {};
+  P.buildBundleContent().files.forEach(f => { navFiles[f.path] = f.text !== undefined ? { string: f.text } : { base64: f.base64 }; });
+  const navSavedFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [{ result: { data: {
+      name: 'API Title', begin: '2026-08-15T08:00:00Z', raceType: 'Individual',
+      courseClasses: [{ id: 'c1', name: 'H21' }],
+      results: [
+        { bibNumber: 101, classId: 'c1', name: 'Virtanen Eino', club: 'ES', chip: '111' },
+        { bibNumber: 102, classId: 'c1', name: 'Nurmo Maija', club: 'ES' },
+      ],
+    } } }],
+  });
+  const navParsed = await P.importBundleFromZip(navFiles);
+  global.fetch = navSavedFetch;
+  assert('importBundleFromZip navisport: teams loaded', S.csvTeams().length === 2, String(S.csvTeams().length));
+  assert('importBundleFromZip navisport: logo kept from bundle', S.eventLogoSrc() === dPng && S.eventLogoName() === 'my_logo.png');
+  assert('importBundleFromZip navisport: bundle title wins over API', getEl('eventTitle').value === 'Bundle Title');
+  assert('importBundleFromZip navisport: navisportUrl input restored', getEl('navisportUrl').value === 'test-event');
+  assert('importBundleFromZip navisport: no navisportError', !navParsed.navisportError, String(navParsed.navisportError));
+
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})();

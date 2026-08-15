@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bib Number Generator</title>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style id="page-style">
   @page { size: 210mm 148mm; margin: 0; }
   .bib-card { width: 210mm; height: 148mm; }
@@ -368,6 +369,10 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
       <button class="bg btn-sm" onclick="exportLayout()">Export JSON</button>
       <button class="bg btn-sm" onclick="importLayout()">Import JSON</button>
     </div>
+    <div class="row" style="margin-top:4px;">
+      <button class="bs btn-sm" onclick="exportBundle()">Download ZIP</button>
+      <button class="bg btn-sm" onclick="importBundle()">Import ZIP</button>
+    </div>
     <div id="layoutStatus" style="margin-top:4px;"></div>
     <div style="margin-top:8px;">
       <label style="display:block;font-size:11px;color:#9aa;margin-bottom:3px;">Font</label>
@@ -470,12 +475,6 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <button class="bg btn-sm" onclick="adj('w',+2)">+</button>
   </div>
   <div class="tb-row">
-    <span>Max W %</span>
-    <button class="bg btn-sm" onclick="adj('maxW',-2)">−</button>
-    <span class="tb-val" id="tb-mw">—</span>
-    <button class="bg btn-sm" onclick="adj('maxW',+2)">+</button>
-  </div>
-  <div class="tb-row">
     <span>Height %</span>
     <button class="bg btn-sm" onclick="adj('h',-2)">−</button>
     <span class="tb-val" id="tb-h">—</span>
@@ -505,8 +504,11 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
 // STATE
 // ═══════════════════════════════════════════
 let csvTeams    = [];
+let rawCsvText  = null;
 let eventLogoSrc = null;
-let sponsorLogos = []; // [{src, parts: Set|null}]
+let eventLogoName = null;
+let sponsorLogos = []; // [{src, name, parts: Set|null}]
+let customFont = null; // {fileName, src, family} when a custom font is loaded
 let editMode    = false;
 let selectedKey = null;
 let selectedRef = null; // the actual mutable layout object currently selected (see getLayoutRef)
@@ -664,6 +666,7 @@ function downloadExampleCSV(type) {
 // ═══════════════════════════════════════════
 function loadEventLogo(inp) {
   const f = inp.files[0]; if (!f) return;
+  eventLogoName = f.name;
   const rd = new FileReader();
   rd.onload = e => {
     eventLogoSrc = e.target.result;
@@ -677,10 +680,11 @@ function addSponsorLogo() {
   const fi = document.getElementById('sponsorFile');
   const pi = document.getElementById('sponsorParts').value.trim();
   if (!fi.files[0]) return alert('Select an image first');
+  const name = fi.files[0].name;
   const rd = new FileReader();
   rd.onload = e => {
     const parts = pi ? new Set(pi.split(',').map(x=>x.trim())) : null;
-    sponsorLogos.push({ src: e.target.result, parts });
+    sponsorLogos.push({ src: e.target.result, name, parts });
     renderSponsorList();
     fi.value = '';
     document.getElementById('sponsorParts').value = '';
@@ -1195,8 +1199,6 @@ function applyPos(el, key) {
     if (l.cx !== undefined && key && key.startsWith('stickerGroup:')) el.style.height = (100 - l.y) + '%';
   }
   if (l.w !== undefined) el.style.width = l.w + '%';
-  if (l.maxW !== undefined && editMode) el.style.maxWidth = l.maxW + '%';
-  else if (!editMode) el.style.maxWidth = '';
   if (l.h !== undefined) {
     if (key === 'stickerBarcode') {
       // max-height, not height: barcode shrinks (flex: 1, see CSS) to make room
@@ -1351,7 +1353,6 @@ function adj(prop, delta) {
   } else {
     if (l[prop] === undefined) return;
     if (prop === 'w') l[prop] = clamp(l[prop]+delta, 5, 100);
-    else if (prop === 'maxW') l[prop] = clamp((l[prop] ?? 55) + delta, 10, 100);
     else if (prop === 'h') l[prop] = clamp(l[prop]+delta, 3, 60);
     else if (prop === 'fontSize') {
       l[prop] = clamp(l[prop]+delta, 2, 100);
@@ -1382,7 +1383,6 @@ function updateToolbar() {
   document.getElementById('tb-name').textContent = selectedKey;
   document.getElementById('tb-fs').textContent   = l.fontSize      !== undefined ? l.fontSize.toFixed(1)+'mm'  : '—';
   document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
-  document.getElementById('tb-mw').textContent   = l.maxW          !== undefined ? l.maxW.toFixed(0)+'%'         : '—';
   document.getElementById('tb-h').textContent    = l.h             !== undefined ? l.h.toFixed(0)+'%'           : '—';
   document.getElementById('tb-ls').textContent   = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2)+'em' : '—';
   const vBtn = document.getElementById('tb-visible');
@@ -1465,6 +1465,355 @@ function importLayout() {
   inp.click();
 }
 
+// ═══════════════════════════════════════════
+// DESIGN BUNDLE EXPORT (layout JSON + images + font as one ZIP)
+// ═══════════════════════════════════════════
+function mimeToExt(mime) {
+  const m = String(mime || '').split(';')[0].trim().toLowerCase();
+  const map = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
+    'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/bmp': 'bmp',
+    'image/avif': 'avif', 'image/x-icon': 'ico',
+  };
+  return map[m] || 'bin';
+}
+
+// Parse a base64 data URL into {mime, ext, base64}, or null if not one.
+function dataURLInfo(src) {
+  if (typeof src !== 'string') return null;
+  const m = /^data:([^;,]+);base64,(.+)$/.exec(src);
+  if (!m) return null;
+  return { mime: m[1], ext: mimeToExt(m[1]), base64: m[2] };
+}
+
+// Make a safe bundle file name: strip path separators + illegal chars, keep the
+// extension (appending one when missing), fall back to `fallback` if empty.
+function sanitizeFileName(name, fallback, ext) {
+  let n = String(name || '').replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!n || n === '.') n = fallback;
+  if (!/\.\w+$/.test(n)) n += '.' + (ext || 'bin');
+  return n;
+}
+
+// Collects the current app state (event data source + all view/print settings)
+// into a JSON-serializable object for the bundle's data.json. Pure, no side effects.
+function buildStateData() {
+  const navisportUrl = (document.getElementById('navisportUrl').value || '').trim();
+  const source = rawCsvText ? 'csv'
+    : (navisportUrl && csvTeams.length ? 'navisport' : null);
+  return {
+    source,
+    navisportUrl,
+    csv: rawCsvText || null,
+    eventTitle: document.getElementById('eventTitle').value,
+    eventSubtitle: document.getElementById('eventSubtitle').value,
+    filters: {
+      numbers: document.getElementById('filterNumbers').value,
+      parts: document.getElementById('filterParts').value,
+      sarja: document.getElementById('filterSarja').value,
+    },
+    options: {
+      showBarcode, colorLegs, useClassPrefix, showClub, showStickerName,
+    },
+    pageSize: document.getElementById('pageSize').value,
+    fontFamily: document.getElementById('fontFamilySelect').value,
+    stickerConfig: deepClone(stickerConfig),
+  };
+}
+
+// Builds the design bundle contents as {files:[{path, text|base64, opts}], manifest}.
+// Pure (no JSZip/DOM side effects) so it is directly unit-testable.
+function buildBundleContent() {
+  const files = [];
+  files.push({ path: 'bib-layout.json', text: JSON.stringify(layout, null, 2) });
+  files.push({ path: 'sticker-layout.json', text: JSON.stringify({ template: stickerLayout, groupPos: stickerGroupPos }, null, 2) });
+  files.push({ path: 'data.json', text: JSON.stringify(buildStateData(), null, 2) });
+
+  const images = [];
+  const addImage = (path, src, role, parts) => {
+    const info = dataURLInfo(src);
+    if (!info) return;
+    files.push({ path, base64: info.base64, opts: { base64: true } });
+    images.push(role === 'event-logo' ? { role, file: path } : { role, file: path, parts: parts || [] });
+  };
+
+  if (eventLogoSrc) {
+    const info = dataURLInfo(eventLogoSrc) || {};
+    addImage('images/' + sanitizeFileName(eventLogoName, 'event-logo', info.ext || 'bin'), eventLogoSrc, 'event-logo');
+  }
+  sponsorLogos.forEach((s, i) => {
+    const info = dataURLInfo(s.src) || {};
+    addImage('images/' + sanitizeFileName(s.name, 'sponsor-' + (i + 1), info.ext || 'bin'), s.src, 'sponsor', s.parts ? [...s.parts] : []);
+  });
+
+  let font = null;
+  if (customFont) {
+    const info = dataURLInfo(customFont.src) || {};
+    const fontPath = 'fonts/' + sanitizeFileName(customFont.fileName, 'custom-font', info.ext || 'ttf');
+    files.push({ path: fontPath, base64: info.base64, opts: { base64: true } });
+    font = { file: fontPath, family: customFont.family };
+  }
+
+  const manifest = {
+    generator: 'bibgenerator.html',
+    exportedAt: new Date().toISOString(),
+    layouts: ['bib-layout.json', 'sticker-layout.json'],
+    data: 'data.json',
+    images,
+    font,
+  };
+  files.push({ path: 'manifest.json', text: JSON.stringify(manifest, null, 2) });
+  return { files, manifest };
+}
+
+async function exportBundle() {
+  if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+  const { files } = buildBundleContent();
+  const zip = new JSZip();
+  for (const f of files) zip.file(f.path, f.text !== undefined ? f.text : f.base64, f.opts || undefined);
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bib-design-bundle.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('Design bundle downloaded ✓');
+}
+
+// Reverse map of mimeToExt: extension → MIME type for rebuilding data URLs on import.
+function extToMime(ext) {
+  const e = String(ext || '').replace(/^\./, '').toLowerCase();
+  const map = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', avif: 'image/avif',
+    ico: 'image/x-icon', ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2',
+  };
+  return map[e] || 'application/octet-stream';
+}
+
+function base64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8.buffer;
+}
+
+// Normalize a bundle's extracted files into import data.
+// files: { path: { text } | { base64 } }. Pure — no state/DOM side effects.
+// Falls back to heuristics when manifest.json is missing, and tolerates malformed JSON.
+function parseBundle(files) {
+  const out = { layout: null, stickerLayout: null, stickerGroupPos: null, images: [], font: null, data: null, hasManifest: false };
+  const manifestText = files['manifest.json'] && files['manifest.json'].text;
+  let manifest = null;
+  if (manifestText) {
+    try { manifest = JSON.parse(manifestText); out.hasManifest = true; } catch { manifest = null; }
+  }
+  if (files['bib-layout.json'] && files['bib-layout.json'].text !== undefined) {
+    try { out.layout = JSON.parse(files['bib-layout.json'].text); } catch { out.layout = null; }
+  }
+  if (files['sticker-layout.json'] && files['sticker-layout.json'].text !== undefined) {
+    try {
+      const s = JSON.parse(files['sticker-layout.json'].text);
+      out.stickerLayout = s.template || {};
+      out.stickerGroupPos = s.groupPos || {};
+    } catch { out.stickerLayout = null; }
+  }
+  if (files['data.json'] && files['data.json'].text !== undefined) {
+    try { out.data = JSON.parse(files['data.json'].text); } catch { out.data = null; }
+  }
+
+  const fileBase = (p, b64) => 'data:' + extToMime(p.split('.').pop()) + ';base64,' + b64;
+  const fileBaseName = p => p.split('/').pop();
+
+  if (manifest && Array.isArray(manifest.images)) {
+    manifest.images.forEach(img => {
+      const f = files[img.file];
+      if (!f || f.base64 === undefined) return;
+      const isEv = img.role === 'event-logo';
+      out.images.push({
+        role: isEv ? 'event-logo' : 'sponsor',
+        name: fileBaseName(img.file),
+        src: fileBase(img.file, f.base64),
+        parts: isEv ? null : (Array.isArray(img.parts) ? img.parts : []),
+      });
+    });
+  } else {
+    Object.keys(files).filter(p => p.startsWith('images/')).forEach(p => {
+      const f = files[p];
+      if (f.base64 === undefined) return;
+      const isEv = /event-logo/i.test(p) || out.images.length === 0;
+      out.images.push({ role: isEv ? 'event-logo' : 'sponsor', name: fileBaseName(p), src: fileBase(p, f.base64), parts: isEv ? null : [] });
+    });
+  }
+
+  if (manifest && manifest.font && files[manifest.font.file] && files[manifest.font.file].base64 !== undefined) {
+    const p = manifest.font.file;
+    out.font = { fileName: fileBaseName(p), family: manifest.font.family || fileBaseName(p), src: fileBase(p, files[p].base64) };
+  } else {
+    const p = Object.keys(files).find(k => k.startsWith('fonts/'));
+    if (p && files[p].base64 !== undefined) {
+      const nm = fileBaseName(p);
+      out.font = { fileName: nm, family: nm.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_'), src: fileBase(p, files[p].base64) };
+    }
+  }
+  return out;
+}
+
+// Restores all synchronous view/print state from data.json: event title/subtitle,
+// filters, checkboxes, page size, font, sticker config, navisport URL, and the CSV
+// data source. Idempotent — safe to call again after a Navisport reload.
+function applyStateData(data) {
+  if (!data) return;
+  if (data.eventTitle    !== undefined) document.getElementById('eventTitle').value    = data.eventTitle;
+  if (data.eventSubtitle !== undefined) document.getElementById('eventSubtitle').value = data.eventSubtitle;
+  if (data.navisportUrl  !== undefined) document.getElementById('navisportUrl').value  = data.navisportUrl;
+
+  const f = data.filters || {};
+  if (f.numbers !== undefined) document.getElementById('filterNumbers').value = f.numbers;
+  if (f.parts   !== undefined) document.getElementById('filterParts').value   = f.parts;
+  if (f.sarja   !== undefined) document.getElementById('filterSarja').value   = f.sarja;
+
+  const o = data.options || {};
+  if (o.showBarcode !== undefined) { showBarcode = !!o.showBarcode; document.getElementById('showBarcode').checked = showBarcode; }
+  if (o.colorLegs !== undefined)   { colorLegs   = !!o.colorLegs;   document.getElementById('colorLegsChk').checked = colorLegs; }
+  if (o.useClassPrefix !== undefined) { useClassPrefix = !!o.useClassPrefix; document.getElementById('classPrefixChk').checked = useClassPrefix; }
+  if (o.showClub !== undefined)    { showClub    = !!o.showClub;    document.getElementById('showClubChk').checked = showClub; }
+  if (o.showStickerName !== undefined) { showStickerName = !!o.showStickerName; document.getElementById('showStickerNameChk').checked = showStickerName; }
+
+  if (data.pageSize !== undefined && PAGE_SIZES[data.pageSize]) {
+    document.getElementById('pageSize').value = data.pageSize;
+    applyPageSize();
+  }
+  if (data.fontFamily !== undefined) {
+    document.getElementById('fontFamilySelect').value = data.fontFamily;
+    applyFontFamily();
+  }
+  if (data.stickerConfig) {
+    stickerConfig = Object.assign(deepClone(DEF_STICKER_CONFIG), data.stickerConfig);
+    populateStickerInputs();
+  }
+
+  // Data source: raw CSV restores teams offline; Navisport source is reloaded
+  // asynchronously by importBundleFromZip (needsNavisport).
+  if (typeof data.csv === 'string' && data.csv.trim()) {
+    rawCsvText = data.csv;
+    csvTeams = parseTeams(parseCSV(data.csv));
+    sortTeams();
+    const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
+    document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
+    populateSarjaFilter();
+  }
+}
+
+// Applies parsed bundle data to app state. Returns { font, needsNavisport } so the
+// caller can load the font and trigger a Navisport reload when the source is navisport.
+function applyImportedBundle(parsed) {
+  if (parsed.layout) {
+    const base = deepClone(DEF_LAYOUT);
+    const keys = new Set([...Object.keys(base), ...Object.keys(parsed.layout)]);
+    layout = {};
+    keys.forEach(k => { layout[k] = Object.assign({}, base[k] || {}, parsed.layout[k] || {}); });
+  }
+  if (parsed.stickerLayout) {
+    const base = deepClone(DEF_STICKER_LAYOUT);
+    const keys = new Set([...Object.keys(base), ...Object.keys(parsed.stickerLayout)]);
+    stickerLayout = {};
+    keys.forEach(k => { stickerLayout[k] = Object.assign({}, base[k] || {}, parsed.stickerLayout[k] || {}); });
+    stickerGroupPos = parsed.stickerGroupPos || {};
+  }
+  if (parsed.images.length) {
+    const ev = parsed.images.find(i => i.role === 'event-logo');
+    if (ev) { eventLogoSrc = ev.src; eventLogoName = ev.name; }
+    sponsorLogos = parsed.images.filter(i => i.role === 'sponsor').map(i => ({
+      src: i.src, name: i.name, parts: i.parts && i.parts.length ? new Set(i.parts) : null,
+    }));
+  }
+  applyStateData(parsed.data);
+  const needsNavisport = !!parsed.data && parsed.data.source === 'navisport'
+    && !!parsed.data.navisportUrl && !(parsed.data.csv && parsed.data.csv.trim());
+  return { font: parsed.font || null, needsNavisport };
+}
+
+// Load a font from a data URL into the document + the font select. No-op in
+// environments without FontFace (e.g. the Node test harness).
+async function applyCustomFontFromDataUrl(fileName, family, dataUrl) {
+  if (typeof FontFace === 'undefined' || !document.fonts) return;
+  const m = /^data:[^,]+,/.exec(dataUrl);
+  const buf = base64ToArrayBuffer(m ? dataUrl.slice(m[0].length) : dataUrl);
+  const face = new FontFace(family, buf);
+  await face.load();
+  document.fonts.add(face);
+
+  const sel = document.getElementById('fontFamilySelect');
+  const existing = sel.querySelector('option[data-custom]');
+  if (existing) existing.remove();
+  const opt = document.createElement('option');
+  opt.value       = `'${family}', sans-serif`;
+  opt.textContent = fileName + ' (custom)';
+  opt.dataset.custom = '1';
+  sel.appendChild(opt);
+  sel.value = opt.value;
+  customFont = { fileName, family, src: dataUrl };
+  applyFontFamily();
+}
+
+// Reads a bundle ZIP file and applies it (used by both the UI and tests).
+async function importBundleFromZip(file) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded');
+  const zip = await JSZip.loadAsync(file);
+  const files = {};
+  for (const n of Object.keys(zip.files)) {
+    const entry = zip.files[n];
+    if (entry.dir) continue;
+    files[n] = /\.json$/i.test(n) ? { text: await entry.async('string') } : { base64: await entry.async('base64') };
+  }
+  const parsed = parseBundle(files);
+  const applied = applyImportedBundle(parsed);
+  if (applied.font) await applyCustomFontFromDataUrl(applied.font.fileName, applied.font.family, applied.font.src);
+
+  if (applied.needsNavisport) {
+    // Re-fetch the event data from Navisport. Keep the bundle's own images/logo —
+    // snapshot them so the fetch doesn't overwrite them — and restore the bundle's
+    // UI values afterwards. A network failure must not abort the import.
+    const evSrc = eventLogoSrc, evName = eventLogoName;
+    try {
+      await loadFromNavisport();
+    } catch (e) {
+      parsed.navisportError = String(e && e.message || e);
+    }
+    eventLogoSrc = evSrc; eventLogoName = evName;
+    applyStateData(parsed.data);
+  }
+  return parsed;
+}
+
+function importBundle() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.zip';
+  inp.onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const parsed = await importBundleFromZip(f);
+      renderSponsorList();
+      if (eventLogoSrc) {
+        document.getElementById('eventLogoPreview').innerHTML =
+          `<img src="${eventLogoSrc}" style="max-height:36px;max-width:130px;object-fit:contain;">`;
+      }
+      if (csvTeams.length) generateBibs(); else syncLayout();
+      if (document.body.classList.contains('stickers-active')) renderStickerSheet();
+      let status = parsed.hasManifest ? 'Design bundle imported ✓' : 'Bundle imported (no manifest) ✓';
+      if (parsed.data) {
+        if (parsed.data.source === 'csv')      status += ' — CSV data restored';
+        else if (parsed.data.source === 'navisport') status += parsed.navisportError ? ' — Navisport reload failed' : ' — Navisport data restored';
+      }
+      setStatus(status);
+    } catch (err) {
+      alert('Invalid bundle ZIP: ' + err.message);
+    }
+  };
+  inp.click();
+}
+
 function setStatus(msg) {
   const el = document.getElementById('layoutStatus');
   el.textContent = msg;
@@ -1506,23 +1855,13 @@ async function loadCustomFont(input) {
   statusEl.style.color = '#7ec8e3';
   statusEl.textContent = 'Loading…';
   try {
-    const buf  = await file.arrayBuffer();
+    const src = await new Promise(resolve => {
+      const rd = new FileReader();
+      rd.onload = e => resolve(e.target.result);
+      rd.readAsDataURL(file);
+    });
     const name = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_');
-    const face = new FontFace(name, buf);
-    await face.load();
-    document.fonts.add(face);
-
-    const sel = document.getElementById('fontFamilySelect');
-    // Remove any previously loaded custom font option
-    const existing = sel.querySelector('option[data-custom]');
-    if (existing) existing.remove();
-    const opt = document.createElement('option');
-    opt.value       = `'${name}', sans-serif`;
-    opt.textContent = `${file.name} (custom)`;
-    opt.dataset.custom = '1';
-    sel.appendChild(opt);
-    sel.value = opt.value;
-    applyFontFamily();
+    await applyCustomFontFromDataUrl(file.name, name, src);
     statusEl.style.color = '#6a6';
     statusEl.textContent = `Loaded: ${file.name}`;
   } catch (e) {
@@ -1570,6 +1909,7 @@ async function loadFromNavisport() {
     navStatus(`✓ ${name || slug} — ${csvTeams.length} entries, ${total} runners`, 'ok');
     document.getElementById('bibCount').textContent = `${csvTeams.length} entries, ${total} runners`;
     populateSarjaFilter();
+    rawCsvText = null; // data now sourced from Navisport, not a CSV file
   } catch(e) {
     navStatus('Error: ' + e.message, 'err');
     console.error(e);
@@ -1774,6 +2114,8 @@ async function tryLoadNavisportLogo(url) {
     const res  = await fetch(url);
     if (!res.ok) return;
     const blob = await res.blob();
+    const name = url.split('/').pop().split('?')[0];
+    if (name && /\.\w+$/.test(name)) eventLogoName = name;
     const reader = new FileReader();
     await new Promise(resolve => {
       reader.onload = e => {
@@ -1860,6 +2202,7 @@ document.getElementById('csvFile').addEventListener('change', function() {
   const f = this.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = e => {
+    rawCsvText = e.target.result;
     const rows = parseCSV(e.target.result);
     csvTeams = parseTeams(rows);
     sortTeams();
