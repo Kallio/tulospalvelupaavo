@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kilpailuanalyysi – Navisport</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --fg: #1b2330;
+    --muted: #5b6b7c;
+    --primary: #1f3a5f;
+    --primary-light: #2e5a8a;
+    --primary-dark: #16283f;
+    --accent: #e67e22;
+    --accent-hover: #d06e15;
+    --card: #ffffff;
+    --border: #dde3ea;
+    --ok: #1e8e3e;
+    --warn: #b7791f;
+    --err: #c0392b;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(23, 35, 55, 0.08), 0 2px 8px rgba(23, 35, 55, 0.06);
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .topbar {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .mark {
+    width: 38px; height: 38px; background: var(--accent); border-radius: 9px;
+    display: grid; place-items: center; font-size: 17px; font-weight: 700; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(230, 126, 34, 0.35);
+  }
+  .brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+  .brand p { font-size: 12px; color: #9db4cc; font-weight: 400; }
+  .topbar .acts { margin-left: auto; display: flex; gap: 7px; }
+  .btn-hdr {
+    padding: 7px 13px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer;
+    font-weight: 600; font-family: inherit; transition: all 0.12s; white-space: nowrap;
+  }
+  .btn-hdr:active { transform: scale(0.97); }
+  .btn-hdr-accent { background: var(--accent); color: #fff; }
+  .btn-hdr-accent:hover { background: var(--accent-hover); }
+  .btn-hdr-sec { background: rgba(255, 255, 255, 0.12); color: #dfe9f3; }
+  .btn-hdr-sec:hover { background: rgba(255, 255, 255, 0.22); }
+
+  .urlbar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow);
+  }
+  .urlbar input {
+    flex: 1;
+    padding: 9px 13px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12.5px;
+    background: var(--bg);
+    color: var(--fg);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .urlbar input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(46, 90, 138, 0.12); }
+  .urlbar input::placeholder { color: var(--muted); font-family: 'Segoe UI', Arial, sans-serif; font-size: 12.5px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--radius);
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent-hover); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: var(--bg); border-color: var(--primary-light); }
+
+  .status { padding: 8px 24px; font-size: 13px; min-height: 34px; display: flex; align-items: center; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+
+  #output { max-width: 1100px; margin: 0 auto; padding: 20px 24px 60px; }
+
+  .evhead {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+  .evhead h2 { font-size: 19px; letter-spacing: -0.3px; }
+  .evhead p { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .evlogo { max-height: 48px; max-width: 130px; object-fit: contain; margin-left: auto; }
+
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-bottom: 18px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .card h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px; }
+  .card .num { font-size: 20px; font-weight: 700; }
+  .card .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 16px; overflow-x: auto;
+  }
+  .phead {
+    font-size: 14px; font-weight: 700; color: var(--primary);
+    border-bottom: 2px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+  }
+  .panel h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0 8px; }
+
+  canvas.chart { display: block; max-width: 100%; }
+  .chartwrap { position: relative; }
+  .chartcap { margin: 4px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+  .charttip {
+    position: absolute; pointer-events: none; z-index: 30;
+    background: #1c2430; color: #e8edf3; font-size: 12px; line-height: 1.55;
+    padding: 7px 9px; border-radius: 7px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    white-space: nowrap; max-width: 320px;
+  }
+  .charttip .tipclock { opacity: 0.7; }
+  .charttip .tipcls { display: inline-flex; align-items: center; gap: 5px; margin-right: 9px; }
+  .charttip .tipcls .sw { width: 9px; height: 9px; }
+  .charttip .tippeak { color: #f6a15c; font-weight: 700; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; font: inherit; color: inherit; cursor: pointer; }
+  .legend .lg:hover { border-color: var(--border); }
+  .legend .lg.off { opacity: 0.35; text-decoration: line-through; }
+  .legend .lg input[type=checkbox] { margin: 0 2px 0 0; width: 13px; height: 13px; accent-color: var(--primary); cursor: pointer; }
+  .legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .lgcontrols { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+  .lgcontrols .lgcombine { background: none; border: 1px solid var(--primary); color: var(--primary); border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+  .lgcontrols .lgcombine:disabled { opacity: 0.4; cursor: default; }
+  .lgcontrols .lgclear { background: none; border: 1px solid transparent; color: var(--muted); border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
+  .lgcontrols .lgclear:hover { color: var(--danger, #c0392b); }
+  .lgpager { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .lgpager button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font: inherit; cursor: pointer; }
+  .lgpager button:disabled { opacity: 0.4; cursor: default; }
+  .axistoggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-bottom: 8px; }
+  .axistoggle button { background: none; border: none; font: inherit; font-size: 11.5px; padding: 4px 10px; cursor: pointer; color: var(--muted); }
+  .axistoggle button.on { background: var(--primary); color: #fff; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--border); white-space: nowrap;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #edf1f5; white-space: nowrap; }
+  tr:hover td { background: #f7fafc; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .stagehead { margin: 26px 0 12px; padding-top: 14px; border-top: 2px dashed var(--border); }
+  .stagehead h3 { font-size: 15px; color: var(--primary); }
+
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+  @media print {
+    .topbar, .urlbar, .status { display: none; }
+    body { background: #fff; }
+    .panel, .evhead { box-shadow: none; }
+    #output { max-width: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="mark">Σ</div>
+  <div class="brand">
+    <h1>Kilpailuanalyysi</h1>
+    <p>Navisport-event flow · Tulospalvelupaavo</p>
+  </div>
+  <div class="acts">
+    <button id="printBtn" class="btn-hdr btn-hdr-sec" type="button"></button>
+    <button id="csvBtn" class="btn-hdr btn-hdr-sec" type="button" style="display:none;"></button>
+    <button id="langBtn" class="btn-hdr btn-hdr-accent" type="button">EN</button>
+  </div>
+</header>
+
+<div class="urlbar">
+  <input id="slugInput" type="text" spellcheck="false" autocomplete="off" placeholder="">
+  <button id="analyzeBtn" class="btn btn-primary" type="button"></button>
+</div>
+
+<div id="status" class="status"></div>
+<div id="output"></div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════════════════
+//  Language strings (FI / EN)
+// ════════════════════════════════════════════════════════════════════
+const LANGS = {
+  fi: {
+    inputPlaceholder: 'Navisport-kisan URL tai slug (esim. navisport.com/events/hyvinkaan-talvirastit-2026)',
+    btnAnalyze: 'Analysoi',
+    btnCsv: 'Lataa CSV',
+    btnPrint: 'Tulosta',
+    statusLoading: 'Ladataan ja analysoidaan',
+    statusDone: 'Valmis',
+    errSlug: 'Tunnista ei voitu päätellä (URL, slug tai UUID)',
+    errEvent: 'Tapahtumaa ei löytynyt',
+    errFetch: 'Lataus epäonnistui',
+    tIndividual: 'Henkilökohtainen kisa',
+    tRelay: 'Viesti',
+    tMultistage: 'Moniosainen kisa',
+    cStarters: 'Lähteneet',
+    cFinishers: 'Maaliin',
+    cDnf: 'Keskeytti',
+    cIntoForest: 'Kaikki metsässä',
+    cFirstResult: 'Ensimmäinen tulos',
+    cResultsWait: 'Tulosten odotus',
+    cTotal: 'Koko kisa',
+    cPeak: 'Maaliruuhkan huippu',
+    cFirstExchange: 'Ensimmäinen vaihto',
+    tFirstStart: 'Ensimmäinen lähtö',
+    tLastStart: 'Viimeinen lähtö',
+    tFirstFinish: 'Ensimmäinen maali',
+    tLastFinish: 'Viimeinen maali',
+    secFlow: 'Kisapäivän kulku',
+    lStarted: 'Lähteneet',
+    pPeak: 'Suurin maaliruuhka',
+    mMass: 'Yhteislähtö',
+    mExch: 'Ensimmäinen vaihto',
+    mRestart: 'Myöhästyneiden yhteislähtö',
+    secClassFinishes: 'Sarjat maaliin',
+    hClass: 'Sarja',
+    hFin: 'Maaliin',
+    hFirst: 'Ensimmäinen',
+    hLast: 'Viimeinen',
+    lWindow: '5 min ikkuna',
+    lFinishing: 'Maaliin',
+    lStarting: 'Lähtö',
+    aRel: 'Kesto',
+    aClock: 'Kello',
+    lCombine: 'Yhdistä valitut',
+    lClear: 'Tyhjennä valinnat',
+    secClassPaces: 'Keskivauhti sarjoittain',
+    hPace: 'min/km',
+    hRunners: 'Juoksijat',
+    secStage: 'Osuus',
+    noStages: 'Kilpailun osuuksia ei löytynyt',
+    noTimeline: 'Aikaleimoja ei ole saatavilla tästä kisasta',
+    empty: 'Ei tuloksia',
+  },
+  en: {
+    inputPlaceholder: 'Navisport event URL or slug (e.g. navisport.com/events/hyvinkaan-talvirastit-2026)',
+    btnAnalyze: 'Analyze',
+    btnCsv: 'Download CSV',
+    btnPrint: 'Print',
+    statusLoading: 'Loading and analyzing',
+    statusDone: 'Done',
+    errSlug: 'Could not determine an event identifier (URL, slug or UUID)',
+    errEvent: 'Event not found',
+    errFetch: 'Load failed',
+    tIndividual: 'Individual race',
+    tRelay: 'Relay',
+    tMultistage: 'Multi-stage event',
+    cStarters: 'Starters',
+    cFinishers: 'Finishers',
+    cDnf: 'DNF',
+    cIntoForest: 'All into the forest',
+    cFirstResult: 'First result',
+    cResultsWait: 'Results wait',
+    cTotal: 'Total event time',
+    cPeak: 'Finish peak',
+    cFirstExchange: 'First exchange',
+    tFirstStart: 'First start',
+    tLastStart: 'Last start',
+    tFirstFinish: 'First finish',
+    tLastFinish: 'Last finish',
+    secFlow: 'Event flow',
+    lStarted: 'Started',
+    pPeak: 'Finish peak',
+    mMass: 'Mass start',
+    mExch: 'First exchange',
+    mRestart: 'Mass re-start',
+    secClassFinishes: 'Classes finishing',
+    hClass: 'Class',
+    hFin: 'Finishers',
+    hFirst: 'First',
+    hLast: 'Last',
+    lWindow: '5 min window',
+    lFinishing: 'Finishing',
+    lStarting: 'Starting',
+    aRel: 'Duration',
+    aClock: 'Clock',
+    lCombine: 'Combine selected',
+    lClear: 'Clear selections',
+    secClassPaces: 'Average pace by class',
+    hPace: 'min/km',
+    hRunners: 'Runners',
+    secStage: 'Stage',
+    noStages: 'No stages found for this event',
+    noTimeline: 'No timestamps available for this event',
+    empty: 'No results',
+  },
+};
+
+let lang = 'fi';
+(function guessLang() {
+  let want = null;
+  try { want = localStorage.getItem('ka_lang'); } catch (e) {}
+  if (want === 'fi' || want === 'en') { lang = want; return; }
+  try {
+    const nav = (navigator.language || 'fi').toLowerCase();
+    if (nav.indexOf('en') === 0) lang = 'en';
+  } catch (e) {}
+})();
+
+const state = { event: null, stageEvents: [] };
+
+// ════════════════════════════════════════════════════════════════════
+//  Tiny helpers
+// ════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+function T(key) {
+  const s = (LANGS[lang] || LANGS.fi)[key];
+  return s != null ? s : key;
+}
+function setLang(l) {
+  if (l !== 'fi' && l !== 'en') l = 'fi';
+  lang = l;
+  try { localStorage.setItem('ka_lang', l); } catch (e) {}
+  const els = [
+    ['langBtn', lang === 'fi' ? 'EN' : 'FI'],
+    ['analyzeBtn', T('btnAnalyze')],
+    ['csvBtn', T('btnCsv')],
+    ['printBtn', T('btnPrint')],
+  ];
+  for (const [id, txt] of els) {
+    const el = $(id);
+    if (el) el.textContent = txt;
+  }
+  const inp = $('slugInput');
+  if (inp) inp.placeholder = T('inputPlaceholder');
+  if (state.event) render();
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+function escAttr(s) { return esc(s); }
+
+function fmtTime(sec) {
+  if (sec == null || !isFinite(sec)) return '—';
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  return h ? h + ':' + mm + ':' + ss : m + ':' + ss;
+}
+function fmtClock(ts) {
+  if (ts == null || !isFinite(ts)) return '—';
+  const d = new Date(ts);
+  const p2 = x => String(x).padStart(2, '0');
+  return p2(d.getHours()) + ':' + p2(d.getMinutes());
+}
+function fmtMin(m) {
+  const total = Math.max(0, Math.round(m * 60));
+  const h = Math.floor(total / 3600);
+  const mm = Math.floor((total % 3600) / 60);
+  const ss = total % 60;
+  const p2 = x => String(x).padStart(2, '0');
+  return h ? h + ':' + p2(mm) + ':' + p2(ss) : mm + ':' + p2(ss);
+}
+function setStatus(msg, type) {
+  const el = $('status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status ' + (type === 'err' ? 'err' : type === 'ok' ? 'ok' : '');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Status classification
+// ════════════════════════════════════════════════════════════════════
+const STATUS_OK = 'OK';
+function classifyStatus(status) {
+  const s = String(status == null ? '' : status).trim().toLowerCase();
+  if (!s) return '';
+  if (s === 'ok' || s === 'fin') return 'OK';
+  if (s === 'mp' || s === 'mis') return 'MP';
+  if (s === 'dnf') return 'DNF';
+  if (s === 'dns') return 'DNS';
+  if (s === 'dsq' || s === 'dis' || s === 'disq') return 'DSQ';
+  if (s === 'otl' || s === 'over') return 'OTL';
+  return 'OTHER';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Event-flow analysis (anonymized, organizer-oriented)
+// ════════════════════════════════════════════════════════════════════
+function runnerRows(event) {
+  return (event.results || []).filter(r => r.resultType !== 'Team');
+}
+function isMultistageEvent(event) {
+  return event.eventKind === 'Multistage event' || (event.events || []).length > 1;
+}
+function parseTS(iso) {
+  if (iso == null || iso === '') return null;
+  const t = new Date(iso).getTime();
+  return isFinite(t) ? t : null;
+}
+
+function flowRows(event) {
+  const results = event.results || [];
+  const rowOf = r => {
+    let start = parseTS(r.startTime);
+    let finish = parseTS(r.finishTime);
+    const dur = r.time != null && r.time > 0 ? r.time : null;
+    if (start == null && finish != null && dur != null) start = finish - dur * 1000;
+    if (finish == null && start != null && dur != null) finish = start + dur * 1000;
+    return { start, finish, duration: dur, status: classifyStatus(r.status), classId: r.classId };
+  };
+  if (event.raceType === 'Relay') {
+    const teams = results.filter(r => r.resultType === 'Team');
+    const legs = results.filter(r => r.resultType !== 'Team');
+    if (legs.length) {
+      // Relay flow is built from every leg punch: each leg runner's start and
+      // finish times (start of later legs = accumulated leg times of the team).
+      const teamById = {};
+      teams.forEach(t => { teamById[t.id] = t; });
+      const matesByParent = {};
+      legs.forEach(l => {
+        const pid = l.parentId != null ? l.parentId : l.bibNumber;
+        (matesByParent[pid] = matesByParent[pid] || []).push(l);
+      });
+      return legs.map(l => {
+        const pid = l.parentId != null ? l.parentId : l.bibNumber;
+        const team = l.parentId != null ? teamById[l.parentId] : null;
+        let start = null;
+        const base = team && team.startTime != null ? parseTS(team.startTime) : null;
+        if (base != null) {
+          const mates = (matesByParent[pid] || []).slice().sort((a, b) => (a.leg || 0) - (b.leg || 0));
+          let acc = base;
+          for (const m of mates) {
+            if (m === l) break;
+            if (m.time != null && m.time > 0) acc += m.time * 1000;
+          }
+          start = acc;
+        }
+        const s = parseTS(l.startTime);
+        if (s != null) start = s;
+        const dur = l.time != null && l.time > 0 ? l.time : null;
+        let finish = start != null && dur != null ? start + dur * 1000 : null;
+        const f = parseTS(l.finishTime);
+        if (f != null) finish = f;
+        return { start, finish, duration: dur, status: classifyStatus(l.status), classId: l.classId, leg: l.leg };
+      }).filter(r => r.start != null || r.finish != null);
+    }
+    return teams.map(rowOf);
+  }
+  return results.filter(r => r.resultType !== 'Team').map(rowOf);
+}
+
+// A mass re-start (relay "jälkilähtö"): a group of leg-N runners sent out
+// together although their own team's leg-(N-1) runner has not handed over yet
+// (still in the forest). Detected when ≥5 such runners share the same start
+// minute. Returns the start minute (relative to base) or null.
+function findMassRestart(event, base) {
+  const rows = (event.results || []).filter(r => r.resultType !== 'Team');
+  const legs = rows.filter(r => (r.leg || 0) >= 2);
+  if (legs.length < 5) return null;
+  const prevFinish = {};
+  rows.filter(r => (r.leg || 0) >= 1).forEach(l => {
+    const f = parseTS(l.finishTime);
+    if (f == null) return;
+    const key = l.parentId + '|' + l.leg;
+    if (prevFinish[key] == null || f < prevFinish[key]) prevFinish[key] = f;
+  });
+  const clusters = {};
+  const seen = {};
+  const MIN_GAP = 60000;
+  legs.forEach(l => {
+    const start = parseTS(l.startTime);
+    if (start == null) return;
+    const legKey = l.parentId + '|' + (l.leg || 0);
+    if (seen[legKey]) return;
+    seen[legKey] = true;
+    const pf = prevFinish[l.parentId + '|' + ((l.leg || 0) - 1)];
+    const natural = pf != null && start >= pf && start - pf < MIN_GAP;
+    if (natural) return;
+    const bucket = Math.floor(start / 60000) * 60000;
+    (clusters[bucket] = clusters[bucket] || []).push(l);
+  });
+  const found = Object.entries(clusters)
+    .filter(([, arr]) => arr.length >= 5)
+    .map(([bucket]) => (Number(bucket) - base) / 60000)
+    .filter(at => at > 0.05)
+    .sort((a, b) => a - b);
+  return found.length ? found[0] : null;
+}
+
+// Known mass starts for the first relay leg: teams (or leg-1 rows when teams
+// lack start times) that start within the same minute, counted as a group
+// when it holds ≥ max(3, 15%) of the starters. Returns relative minutes.
+function firstLegMassStarts(event, base) {
+  const results = event.results || [];
+  const teamStarts = results.filter(r => r.resultType === 'Team' && parseTS(r.startTime) != null).map(r => parseTS(r.startTime));
+  const leg1Starts = results.filter(r => r.resultType !== 'Team' && (r.leg || 0) === 1 && parseTS(r.startTime) != null).map(r => parseTS(r.startTime));
+  const times = teamStarts.length ? teamStarts : leg1Starts;
+  if (!times.length) return [];
+  const thr = Math.max(3, Math.ceil(times.length * 0.15));
+  const groups = {};
+  times.forEach(t => {
+    const bucket = Math.floor(t / 60000) * 60000;
+    (groups[bucket] = groups[bucket] || []).push(t);
+  });
+  return Object.entries(groups)
+    .filter(([, arr]) => arr.length >= thr)
+    .map(([bucket]) => (Number(bucket) - base) / 60000)
+    .sort((a, b) => a - b);
+}
+
+function relayMarkers(event) {
+  if (event.raceType !== 'Relay') return [];
+  const rows = flowRows(event);
+  const starts = rows.map(r => r.start).filter(t => t != null).sort((a, b) => a - b);
+  const finishes = rows.map(r => r.finish).filter(t => t != null).sort((a, b) => a - b);
+  if (!starts.length && !finishes.length) return [];
+  const base = starts.length ? starts[0] : (finishes.length ? finishes[0] : 0);
+  const markers = [];
+  firstLegMassStarts(event, base).forEach(at => markers.push({ kind: 'mass', at, key: 'mMass' }));
+  if (finishes.length) {
+    markers.push({ kind: 'exch', at: (finishes[0] - base) / 60000, key: 'mExch' });
+  }
+  const restart = findMassRestart(event, base);
+  if (restart != null) markers.push({ kind: 'restart', at: restart, key: 'mRestart' });
+  markers.sort((a, b) => a.at - b.at);
+  return markers;
+}
+
+function eventFlow(event) {
+  const rows = flowRows(event);
+  const starts = rows.map(r => r.start).filter(t => t != null).sort((a, b) => a - b);
+  const finishes = rows.map(r => r.finish).filter(t => t != null).sort((a, b) => a - b);
+  const base = starts.length ? starts[0] : (finishes.length ? finishes[0] : 0);
+  const startByClass = {};
+  rows.forEach(r => {
+    if (r.start == null) return;
+    const cid = r.classId || '';
+    (startByClass[cid] = startByClass[cid] || []).push((r.start - base) / 60000);
+  });
+  Object.keys(startByClass).forEach(k => startByClass[k].sort((a, b) => a - b));
+  let firstExchange = null;
+  if (event.raceType === 'Relay') {
+    const ex = rows.filter(r => r.leg === 1 && r.finish != null).map(r => r.finish).sort((a, b) => a - b);
+    firstExchange = ex.length ? ex[0] : null;
+  }
+  return {
+    starters: starts.length,
+    finishers: rows.filter(r => r.status === STATUS_OK).length,
+    dnf: rows.filter(r => r.status === 'DNF').length,
+    dns: rows.filter(r => r.status === 'DNS').length,
+    firstStart: starts.length ? starts[0] : null,
+    lastStart: starts.length ? starts[starts.length - 1] : null,
+    firstFinish: finishes.length ? finishes[0] : null,
+    lastFinish: finishes.length ? finishes[finishes.length - 1] : null,
+    startMinutes: starts.map(t => (t - base) / 60000),
+    finishMinutes: finishes.map(t => (t - base) / 60000),
+    startByClass,
+    firstExchange,
+    relayMarkers: relayMarkers(event),
+  };
+}
+
+// Categorical class palette (Tableau 10 — industry-standard, colorblind-aware,
+// distinct hues). Cycles via index % length for events with many classes.
+const CLASS_PALETTE = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+
+// Per-class finish curves (minutes since first start), largest classes first.
+// Every class gets its own curve.
+function classFlowSeries(event) {
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const rows = flowRows(event);
+  const starts = rows.map(r => r.start).filter(t => t != null).sort((a, b) => a - b);
+  const finishes = rows.map(r => r.finish).filter(t => t != null).sort((a, b) => a - b);
+  const base = starts.length ? starts[0] : (finishes.length ? finishes[0] : 0);
+  const byClass = {};
+  rows.forEach(r => {
+    if (r.finish == null) return;
+    const cid = r.classId || '';
+    (byClass[cid] = byClass[cid] || []).push((r.finish - base) / 60000);
+  });
+  const classes = Object.entries(byClass).map(([id, mins]) => ({
+    id,
+    className: cc[id] || id,
+    mins: mins.sort((a, b) => a - b),
+  })).sort((a, b) => b.mins.length - a.mins.length);
+  return classes.map((c, i) => ({ ...c, color: CLASS_PALETTE[i % CLASS_PALETTE.length] }));
+}
+
+// Window with the most finishers (the steepest climb on the finish line).
+function finishPeak(finishMinutes, binW = 5) {
+  if (!finishMinutes || !finishMinutes.length) return null;
+  const counts = new Map();
+  finishMinutes.forEach(m => {
+    const k = Math.floor(m / binW) * binW;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  });
+  let from = null, count = 0;
+  counts.forEach((c, k) => { if (c > count) { count = c; from = k; } });
+  return from == null ? null : { from, to: from + binW, count };
+}
+
+// Average pace (min/km) per class, computed from every OK result (relay: each
+// leg finish), anonymized (no runner name). Distance comes from each runner's
+// own course, so it works for individual and relay races alike.
+function classPaces(event) {
+  const dist = {};
+  (event.courses || []).forEach(c => { if (c.distance > 0) dist[c.id] = c.distance; });
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const byClass = {};
+  runnerRows(event).forEach(r => {
+    if (classifyStatus(r.status) !== STATUS_OK || r.time == null || r.time <= 0) return;
+    const d = r.courseId != null ? dist[r.courseId] : null;
+    if (!d) return;
+    const cid = r.classId || '';
+    (byClass[cid] = byClass[cid] || []).push(r.time / (d / 1000));
+  });
+  return Object.entries(byClass).map(([cid, paces]) => ({
+    className: cc[cid] || cid,
+    paceSec: Math.round(paces.reduce((a, b) => a + b, 0) / paces.length),
+    runners: paces.length,
+  })).sort((a, b) => a.paceSec - b.paceSec);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Navisport fetch
+// ════════════════════════════════════════════════════════════════════
+function extractSlug(input) {
+  const s = String(input == null ? '' : input).trim();
+  if (!s) return '';
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return s;
+  let m = s.match(/navisport\.com\/(?:events|tapahtumat)\/([^\/?#\s]+)/i);
+  if (m) return m[1];
+  if (/^[a-z0-9][a-z0-9._-]*$/i.test(s)) return s;
+  return '';
+}
+
+async function fetchEventByUUID(uuid) {
+  const res = await fetch('https://navisport.com/api/events/' + uuid);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' for event ' + uuid);
+  return res.json();
+}
+
+async function fetchEvent(input) {
+  const id = extractSlug(input);
+  if (!id) throw new Error(T('errSlug'));
+  if (/^[0-9a-f]{8}-/i.test(id)) return fetchEventByUUID(id);
+  const enc = encodeURIComponent(JSON.stringify({ '0': id }));
+  const url = 'https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=' + enc;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' for "' + id + '"');
+  const batch = await res.json();
+  const data = batch && batch[0] && batch[0].result && batch[0].result.data;
+  if (!data || !data.id) throw new Error(T('errEvent'));
+  return fetchEventByUUID(data.id);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Canvas charts
+// ════════════════════════════════════════════════════════════════════
+let chartSeq = 0;
+let combSeq = 0;
+const chartStore = {};
+
+function chartCanvas(cfg) {
+  const id = cfg.id || ('ch' + (++chartSeq));
+  chartStore[id] = cfg;
+  return '<div class="chartwrap"><canvas data-chart-id="' + id + '" class="chart"></canvas>' +
+    '<div class="charttip" data-tip-for="' + id + '" hidden></div></div>';
+}
+
+function stepPoints(sortedMin) {
+  const pts = [{ x: 0, y: 0 }];
+  let n = 0;
+  for (const v of sortedMin) {
+    pts.push({ x: v, y: n });
+    n++;
+    pts.push({ x: v, y: n });
+  }
+  return pts;
+}
+
+function stepEvents(sortedMin) {
+  const ev = [{ x: 0, y: 0 }];
+  let n = 0;
+  for (const v of sortedMin) {
+    ev.push({ x: v, y: n });
+    n++;
+    ev.push({ x: v, y: n });
+  }
+  ev.push({ x: Infinity, y: n });
+  return ev;
+}
+
+function niceStep(span) {
+  const raw = span / 6;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+
+function drawStepArea(ctx, sortedMin, color, fill, X, Y, sMin, xMax) {
+  ctx.beginPath();
+  ctx.moveTo(X(sMin), Y(0));
+  for (const p of stepPoints(sortedMin)) {
+    if (p.x < sMin) continue;
+    ctx.lineTo(X(Math.min(p.x, xMax)), Y(p.y));
+  }
+  ctx.lineTo(X(xMax), Y(sortedMin.length));
+  ctx.lineTo(X(xMax), Y(0));
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let started = false;
+  for (const p of stepPoints(sortedMin)) {
+    if (p.x < sMin) continue;
+    const x = X(Math.min(p.x, xMax));
+    const y = Y(p.y);
+    if (!started) { ctx.moveTo(x, y); started = true; }
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+function drawFlowChart(ctx, w, h, opts, cross) {
+  const starts = opts.starts || [];
+  const classes = opts.classes || [];
+  const peak = opts.peak || null;
+  const padL = 42, padR = 8, padT = 8, padB = 24;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+  const sMin = starts.length ? starts[0] : 0;
+  let lastFinish = 0;
+  for (const c of classes) if (c.mins.length) lastFinish = Math.max(lastFinish, c.mins[c.mins.length - 1]);
+  const xMax = Math.max(starts.length ? starts[starts.length - 1] : 0, lastFinish, 1);
+  let yMax = starts.length;
+  for (const c of classes) yMax += c.mins.length;
+  yMax = Math.max(yMax, 1);
+  const spanX = (xMax - sMin) || 1;
+  const X = m => padL + ((m - sMin) / spanX) * pw;
+  const Y = n => padT + ph - (n / yMax) * ph;
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const val = Math.round(yMax * i / yTicks);
+    const y = Y(val);
+    ctx.strokeStyle = '#e4e9f0';
+    ctx.fillStyle = '#8a97a6';
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(w - padR, y);
+    ctx.stroke();
+    ctx.fillText(String(val), padL - 5, y);
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#8a97a6';
+  const xLab = opts.xMode === 'clock' && opts.clockBase != null
+    ? (m) => fmtClock(opts.clockBase + m * 60000)
+    : fmtMin;
+  const step = niceStep(spanX);
+  for (let m = Math.ceil(sMin / step) * step; m <= xMax + 0.01; m += step) {
+    const x = X(Math.max(m, sMin));
+    ctx.strokeStyle = '#eef2f6';
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, padT + ph);
+    ctx.stroke();
+    ctx.fillText(xLab(m), x, h - 14);
+  }
+  if (peak && peak.count > 0) {
+    const x0 = X(Math.max(peak.from, sMin));
+    const x1 = X(Math.min(peak.to, xMax));
+    if (x1 > x0) {
+      ctx.fillStyle = 'rgba(230,126,34,0.14)';
+      ctx.fillRect(x0, padT, x1 - x0, ph);
+      const lbl = T('pPeak') + ' ' + xLab(peak.from) + '–' + xLab(peak.to) + ' · ' + peak.count;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      const tw = ctx.measureText(lbl).width || 120;
+      const lx = Math.max(padL, Math.min(x0 + 4, w - padR - tw - 8));
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillRect(lx, padT + 3, tw + 8, 15);
+      ctx.fillStyle = '#b0560f';
+      ctx.fillText(lbl, lx + 4, padT + 5);
+    }
+  }
+  const markers = opts.markers || [];
+  const markerLabel = { mMass: T('mMass'), mExch: T('mExch'), mRestart: T('mRestart') };
+  for (const mk of markers) {
+    const x = X(mk.at);
+    if (x < padL || x > w - padR) continue;
+    ctx.strokeStyle = 'rgba(196,106,42,0.9)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, padT + ph);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const lbl = markerLabel[mk.key] || mk.key;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    const tw = ctx.measureText(lbl).width || 70;
+    const lx = Math.max(padL, Math.min(x - tw - 8, w - padR - tw - 8));
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillRect(lx, padT + 22, tw + 8, 15);
+    ctx.fillStyle = '#8a5a1c';
+    ctx.fillText(lbl, lx + 4, padT + 24);
+  }
+  drawStepArea(ctx, starts, '#2e5a8a', 'rgba(46,90,138,0.10)', X, Y, sMin, xMax);
+  let acc = [];
+  ctx.lineWidth = 1.5;
+  for (const c of classes) {
+    const bot = stepEvents(acc);
+    const merged = acc.concat(c.mins).sort((a, b) => a - b);
+    const top = stepEvents(merged);
+    acc = merged;
+    ctx.beginPath();
+    let started = false;
+    for (const e of top) {
+      const x = X(Math.min(Math.max(e.x, sMin), xMax));
+      const y = Y(e.y);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(X(xMax), Y(top[top.length - 1].y));
+    for (let i = bot.length - 1; i >= 0; i--) {
+      ctx.lineTo(X(Math.min(Math.max(bot[i].x, sMin), xMax)), Y(bot[i].y));
+    }
+    ctx.closePath();
+    ctx.fillStyle = c.color + 'cc';
+    ctx.fill();
+    ctx.strokeStyle = c.color;
+    ctx.beginPath();
+    started = false;
+    for (const e of top) {
+      const x = X(Math.min(Math.max(e.x, sMin), xMax));
+      const y = Y(e.y);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#c9d2dc';
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + ph);
+  ctx.lineTo(w - padR, padT + ph);
+  ctx.stroke();
+  if (cross) drawCrosshair(ctx, w, h, padL, padR, padT, ph, cross);
+}
+
+function drawCrosshair(ctx, w, h, padL, padR, padT, ph, cross) {
+  const cx = cross.x, cy = cross.y;
+  if (cx < padL || cx > w - padR || cy < padT || cy > padT + ph) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(108,122,140,0.85)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(cx, padT);
+  ctx.lineTo(cx, padT + ph);
+  ctx.moveTo(padL, cy);
+  ctx.lineTo(w - padR, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(30,40,55,0.5)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// Horizontal bar chart of average pace (min/km) per relay class. No runner
+// counts or names — just class + pace, sorted fastest first.
+function paintPace(ctx, w, h, cfg) {
+  ctx.clearRect(0, 0, w, h);
+  const paces = cfg.paces || [];
+  const n = paces.length;
+  if (!n) return;
+  const padT = 6, padB = 22;
+  const rowH = Math.max(18, Math.floor((h - padT - padB) / n));
+  ctx.font = '12px sans-serif';
+  ctx.textBaseline = 'middle';
+  let nameW = 72;
+  for (const p of paces) {
+    const mw = ctx.measureText ? (ctx.measureText(p.className).width || 0) : 0;
+    if (mw + 12 > nameW) nameW = mw + 12;
+  }
+  const padL = nameW;
+  const padR = 52;
+  const pw = w - padL - padR;
+  const maxV = Math.max(1, Math.ceil(Math.max(...paces.map(p => p.paceSec / 60))));
+  const X = v => padL + (v / maxV) * pw;
+  const step = niceStep(maxV);
+  ctx.textAlign = 'center';
+  for (let v = 0; v <= maxV + 0.001; v += step) {
+    const x = X(v);
+    ctx.strokeStyle = '#eef2f6';
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, h - padB); ctx.stroke();
+    ctx.fillStyle = '#8a97a6';
+    ctx.fillText(String(v), x, h - padB + 10);
+  }
+  for (let i = 0; i < n; i++) {
+    const p = paces[i];
+    const v = p.paceSec / 60;
+    const y = padT + i * rowH;
+    const bw = Math.max(2, X(v) - padL);
+    ctx.fillStyle = CLASS_PALETTE[i % CLASS_PALETTE.length];
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(padL, y + 3, bw, rowH - 8, 4);
+    else { ctx.rect(padL, y + 3, bw, rowH - 8); }
+    ctx.fill();
+    ctx.fillStyle = '#33475b';
+    ctx.textAlign = 'right';
+    ctx.fillText(p.className, padL - 8, y + rowH / 2);
+    ctx.textAlign = 'left';
+    ctx.fillText(fmtTime(p.paceSec), X(v) + 6, y + rowH / 2);
+  }
+}
+
+function tipHtmlFor(cfg, m) {
+  const binW = 5;
+  const from = Math.floor(m / binW) * binW;
+  const to = from + binW;
+  const finCounts = [];
+  let finishing = 0;
+  cfg.classes.forEach(c => {
+    const n = c.mins.filter(v => v >= from && v < to).length;
+    finishing += n;
+    finCounts.push({ name: c.className, n, color: c.color });
+  });
+  const starting = cfg.starts ? cfg.starts.filter(v => v >= from && v < to).length : 0;
+  const parts = [];
+  parts.push('<b>' + esc(T('lWindow')) + ' ' + fmtMin(from) + '–' + fmtMin(to) + '</b>');
+  if (cfg.clockBase != null) {
+    parts.push('<span class="tipclock">' + esc(fmtClock(cfg.clockBase + from * 60000)) + '–' +
+      esc(fmtClock(cfg.clockBase + to * 60000)) + '</span>');
+  }
+  parts.push(esc(T('lFinishing')) + ': ' + finishing);
+  if (cfg.starts && cfg.starts.length) parts.push(esc(T('lStarting')) + ': ' + starting);
+  const hit = finCounts.filter(p => p.n > 0).sort((a, b) => b.n - a.n).slice(0, 6);
+  if (hit.length) {
+    parts.push(hit.map(p =>
+      '<span class="tipcls"><span class="sw" style="background:' + p.color + '"></span>' +
+      esc(p.name) + ' ' + p.n + '</span>'
+    ).join(''));
+  }
+  if (cfg.peak && cfg.peak.from === from) parts.push('<span class="tippeak">' + esc(T('pPeak')) + '</span>');
+  return parts.join('<br>');
+}
+
+function flowMap(cfg, w) {
+  const padL = 42, padR = 8, padT = 8, padB = 24;
+  const pw = Math.max(1, w - padL - padR);
+  const starts = cfg.starts || [];
+  const sMin = starts.length ? starts[0] : 0;
+  let lastFinish = 0;
+  for (const cl of cfg.classes || []) if (cl.mins.length) lastFinish = Math.max(lastFinish, cl.mins[cl.mins.length - 1]);
+  const xMax = Math.max(starts.length ? starts[starts.length - 1] : 0, lastFinish, 1);
+  return { padL, padR, padT, padB, pw, sMin, spanX: (xMax - sMin) || 1, xMax };
+}
+
+function paintFlow(c, cfg, w, h, dpr, cross) {
+  const ctx = c.getContext('2d');
+  if (!ctx) return;
+  const hidden = cfg.hiddenIds || [];
+  const hiddenAny = !!hidden.length || !!cfg.hideStarts;
+  const eff = effectiveClasses(cfg);
+  const classes = eff.filter(cl => hidden.indexOf(cl.id) === -1);
+  let starts;
+  if (cfg.hideStarts) starts = [];
+  else if (!hiddenAny) starts = (cfg.starts || []).slice();
+  else {
+    starts = [];
+    for (const cl of classes) for (const m of (cl.starts || [])) starts.push(m);
+    for (const m of (cfg.extraStartMins || [])) starts.push(m);
+    starts.sort((a, b) => a - b);
+  }
+  const allFinish = [];
+  for (const cl of classes) for (const m of cl.mins) allFinish.push(m);
+  allFinish.sort((a, b) => a - b);
+  const view = { starts, classes, peak: finishPeak(allFinish), clockBase: cfg.clockBase, xMode: cfg.xMode };
+  cfg._view = view;
+  cfg.mapX = flowMap(view, w);
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  drawFlowChart(ctx, w, h, view, cross);
+  ctx.restore();
+}
+
+// Effective per-class draw series honoring user combine groups. Each returned
+// class also carries its own start minutes so hidden classes drop out of the
+// started curve too.
+function effectiveClasses(cfg) {
+  const sbc = cfg.startByClass || {};
+  const startsFor = ids => {
+    const a = [];
+    for (const id of ids) for (const m of (sbc[id] || [])) a.push(m);
+    return a.sort((x, y) => x - y);
+  };
+  const out = [];
+  const used = {};
+  for (const g of (cfg.combines || [])) {
+    const mins = [];
+    for (const id of g.ids) for (const c of (cfg.classes || [])) if (c.id === id) for (const m of c.mins) mins.push(m);
+    mins.sort((x, y) => x - y);
+    out.push({ id: g.id, className: g.name, color: g.color, mins, starts: startsFor(g.ids) });
+    for (const id of g.ids) used[id] = true;
+  }
+  for (const c of (cfg.classes || [])) {
+    if (used[c.id]) continue;
+    out.push({ id: c.id, className: c.className, color: c.color, mins: c.mins, starts: startsFor([c.id]) });
+  }
+  return out;
+}
+
+function rebuildLegendItems(cfg) {
+  const used = {};
+  (cfg.combines || []).forEach(g => g.ids.forEach(id => { used[id] = true; }));
+  const items = [{ key: 'started', name: T('lStarted'), color: '#2e5a8a' }];
+  (cfg.combines || []).forEach(g => items.push({ key: g.id, name: g.name, color: g.color, combined: true }));
+  (cfg.classes || []).forEach(c => { if (!used[c.id]) items.push({ key: c.id, name: c.className, color: c.color }); });
+  cfg.legendItems = items;
+  cfg.hiddenIds = (cfg.hiddenIds || []).filter(k => items.some(it => it.key === k));
+}
+
+function combineSelected(cfg) {
+  const keys = cfg.selKeys || [];
+  if (keys.length < 2) return;
+  const chosen = (cfg.legendItems || []).filter(it => it.key !== 'started' && !it.combined && keys.indexOf(it.key) !== -1);
+  if (chosen.length < 2) return;
+  cfg.combines = cfg.combines || [];
+  cfg.combines.push({ id: '_comb' + (++combSeq), name: chosen.map(it => it.name).join('/'), ids: chosen.map(it => it.key), color: CLASS_PALETTE[cfg.combines.length % CLASS_PALETTE.length] });
+  rebuildLegendItems(cfg);
+  cfg.selKeys = [];
+}
+
+function clearCombines(cfg) {
+  cfg.combines = [];
+  cfg.selKeys = [];
+  rebuildLegendItems(cfg);
+}
+
+function rerenderLegend(cfg, legendEl) {
+  legendEl.innerHTML = legendInner(cfg, cfg.legendPage || 0);
+}
+
+function rerenderAxis(cfg) {
+  const host = document.querySelector('.axistoggle[data-chart="' + cfg.id + '"]');
+  if (!host) return;
+  host.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.axis === cfg.xMode));
+}
+
+function repaintChart(cfg) {
+  if (!cfg || !cfg._el || !cfg._w) return;
+  paintFlow(cfg._el, cfg, cfg._w, cfg._h, cfg._dpr, null);
+}
+
+function setupChartInteractions() {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    const btn = t && t.closest ? t.closest('button[data-chart]') : null;
+    if (!btn) return;
+    const cfg = chartStore[btn.dataset.chart];
+    if (!cfg) return;
+    const legend = btn.closest('.legend');
+    if (btn.dataset.idx !== undefined) {
+      const item = cfg.legendItems && cfg.legendItems[+btn.dataset.idx];
+      if (!item) return;
+      if (t && t.tagName === 'INPUT') {
+        cfg.selKeys = cfg.selKeys || [];
+        const at = cfg.selKeys.indexOf(item.key);
+        if (at === -1) cfg.selKeys.push(item.key);
+        else cfg.selKeys.splice(at, 1);
+        if (legend) rerenderLegend(cfg, legend);
+        return;
+      }
+      if (item.key === 'started') cfg.hideStarts = !cfg.hideStarts;
+      else {
+        cfg.hiddenIds = cfg.hiddenIds || [];
+        const at = cfg.hiddenIds.indexOf(item.key);
+        if (at === -1) cfg.hiddenIds.push(item.key);
+        else cfg.hiddenIds.splice(at, 1);
+      }
+      if (legend) rerenderLegend(cfg, legend);
+      repaintChart(cfg);
+    } else if (btn.dataset.page !== undefined) {
+      cfg.legendPage = Math.max(0, +btn.dataset.page);
+      if (legend) rerenderLegend(cfg, legend);
+    } else if (btn.dataset.axis !== undefined) {
+      cfg.xMode = btn.dataset.axis;
+      rerenderAxis(cfg);
+      repaintChart(cfg);
+    } else if (btn.dataset.combine !== undefined) {
+      combineSelected(cfg);
+      if (legend) rerenderLegend(cfg, legend);
+      repaintChart(cfg);
+    } else if (btn.dataset.clear !== undefined) {
+      clearCombines(cfg);
+      if (legend) rerenderLegend(cfg, legend);
+      repaintChart(cfg);
+    }
+  });
+}
+
+function attachChartTip(c) {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
+  if (!tip) return;
+  const cfgOf = () => chartStore[c.dataset.chartId];
+  const redraw = (cx, cy) => {
+    const cfg = cfgOf();
+    if (!cfg || !cfg._w) return;
+    paintFlow(c, cfg, cfg._w, cfg._h, cfg._dpr, (cx != null && cy != null) ? { x: cx, y: cy } : null);
+  };
+  const show = (e) => {
+    const cfg = cfgOf();
+    if (!cfg || !cfg.mapX) { tip.hidden = true; return; }
+    const view = cfg._view || cfg;
+    const rect = c.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const map = cfg.mapX;
+    const inside = px >= map.padL && px <= rect.width - map.padR &&
+      py >= map.padT && py <= rect.height - map.padB;
+    if (!inside) { tip.hidden = true; redraw(); return; }
+    const m = map.sMin + ((px - map.padL) / map.pw) * map.spanX;
+    if (m > map.xMax) { tip.hidden = true; redraw(); return; }
+    redraw(px, py);
+    tip.innerHTML = tipHtmlFor(view, m);
+    tip.hidden = false;
+    const wrap = c.parentElement;
+    const wr = wrap.getBoundingClientRect();
+    const ww = wrap.clientWidth || rect.width;
+    tip.style.left = Math.max(0, Math.min(e.clientX - wr.left + 14, ww - 220)) + 'px';
+    let ty = e.clientY - wr.top - (tip.offsetHeight || 0) - 10;
+    if (ty < 2) ty = e.clientY - wr.top + 16;
+    tip.style.top = ty + 'px';
+  };
+  c.addEventListener('mousemove', show);
+  c.addEventListener('mouseleave', () => { tip.hidden = true; redraw(); });
+}
+
+function paintCharts() {
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+  const canvases = document.querySelectorAll('canvas[data-chart-id]');
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  for (let i = 0; i < canvases.length; i++) {
+    const c = canvases[i];
+    const cfg = chartStore[c.dataset.chartId];
+    if (!cfg) continue;
+    const parentW = c.parentElement ? c.parentElement.clientWidth : 800;
+    const w = Math.max(300, parentW - 36);
+    const h = cfg.type === 'pace'
+      ? Math.max(120, 18 * (cfg.paces || []).length + 40)
+      : 280;
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    if (cfg.type === 'flow') {
+      cfg._el = c; cfg._w = w; cfg._h = h; cfg._dpr = dpr;
+      paintFlow(c, cfg, w, h, dpr, null);
+      attachChartTip(c);
+    } else if (cfg.type === 'pace') {
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintPace(ctx, w, h, cfg);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Rendering
+// ════════════════════════════════════════════════════════════════════
+function sectionHtml(title, inner) {
+  return '<section class="panel"><h3 class="phead">' + title + '</h3>' + inner + '</section>';
+}
+function tableHtml(headers, rows) {
+  if (!rows.length) return '<p class="empty">' + T('empty') + '</p>';
+  return '<div class="tblwrap"><table><thead><tr>' +
+    headers.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table></div>';
+}
+function cardHtml(label, value, sub) {
+  return '<div class="card"><h4>' + label + '</h4><span class="num">' + value + '</span>' +
+    (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div>';
+}
+function legendInner(cfg, page) {
+  const items = cfg.legendItems || [];
+  const size = cfg.legendPageSize || 8;
+  const total = Math.max(1, Math.ceil(items.length / size));
+  const p = Math.max(0, Math.min(total - 1, page));
+  const slice = items.slice(p * size, p * size + size);
+  const hidden = cfg.hiddenIds || [];
+  const sel = cfg.selKeys || [];
+  const html = slice.map(it => {
+    const off = it.key === 'started' ? !!cfg.hideStarts : hidden.indexOf(it.key) !== -1;
+    const cb = it.key !== 'started'
+      ? '<input type="checkbox"' + (sel.indexOf(it.key) !== -1 ? ' checked' : '') + ' aria-label="select">'
+      : '';
+    return '<button type="button" class="lg' + (off ? ' off' : '') + '" data-chart="' + cfg.id + '" data-idx="' + items.indexOf(it) + '">' +
+      cb + '<span class="sw" style="background:' + it.color + '"></span>' + esc(it.name) + '</button>';
+  }).join('');
+  const controls = [];
+  if (items.some(it => it.key !== 'started' && !it.combined)) {
+    controls.push('<button type="button" class="lgcombine" data-chart="' + cfg.id + '" data-combine="1"' +
+      (sel.length < 2 ? ' disabled' : '') + '>' + esc(T('lCombine')) + '</button>');
+  }
+  if (cfg.combines && cfg.combines.length) {
+    controls.push('<button type="button" class="lgclear" data-chart="' + cfg.id + '" data-clear="1">' + esc(T('lClear')) + '</button>');
+  }
+  if (total > 1) {
+    controls.push('<span class="lgpager">' +
+      '<button type="button" data-chart="' + cfg.id + '" data-page="' + (p - 1) + '"' + (p === 0 ? ' disabled' : '') + '>‹</button>' +
+      (p + 1) + '/' + total +
+      '<button type="button" data-chart="' + cfg.id + '" data-page="' + (p + 1) + '"' + (p >= total - 1 ? ' disabled' : '') + '>›</button></span>');
+  }
+  const ctrl = controls.length ? '<span class="lgcontrols">' + controls.join('') + '</span>' : '';
+  return html + ctrl;
+}
+
+function axisToggle(cfg) {
+  return '<div class="axistoggle" data-chart="' + cfg.id + '">' +
+    '<button type="button" data-chart="' + cfg.id + '" data-axis="rel"' + (cfg.xMode !== 'clock' ? ' class="on"' : '') + '>' + esc(T('aRel')) + '</button>' +
+    '<button type="button" data-chart="' + cfg.id + '" data-axis="clock"' + (cfg.xMode === 'clock' ? ' class="on"' : '') + '>' + esc(T('aClock')) + '</button>' +
+    '</div>';
+}
+
+function renderHeader(event) {
+  const date = event.begin
+    ? new Date(event.begin).toLocaleDateString(lang === 'fi' ? 'fi-FI' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const org = event.organisation && event.organisation.name ? event.organisation.name : '';
+  const place = event.address || '';
+  const type = event.raceType === 'Relay' ? T('tRelay') : (isMultistageEvent(event) ? T('tMultistage') : T('tIndividual'));
+  const logo = event.logoUrl ? '<img class="evlogo" src="' + escAttr(event.logoUrl) + '" alt="">' : '';
+  return '<section class="evhead"><div><h2>' + esc(event.name || '') + '</h2>' +
+    '<p>' + esc([date, org, place, type].filter(Boolean).join(' · ')) + '</p></div>' + logo + '</section>';
+}
+
+function durSec(a, b) {
+  return (a != null && b != null) ? fmtTime(Math.round((b - a) / 1000)) : '—';
+}
+
+function flowCards(flow) {
+  const c = t => t != null ? fmtClock(t) : '—';
+  const cards = [
+    cardHtml(T('cStarters'), String(flow.starters)),
+    cardHtml(T('cFinishers'), String(flow.finishers)),
+    cardHtml(T('cDnf'), String(flow.dnf)),
+    cardHtml(T('cIntoForest'), durSec(flow.firstStart, flow.lastStart),
+      esc(T('tFirstStart') + ' ' + c(flow.firstStart) + ' · ' + T('tLastStart') + ' ' + c(flow.lastStart))),
+    cardHtml(T('cFirstResult'), durSec(flow.firstStart, flow.firstFinish),
+      esc(T('tFirstFinish') + ' ' + c(flow.firstFinish))),
+    cardHtml(T('cResultsWait'), durSec(flow.firstFinish, flow.lastFinish),
+      esc(T('tFirstFinish') + ' ' + c(flow.firstFinish) + ' · ' + T('tLastFinish') + ' ' + c(flow.lastFinish))),
+    cardHtml(T('cTotal'), durSec(flow.firstStart, flow.lastFinish),
+      esc(T('tFirstStart') + ' ' + c(flow.firstStart) + ' · ' + T('tLastFinish') + ' ' + c(flow.lastFinish))),
+  ];
+  if (flow.firstExchange != null) {
+    cards.push(cardHtml(T('cFirstExchange'), c(flow.firstExchange)));
+  }
+  const pk = finishPeak(flow.finishMinutes);
+  if (pk && flow.finishMinutes.length) {
+    const base = flow.firstStart != null ? flow.firstStart : flow.firstFinish;
+    cards.push(cardHtml(T('cPeak'),
+      fmtClock(base + pk.from * 60000) + '–' + fmtClock(base + pk.to * 60000) + ' · ' + pk.count));
+  }
+  return cards;
+}
+
+function flowSection(event) {
+  const flow = eventFlow(event);
+  const parts = ['<div class="cards">' + flowCards(flow).join('') + '</div>'];
+  if (!flow.starters && !flow.finishers) {
+    parts.push('<p class="empty">' + T('noTimeline') + '</p>');
+    return parts.join('\n');
+  }
+  const chartId = 'ch' + (++chartSeq);
+  const classes = classFlowSeries(event);
+  const clockBase = flow.firstStart != null ? flow.firstStart : flow.firstFinish;
+  const startByClass = flow.startByClass || {};
+  const classIds = classes.map(c => c.id);
+  const extraStartMins = [];
+  Object.keys(startByClass).forEach(cid => {
+    if (classIds.indexOf(cid) === -1) for (const m of startByClass[cid]) extraStartMins.push(m);
+  });
+  extraStartMins.sort((a, b) => a - b);
+  const cfg = {
+    type: 'flow', id: chartId,
+    starts: flow.startMinutes, classes, clockBase, xMode: 'rel',
+    startByClass, extraStartMins,
+    markers: flow.relayMarkers || [],
+  };
+  rebuildLegendItems(cfg);
+  parts.push(sectionHtml(T('secFlow'),
+    '<div class="legend" data-chart="' + chartId + '">' + legendInner(cfg, 0) + '</div>' +
+    axisToggle(cfg) +
+    chartCanvas(cfg)));
+  return parts.join('\n');
+}
+
+function renderIndividual(event) {
+  return renderHeader(event) + '\n' + flowSection(event) + '\n' + paceSection(event);
+}
+
+function paceSection(event) {
+  const paces = classPaces(event);
+  if (!paces.length) return '';
+  const id = 'ch' + (++chartSeq);
+  return sectionHtml(T('secClassPaces'),
+    chartCanvas({ type: 'pace', id, paces }) + '<p class="chartcap">' + esc(T('hPace')) + '</p>');
+}
+
+function renderRelay(event) {
+  const parts = [renderHeader(event), flowSection(event)];
+  parts.push(paceSection(event));
+  return parts.join('\n');
+}
+
+function renderMultistage() {
+  const stages = state.stageEvents;
+  const out = [renderHeader(state.event)];
+  if (!stages.length) {
+    out.push('<p class="empty">' + T('noStages') + '</p>');
+    return out.join('\n');
+  }
+  stages.forEach((s, i) => {
+    out.push('<div class="stagehead"><h3>' + T('secStage') + ' ' + (s.stageNumber || (i + 1)) +
+      (s.name ? ' — ' + esc(s.name) : '') + '</h3></div>');
+    out.push(flowSection(s));
+    out.push(paceSection(s));
+  });
+  return out.join('\n');
+}
+
+function render() {
+  const event = state.event;
+  if (!event) return;
+  let html;
+  if (isMultistageEvent(event)) html = renderMultistage();
+  else if (event.raceType === 'Relay') html = renderRelay(event);
+  else html = renderIndividual(event);
+  const out = $('output');
+  if (out) {
+    out.innerHTML = html;
+    paintCharts();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Orchestration
+// ════════════════════════════════════════════════════════════════════
+async function analyze(inputOverride) {
+  const input = (inputOverride != null ? inputOverride : $('slugInput') ? $('slugInput').value : '').trim();
+  if (!input) return;
+  setStatus(T('statusLoading') + ' …', 'ok');
+  state.event = null;
+  state.stageEvents = [];
+  try {
+    const event = await fetchEvent(input);
+    state.event = event;
+    if (isMultistageEvent(event)) {
+      const stages = event.events || [];
+      for (let i = 0; i < stages.length; i++) {
+        try {
+          setStatus(T('statusLoading') + ' — ' + (i + 1) + '/' + stages.length + ' …', 'ok');
+          const se = await fetchEventByUUID(stages[i].id);
+          se.stageNumber = stages[i].stageNumber != null ? stages[i].stageNumber : i + 1;
+          state.stageEvents.push(se);
+        } catch (e) {
+          console.warn('Stage load failed:', stages[i].id, e);
+        }
+      }
+    }
+    render();
+    setStatus(T('statusDone'), 'ok');
+  } catch (e) {
+    setStatus(T('errFetch') + ': ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  CSV export
+// ════════════════════════════════════════════════════════════════════
+function toCSV(rows) {
+  return rows.map(r => r.map(cell => {
+    const s = String(cell == null ? '' : cell);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(';')).join('\r\n');
+}
+
+function addFlowRows(rows, event) {
+  const flow = eventFlow(event);
+  const sec = (a, b) => a != null && b != null ? Math.round((b - a) / 1000) : '';
+  rows.push([T('cStarters'), flow.starters]);
+  rows.push([T('cFinishers'), flow.finishers]);
+  rows.push([T('cDnf'), flow.dnf]);
+  rows.push([T('cIntoForest'), sec(flow.firstStart, flow.lastStart)]);
+  rows.push([T('cFirstResult'), sec(flow.firstStart, flow.firstFinish)]);
+  rows.push([T('cResultsWait'), sec(flow.firstFinish, flow.lastFinish)]);
+  rows.push([T('cTotal'), sec(flow.firstStart, flow.lastFinish)]);
+  if (flow.firstExchange != null) rows.push([T('cFirstExchange'), fmtClock(flow.firstExchange)]);
+  const p = finishPeak(flow.finishMinutes);
+  if (p) rows.push([T('pPeak'), fmtMin(p.from) + '–' + fmtMin(p.to), p.count]);
+  const cls = classFlowSeries(event);
+  if (cls.length) {
+    rows.push([]);
+    rows.push([T('secClassFinishes')]);
+    rows.push([T('hClass'), T('hFin'), T('hFirst'), T('hLast')]);
+    cls.forEach(c => rows.push([
+      c.className,
+      c.mins.length,
+      fmtMin(c.mins[0]),
+      fmtMin(c.mins[c.mins.length - 1]),
+    ]));
+  }
+}
+
+function buildCSV() {
+  const event = state.event;
+  if (!event) return '';
+  const rows = [];
+  if (isMultistageEvent(event)) {
+    state.stageEvents.forEach((stage, i) => {
+      rows.push([]);
+      rows.push([T('secStage') + ' ' + (stage.stageNumber || (i + 1)) + (stage.name ? ' ' + stage.name : '')]);
+      addFlowRows(rows, stage);
+    });
+  } else {
+    addFlowRows(rows, event);
+    const paces = classPaces(event);
+    if (paces.length) {
+      rows.push([]);
+      rows.push([T('secClassPaces')]);
+      rows.push([T('hClass'), T('hPace'), T('hRunners')]);
+      paces.forEach(c => rows.push([c.className, c.paceSec, c.runners]));
+    }
+  }
+  return toCSV(rows);
+}
+
+function downloadFile(name, content, mime) {
+  if (typeof Blob === 'undefined') return;
+  try {
+    const blob = new Blob([content], { type: mime || 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = String(name).replace(/[^a-z0-9_\-\u00e4\u00f6\u00e5\u00c4\u00d6\u00c5 ]/gi, '_').trim().replace(/\s+/g, '_') + '.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { console.error(e); }
+}
+
+function exportCSV() {
+  if (!state.event) return;
+  downloadFile((state.event.name || 'analysis'), buildCSV(), 'text/csv;charset=utf-8');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════════════════
+function wireUI() {
+  setLang(lang);
+  const ab = $('analyzeBtn');
+  if (ab) ab.addEventListener('click', () => { analyze(); });
+  const slug = $('slugInput');
+  if (slug) slug.addEventListener('keydown', e => { if (e.key === 'Enter') analyze(); });
+  const lb = $('langBtn');
+  if (lb) lb.addEventListener('click', () => setLang(lang === 'fi' ? 'en' : 'fi'));
+  const pb = $('printBtn');
+  if (pb) pb.addEventListener('click', () => { try { window.print(); } catch (e) {} });
+  const cb = $('csvBtn');
+  if (cb) {
+    cb.style.display = '';
+    cb.addEventListener('click', exportCSV);
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('resize', () => { if (state.event) paintCharts(); });
+  }
+  setupChartInteractions();
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('DOMContentLoaded', wireUI);
+}
+</script>
+</body>
+</html>
