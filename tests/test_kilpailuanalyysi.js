@@ -166,6 +166,36 @@ const multiEvent = {
   events: [{ id: 's1' }, { id: 's2' }], results: [], courseClasses: [], courses: [],
 };
 
+// Event with a "Si-style" corrupt timestamp: two results carry a finish
+// time hours before the event even begins (time 0, status No time). These must
+// be excluded from the flow and reported as anonymized warnings.
+const corruptEvent = {
+  id: 'e-corrupt', name: 'Korruptiokisa', begin: '2026-03-21T08:00:00.000Z',
+  ending: '2026-03-21T10:00:00.000Z', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [{ id: 'ca', name: 'A' }],
+  courses: [{ id: 'ca', name: 'A', distance: 3000, controls: [] }],
+  results: [
+    { id: 'c1', classId: 'ca', courseId: 'ca', bibNumber: 1, name: 'Hyvä Juoksija', status: 'Ok', time: 600, finishTime: '2026-03-21T08:10:00.000Z' },
+    { id: 'c2', classId: 'ca', bibNumber: 2, name: 'Paha Aikaleima', status: 'No time', time: 0, finishTime: '2026-03-21T02:00:00.000Z' },
+    { id: 'c3', classId: 'ca', bibNumber: 3, name: 'Toinen Paha', status: 'No time', time: 0, finishTime: '2026-03-21T02:05:00.000Z' },
+  ],
+};
+
+// Event whose ending is in the past but still has runners "Competing" (on
+// course). They carry no timestamps, so they never disturb the flow, but the
+// organizer must be told someone is still out.
+const onCourseEvent = {
+  id: 'e-oc', name: 'Keskeneräinen kisa', begin: '2026-03-21T08:00:00.000Z',
+  ending: '2026-03-21T10:00:00.000Z', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [{ id: 'oc', name: 'A' }],
+  courses: [{ id: 'oc', name: 'A', distance: 3000, controls: [] }],
+  results: [
+    { id: 'o1', classId: 'oc', courseId: 'oc', bibNumber: 1, name: 'Matti Meikäläinen', status: 'Ok', time: 600, finishTime: '2026-03-21T08:10:00.000Z' },
+    { id: 'o2', classId: 'oc', bibNumber: 2, name: 'Jaakko Toropainen', status: 'Competing' },
+    { id: 'o3', classId: 'oc', bibNumber: 3, name: 'Kalle Kettunen', status: 'Competing' },
+  ],
+};
+
 // ── mock fetch ────────────────────────────────────────────────────────
 global.fetch = (url) => {
   if (url.includes('/trpc/eventsTrpcRouter.getEvent')) {
@@ -198,6 +228,8 @@ try {
       legendInner, axisToggle, effectiveClasses, combineSelected, clearCombines, rebuildLegendItems,
       buildCSV, toCSV, addFlowRows, analyze, render, setLang, T,
       runnerRows, statusConst: STATUS_OK, CLASS_PALETTE, paceSection, paintPace, drawFlowChart,
+      flowWarnings, droppedWarnings, onCourseWarnings, warnLabel, warnBoxHtml, flowSection, tsInWindow, initials,
+      isDoubleTapSecond, dblTapMs: DBL_TAP_MS,
     };
     global.__state = {
       event: () => state.event,
@@ -282,6 +314,43 @@ ftOnly.results = ftOnly.results.map(r => {
 const ftFlow = P.eventFlow(ftOnly);
 assert('flow: finishTime-only derives starts', ftFlow.starters === 11, String(ftFlow.starters));
 assert('flow: finishTime-only matches metrics', ftFlow.firstStart === flow.firstStart && ftFlow.lastFinish === flow.lastFinish);
+
+// ── corrupt timestamp exclusion + anonymized warnings ──
+const cflow = P.eventFlow(corruptEvent);
+assert('corrupt: pre-begin finish rows excluded from flow', cflow.starters === 1 && cflow.finishers === 1 && (cflow.firstFinish - cflow.firstStart) / 60000 === 10, JSON.stringify(cflow));
+const cwarns = P.flowWarnings(corruptEvent);
+assert('corrupt: one warning per corrupt runner (grouped by initials)', cwarns.length === 2 && cwarns.every(w => w.count === 1), JSON.stringify(cwarns));
+const cpa = cwarns.find(w => w.name === 'PA');
+const ctp = cwarns.find(w => w.name === 'TP');
+assert('corrupt: warning reason finishBeforeBegin', cpa && cpa.reason === 'finishBeforeBegin', JSON.stringify(cwarns));
+assert('corrupt: warning has class + status + initials, no full name', cpa && cpa.className === 'A' && cpa.status === 'No time' && cpa.name === 'PA', JSON.stringify(cwarns));
+assert('corrupt: warning label shows initials but not full name', P.warnLabel(cpa).includes('PA') && P.warnLabel(cpa).includes('6:00:00') && P.warnLabel(cpa).includes('No time') && !P.warnLabel(cpa).includes('Aikaleima'), P.warnLabel(cpa));
+assert('corrupt: distinct corrupt runners keep distinct initials', ctp && ctp.name === 'TP' && P.warnLabel(ctp).includes('TP'), P.warnLabel(ctp));
+const warnSec = P.flowSection(corruptEvent);
+assert('corrupt: flow section renders warnbox', warnSec.includes('warnbox') && warnSec.includes('Pois jätetyt tulokset'), warnSec.slice(0, 200));
+assert('corrupt: flow section keeps runner names out', !warnSec.includes('Paha Aikaleima') && !warnSec.includes('Toinen Paha'));
+assert('corrupt: clean event produces no warnings', P.flowWarnings(indEvent).length === 0);
+const rowsC = [];
+P.addFlowRows(rowsC, corruptEvent);
+assert('corrupt: CSV includes warnings block', rowsC.some(r => r[0] === 'Pois jätetyt tulokset'), JSON.stringify(rowsC));
+assert('corrupt: normal event CSV has no warnings block', (() => { const r2 = []; P.addFlowRows(r2, indEvent); return !r2.some(x => x[0] === 'Pois jätetyt tulokset'); })());
+S.setEvent(corruptEvent);
+assert('corrupt: full CSV export includes warning lines', P.buildCSV().includes('PA') && P.buildCSV().includes('TP') && P.buildCSV().includes('No time'), P.buildCSV().split('\n').filter(l => l.includes('A')).join('|'));
+
+// ── still-on-course runners after the event has ended ──
+const ocs = P.onCourseWarnings(onCourseEvent);
+assert('on-course: one warning per on-course runner', ocs.length === 2, JSON.stringify(ocs));
+assert('on-course: warning reason stillOnCourse with initials', ocs.every(w => w.reason === 'stillOnCourse' && w.status === 'Competing') && ocs.some(w => w.name === 'JT') && ocs.some(w => w.name === 'KK'), JSON.stringify(ocs));
+assert('on-course: label has initials + status + reason, no full name', P.warnLabel(ocs[0]).includes('JT') && P.warnLabel(ocs[0]).includes('Competing') && P.warnLabel(ocs[0]).includes('vielä radalla') && !P.warnLabel(ocs[0]).includes('Toropainen'), P.warnLabel(ocs[0]));
+const ocSec = P.flowSection(onCourseEvent);
+assert('on-course: flow section renders its own warnbox', ocSec.includes('Vielä radalla') && ocSec.includes('warnbox'), ocSec.slice(0, 300));
+assert('on-course: flow section keeps runner names out', !ocSec.includes('Jaakko Toropainen') && !ocSec.includes('Kalle Kettunen'));
+assert('on-course: finishers unaffected (still 1 finisher)', P.eventFlow(onCourseEvent).finishers === 1 && P.eventFlow(onCourseEvent).starters === 1);
+const rowsO = [];
+P.addFlowRows(rowsO, onCourseEvent);
+assert('on-course: CSV has still-on-course block', rowsO.some(r => r[0] === 'Vielä radalla') && rowsO.some(r => Array.isArray(r) && r[0] === 'JT · A · Competing · vielä radalla kisan päättymisen jälkeen'), JSON.stringify(rowsO));
+assert('on-course: no warnings while the event is still running', P.onCourseWarnings({ ...onCourseEvent, ending: '2099-01-01T10:00:00.000Z' }).length === 0);
+assert('initials: multi-part name → first letters', P.initials('Sikström Jack') === 'SJ' && P.initials('vanhanen') === 'V' && P.initials(null) === '');
 
 // ── relay markers (mass start + first exchange) ──
 const rmf = P.eventFlow(relayEvent);
@@ -470,6 +539,18 @@ assert('lang: T en', P.T('btnAnalyze') === 'Analyze');
 assert('lang: langBtn label EN→FI', document.getElementById('langBtn').textContent === 'FI');
 P.setLang('fi');
 assert('lang: back to fi', S.lang() === 'fi' && P.T('secFlow') === 'Kisapäivän kulku');
+
+// ── mobile tap-zoom guard (double-tap must never zoom the chart page) ──
+const tapNow = 2000000;
+assert('tap-zoom: second tap within window → cancel', P.isDoubleTapSecond([{}], tapNow - 100, tapNow) === true);
+assert('tap-zoom: first tap never cancelled', P.isDoubleTapSecond([{}], 0, tapNow) === false);
+assert('tap-zoom: slow tap not part of double-tap', P.isDoubleTapSecond([{}], tapNow - 600, tapNow) === false);
+assert('tap-zoom: pinch (2 fingers) never cancelled', P.isDoubleTapSecond([{}, {}], tapNow - 100, tapNow) === false);
+assert('tap-zoom: no touches never cancelled', P.isDoubleTapSecond(null, tapNow - 100, tapNow) === false && P.isDoubleTapSecond(undefined, tapNow - 100, tapNow) === false);
+assert('tap-zoom: guard threshold is finite and positive', Number.isFinite(P.dblTapMs) && P.dblTapMs > 0);
+assert('tap-zoom: canvas CSS uses touch-action manipulation', /touch-action:\s*manipulation/.test(html));
+assert('tap-zoom: touchstart is non-passive so preventDefault works', code.indexOf("passive: false") !== -1);
+assert('tap-zoom: touchstart cancels via guard before zoom can arm', /isDoubleTapSecond\(e\.touches, lastTapMs\)[\s\S]{0,80}preventDefault/.test(code));
 
 // ── fetch flow: slug → tRPC → REST → render ──
 (async () => {

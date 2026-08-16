@@ -139,7 +139,7 @@
   }
   .panel h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0 8px; }
 
-  canvas.chart { display: block; max-width: 100%; }
+  canvas.chart { display: block; max-width: 100%; touch-action: manipulation; }
   .chartwrap { position: relative; }
   .chartcap { margin: 4px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
   .charttip {
@@ -183,6 +183,20 @@
   .stagehead h3 { font-size: 15px; color: var(--primary); }
 
   .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+  .warnbox {
+    background: #fdf3e7;
+    border: 1px solid #f0d9b8;
+    border-left: 4px solid var(--warn);
+    color: #7a5410;
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .warnbox .wtitle { font-weight: 700; margin-bottom: 2px; }
+  .warnrow { display: block; }
 
   @media print {
     .topbar, .urlbar, .status { display: none; }
@@ -273,6 +287,15 @@ const LANGS = {
     noStages: 'Kilpailun osuuksia ei löytynyt',
     noTimeline: 'Aikaleimoja ei ole saatavilla tästä kisasta',
     empty: 'Ei tuloksia',
+    warnTitle: 'Pois jätetyt tulokset',
+    warnIntro: 'Seuraavat tulokset jätettiin pois, koska niiden aikaleima ei mahdu kisan aikaikkunaan:',
+    wFinish: 'maaliaika',
+    wStart: 'lähtöaika',
+    wBeforeStart: 'ennen kisan alkua',
+    wAfterEnd: 'kisan päättymisen jälkeen',
+    ocTitle: 'Vielä radalla',
+    ocIntro: 'Kisa on päättynyt, mutta nämä osallistujat eivät ole maalissa:',
+    ocStatus: 'vielä radalla kisan päättymisen jälkeen',
   },
   en: {
     inputPlaceholder: 'Navisport event URL or slug (e.g. navisport.com/events/hyvinkaan-talvirastit-2026)',
@@ -325,6 +348,15 @@ const LANGS = {
     noStages: 'No stages found for this event',
     noTimeline: 'No timestamps available for this event',
     empty: 'No results',
+    warnTitle: 'Excluded results',
+    warnIntro: 'The following results were excluded because their timestamp is outside the event window:',
+    wFinish: 'finish',
+    wStart: 'start',
+    wBeforeStart: 'before the event start',
+    wAfterEnd: 'after the event end',
+    ocTitle: 'Still on course',
+    ocIntro: 'The event has ended but these runners have not finished:',
+    ocStatus: 'still on course after the event ended',
   },
 };
 
@@ -438,16 +470,80 @@ function parseTS(iso) {
   return isFinite(t) ? t : null;
 }
 
-function flowRows(event) {
-  const results = event.results || [];
-  const rowOf = r => {
-    let start = parseTS(r.startTime);
-    let finish = parseTS(r.finishTime);
-    const dur = r.time != null && r.time > 0 ? r.time : null;
-    if (start == null && finish != null && dur != null) start = finish - dur * 1000;
-    if (finish == null && start != null && dur != null) finish = start + dur * 1000;
-    return { start, finish, duration: dur, status: classifyStatus(r.status), classId: r.classId };
+// Tolerance used when validating timestamps against the event window (3 h).
+const TS_TOL = 3 * 3600 * 1000;
+
+// True when a timestamp is inside the event's [begin, ending] window (with a
+// tolerance for early starts and late finishers). Null/unknown → allowed.
+function tsInWindow(event, ts) {
+  if (ts == null) return true;
+  const begin = parseTS(event.begin);
+  const ending = parseTS(event.ending);
+  if (begin != null && ts < begin - TS_TOL) return false;
+  if (ending != null && ts > ending + TS_TOL) return false;
+  return true;
+}
+
+// Initials of a person's name parts (e.g. "Sikström Jack" → "JS"), used to
+// identify a runner in warnings without printing the full name.
+function initials(name) {
+  return String(name == null ? '' : name).trim().split(/\s+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase()).join('');
+}
+
+// True when a result status means the runner is still on course (started but
+// not finished). Navisport uses "Competing"; other systems may differ.
+function isOnCourseStatus(status) {
+  const st = String(status == null ? '' : status).trim().toLowerCase();
+  return st === 'competing' || st === 'on course' || st === 'in progress' || st === 'running';
+}
+
+// Timestamp sanity check for a single result. Returns a warning with the
+// runner's initials when the start/finish cannot be inside the event window
+// (e.g. a finish recorded hours before the event begins — "Sikström-style"
+// corrupt data that would otherwise skew the flow chart and the summary
+// cards), else null.
+function makeRowCheck(event) {
+  const begin = parseTS(event.begin);
+  const ending = parseTS(event.ending);
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  return (r, start, finish) => {
+    let reason = null, ts = null, delta = null;
+    if (finish != null && !tsInWindow(event, finish)) {
+      if (begin != null && finish < begin - TS_TOL) {
+        reason = 'finishBeforeBegin'; ts = finish; delta = begin - finish;
+      } else if (ending != null) {
+        reason = 'finishAfterEnd'; ts = finish; delta = finish - ending;
+      }
+    } else if (start != null && ending != null && start > ending + TS_TOL) {
+      reason = 'startAfterEnd'; ts = start; delta = start - ending;
+    }
+    if (!reason) return null;
+    return {
+      reason,
+      name: initials(r.name),
+      className: cc[r.classId] || '',
+      status: String(r.status == null ? '' : r.status),
+      clock: fmtClock(ts),
+      deltaSec: Math.round(delta / 1000),
+    };
   };
+}
+
+// Rows plus anonymized warnings for results dropped by the timestamp check.
+function buildFlowRows(event) {
+  const results = event.results || [];
+  const warnings = [];
+  const check = makeRowCheck(event);
+  const mk = (r, start, finish, dur, extra) => {
+    const w = check(r, start, finish);
+    if (w) { warnings.push(w); return null; }
+    const row = { start, finish, duration: dur, status: classifyStatus(r.status), classId: r.classId };
+    if (extra) Object.assign(row, extra);
+    return row;
+  };
+  let rows;
   if (event.raceType === 'Relay') {
     const teams = results.filter(r => r.resultType === 'Team');
     const legs = results.filter(r => r.resultType !== 'Team');
@@ -461,7 +557,7 @@ function flowRows(event) {
         const pid = l.parentId != null ? l.parentId : l.bibNumber;
         (matesByParent[pid] = matesByParent[pid] || []).push(l);
       });
-      return legs.map(l => {
+      rows = legs.map(l => {
         const pid = l.parentId != null ? l.parentId : l.bibNumber;
         const team = l.parentId != null ? teamById[l.parentId] : null;
         let start = null;
@@ -481,12 +577,90 @@ function flowRows(event) {
         let finish = start != null && dur != null ? start + dur * 1000 : null;
         const f = parseTS(l.finishTime);
         if (f != null) finish = f;
-        return { start, finish, duration: dur, status: classifyStatus(l.status), classId: l.classId, leg: l.leg };
-      }).filter(r => r.start != null || r.finish != null);
+        return mk(l, start, finish, dur, { leg: l.leg });
+      }).filter(r => r != null && (r.start != null || r.finish != null));
+    } else {
+      rows = teams.map(t => mk(t, parseTS(t.startTime), parseTS(t.finishTime),
+        t.time != null && t.time > 0 ? t.time : null))
+        .filter(r => r != null && (r.start != null || r.finish != null));
     }
-    return teams.map(rowOf);
+  } else {
+    rows = results.filter(r => r.resultType !== 'Team').map(r => {
+      let start = parseTS(r.startTime);
+      let finish = parseTS(r.finishTime);
+      const dur = r.time != null && r.time > 0 ? r.time : null;
+      if (start == null && finish != null && dur != null) start = finish - dur * 1000;
+      if (finish == null && start != null && dur != null) finish = start + dur * 1000;
+      return mk(r, start, finish, dur);
+    }).filter(r => r != null);
   }
-  return results.filter(r => r.resultType !== 'Team').map(rowOf);
+  return { rows, warnings };
+}
+
+function flowRows(event) {
+  return buildFlowRows(event).rows;
+}
+
+// Warnings for results dropped by the timestamp check, grouped by
+// reason + initials + class + status so repeated corrupt entries collapse.
+function droppedWarnings(event) {
+  const groups = {};
+  buildFlowRows(event).warnings.forEach(w => {
+    const key = w.reason + '|' + w.name + '|' + w.className + '|' + w.status;
+    if (groups[key]) groups[key].count++;
+    else groups[key] = Object.assign({}, w, { count: 1 });
+  });
+  return Object.keys(groups).map(k => groups[k]);
+}
+
+// Warnings for runners still on course after the event has ended. Only fires
+// once the event ending is in the past (a live feed analyzed mid-event must
+// not flag runners who are legitimately still out). Each runner gets its own
+// line so the initials can be used to look the runner up.
+function onCourseWarnings(event) {
+  const ending = parseTS(event.ending);
+  if (ending == null || Date.now() <= ending) return [];
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const out = [];
+  (event.results || []).forEach(r => {
+    if (r.resultType === 'Team' || !isOnCourseStatus(r.status)) return;
+    out.push({
+      reason: 'stillOnCourse',
+      name: initials(r.name),
+      className: cc[r.classId] || '',
+      status: String(r.status == null ? '' : r.status),
+      clock: null,
+      deltaSec: null,
+      count: 1,
+    });
+  });
+  return out;
+}
+
+// All warnings (dropped rows + still-on-course), kept for the CSV export.
+function flowWarnings(event) {
+  return droppedWarnings(event).concat(onCourseWarnings(event));
+}
+
+// One-line, name-free description of a result warning (for UI and CSV).
+function warnLabel(w) {
+  const parts = [w.name, w.className, w.status];
+  if (w.reason === 'stillOnCourse') {
+    parts.push(T('ocStatus'));
+  } else {
+    const what = w.reason === 'startAfterEnd' ? T('wStart') : T('wFinish');
+    const when = w.reason === 'finishBeforeBegin' ? T('wBeforeStart') : T('wAfterEnd');
+    parts.push(what + ' ' + w.clock + ' (' + fmtTime(w.deltaSec) + ' ' + when + ')');
+  }
+  return parts.filter(Boolean).join(' · ');
+}
+
+function warnBoxHtml(title, intro, warnings) {
+  return '<div class="warnbox"><div class="wtitle">' + esc(title) + '</div>' +
+    '<div>' + esc(intro) + '</div>' +
+    warnings.map(w => '<span class="warnrow">' + (w.count > 1 ? esc(w.count + ' × ') : '') + esc(warnLabel(w)) + '</span>').join('') +
+    '</div>';
 }
 
 // A mass re-start (relay "jälkilähtö"): a group of leg-N runners sent out
@@ -500,7 +674,7 @@ function findMassRestart(event, base) {
   const prevFinish = {};
   rows.filter(r => (r.leg || 0) >= 1).forEach(l => {
     const f = parseTS(l.finishTime);
-    if (f == null) return;
+    if (f == null || !tsInWindow(event, f)) return;
     const key = l.parentId + '|' + l.leg;
     if (prevFinish[key] == null || f < prevFinish[key]) prevFinish[key] = f;
   });
@@ -509,7 +683,7 @@ function findMassRestart(event, base) {
   const MIN_GAP = 60000;
   legs.forEach(l => {
     const start = parseTS(l.startTime);
-    if (start == null) return;
+    if (start == null || !tsInWindow(event, start)) return;
     const legKey = l.parentId + '|' + (l.leg || 0);
     if (seen[legKey]) return;
     seen[legKey] = true;
@@ -532,8 +706,10 @@ function findMassRestart(event, base) {
 // when it holds ≥ max(3, 15%) of the starters. Returns relative minutes.
 function firstLegMassStarts(event, base) {
   const results = event.results || [];
-  const teamStarts = results.filter(r => r.resultType === 'Team' && parseTS(r.startTime) != null).map(r => parseTS(r.startTime));
-  const leg1Starts = results.filter(r => r.resultType !== 'Team' && (r.leg || 0) === 1 && parseTS(r.startTime) != null).map(r => parseTS(r.startTime));
+  const teamStarts = results.filter(r => r.resultType === 'Team' && parseTS(r.startTime) != null)
+    .map(r => parseTS(r.startTime)).filter(t => tsInWindow(event, t));
+  const leg1Starts = results.filter(r => r.resultType !== 'Team' && (r.leg || 0) === 1 && parseTS(r.startTime) != null)
+    .map(r => parseTS(r.startTime)).filter(t => tsInWindow(event, t));
   const times = teamStarts.length ? teamStarts : leg1Starts;
   if (!times.length) return [];
   const thr = Math.max(3, Math.ceil(times.length * 0.15));
@@ -1013,13 +1189,19 @@ function paintFlow(c, cfg, w, h, dpr, cross) {
   const hidden = cfg.hiddenIds || [];
   const hiddenAny = !!hidden.length || !!cfg.hideStarts;
   const eff = effectiveClasses(cfg);
-  const classes = eff.filter(cl => hidden.indexOf(cl.id) === -1);
+  // Sanitize: ignore any non-finite minute so a corrupt value can never
+  // produce a NaN extent or a blank canvas.
+  const classes = eff.filter(cl => hidden.indexOf(cl.id) === -1).map(cl => ({
+    id: cl.id, className: cl.className, color: cl.color,
+    mins: (cl.mins || []).filter(m => isFinite(m)).sort((a, b) => a - b),
+    starts: (cl.starts || []).filter(m => isFinite(m)).sort((a, b) => a - b),
+  }));
   let starts;
   if (cfg.hideStarts) starts = [];
-  else if (!hiddenAny) starts = (cfg.starts || []).slice();
+  else if (!hiddenAny) starts = (cfg.starts || []).filter(m => isFinite(m)).slice();
   else {
     starts = [];
-    for (const cl of classes) for (const m of (cl.starts || [])) starts.push(m);
+    for (const cl of classes) for (const m of cl.starts) starts.push(m);
     for (const m of (cfg.extraStartMins || [])) starts.push(m);
     starts.sort((a, b) => a - b);
   }
@@ -1152,6 +1334,21 @@ function setupChartInteractions() {
   });
 }
 
+// Double-tap-to-zoom guard: a second tap landing within this many
+// milliseconds of the previous tap is part of a double-tap. The chart cancels
+// such a tap so a mobile browser can never zoom the page while the organizer
+// is just inspecting the flow graph.
+const DBL_TAP_MS = 500;
+
+// True when a touch should be cancelled to stop double-tap-to-zoom — i.e. a
+// new single-finger touch starting within DBL_TAP_MS of the previous tap.
+// `now` is injectable for tests.
+function isDoubleTapSecond(touches, lastTapMs, now) {
+  if (!touches || touches.length !== 1) return false;
+  const n = now != null ? now : Date.now();
+  return n - lastTapMs < DBL_TAP_MS;
+}
+
 function attachChartTip(c) {
   if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
   const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
@@ -1186,8 +1383,37 @@ function attachChartTip(c) {
     if (ty < 2) ty = e.clientY - wr.top + 16;
     tip.style.top = ty + 'px';
   };
-  c.addEventListener('mousemove', show);
+  let lastTouchEnd = 0;
+  c.addEventListener('mousemove', (e) => {
+    if (Date.now() - lastTouchEnd < 350) return;
+    show(e);
+  });
   c.addEventListener('mouseleave', () => { tip.hidden = true; redraw(); });
+  // Touch: tap to inspect, release to hide. Suppresses the synthesized
+  // mousemove that immediately follows a tap so the tooltip does not stick.
+  let tapX = 0, tapY = 0, lastTapMs = 0;
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) { tapX = t.clientX; tapY = t.clientY; show({ clientX: t.clientX, clientY: t.clientY }); }
+    // Kill the browser's double-tap-to-zoom on the chart: cancel the second
+    // tap of a double-tap at touchstart, before the browser can arm the zoom.
+    // preventDefault() on touchend alone is too late in several browsers. A
+    // drag is never caught here (a second finger cannot go down mid-drag), so
+    // scrolling over the chart keeps working and the tooltip was already shown.
+    if (isDoubleTapSecond(e.touches, lastTapMs)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+  c.addEventListener('touchend', (e) => {
+    lastTouchEnd = Date.now();
+    const t = e.changedTouches && e.changedTouches[0];
+    if (t && Math.abs(t.clientX - tapX) < 10 && Math.abs(t.clientY - tapY) < 10) {
+      lastTapMs = Date.now();
+      if (e.cancelable) e.preventDefault();
+    }
+    tip.hidden = true;
+    redraw();
+  }, { passive: false });
 }
 
 function paintCharts() {
@@ -1199,7 +1425,7 @@ function paintCharts() {
     const cfg = chartStore[c.dataset.chartId];
     if (!cfg) continue;
     const parentW = c.parentElement ? c.parentElement.clientWidth : 800;
-    const w = Math.max(300, parentW - 36);
+    const w = Math.max(200, parentW - 36);
     const h = cfg.type === 'pace'
       ? Math.max(120, 18 * (cfg.paces || []).length + 40)
       : 280;
@@ -1323,6 +1549,10 @@ function flowCards(flow) {
 function flowSection(event) {
   const flow = eventFlow(event);
   const parts = ['<div class="cards">' + flowCards(flow).join('') + '</div>'];
+  const excluded = droppedWarnings(event);
+  if (excluded.length) parts.push(warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded));
+  const onCourse = onCourseWarnings(event);
+  if (onCourse.length) parts.push(warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse));
   if (!flow.starters && !flow.finishers) {
     parts.push('<p class="empty">' + T('noTimeline') + '</p>');
     return parts.join('\n');
@@ -1466,6 +1696,18 @@ function addFlowRows(rows, event) {
       fmtMin(c.mins[0]),
       fmtMin(c.mins[c.mins.length - 1]),
     ]));
+  }
+  const excluded = droppedWarnings(event);
+  if (excluded.length) {
+    rows.push([]);
+    rows.push([T('warnTitle')]);
+    excluded.forEach(w => rows.push([w.count > 1 ? w.count + ' × ' + warnLabel(w) : warnLabel(w)]));
+  }
+  const onCourse = onCourseWarnings(event);
+  if (onCourse.length) {
+    rows.push([]);
+    rows.push([T('ocTitle')]);
+    onCourse.forEach(w => rows.push([warnLabel(w)]));
   }
 }
 
