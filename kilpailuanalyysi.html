@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kilpailuanalyysi – Navisport</title>
+<title>Tulospalvelupaavon kilpailuanalyysi - Navisport tapahtumasta</title>
 <style>
   :root {
     --bg: #f4f6f9;
@@ -277,7 +277,7 @@ const LANGS = {
     cFinishers: 'Maaliin',
     cDnf: 'Keskeytti',
     cIntoForest: 'Kaikki metsässä',
-    cFirstResult: 'Ensimmäinen tulos',
+    cFirstResult: 'Aika ensimmäiseen maaliin',
     cResultsWait: 'Tulosten odotus',
     cTotal: 'Koko kisa',
     cPeak: 'Maaliruuhkan huippu',
@@ -341,7 +341,7 @@ const LANGS = {
     cFinishers: 'Finishers',
     cDnf: 'DNF',
     cIntoForest: 'All into the forest',
-    cFirstResult: 'First result',
+    cFirstResult: 'Time to first finisher',
     cResultsWait: 'Results wait',
     cTotal: 'Total event time',
     cPeak: 'Finish peak',
@@ -1688,22 +1688,30 @@ function flowCards(flow, onCourseCount) {
   return cards;
 }
 
-function flowSection(event) {
-  const flow = eventFlow(event);
-  const onCourse = onCourseWarnings(event);
-  const parts = ['<div class="cards">' + flowCards(flow, onCourse.length).join('') + '</div>'];
+// Excluded-results / still-on-course box, returned separately from
+// flowSection's HTML so callers can place it at the very end of the page
+// instead of right after the summary cards.
+function excludedBoxHtml(event, onCourse) {
   const excluded = droppedWarnings(event);
   if (excluded.length) {
     // Still-on-course entries are tacked onto the end of this same box
     // rather than shown as a separate box below it.
-    parts.push(warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded,
-      onCourse.length ? { title: T('ocTitle'), intro: T('ocIntro'), warnings: onCourse } : null));
+    return warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded,
+      onCourse.length ? { title: T('ocTitle'), intro: T('ocIntro'), warnings: onCourse } : null);
   } else if (onCourse.length) {
-    parts.push(warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse));
+    return warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse);
   }
+  return '';
+}
+
+function flowSection(event) {
+  const flow = eventFlow(event);
+  const onCourse = onCourseWarnings(event);
+  const warnBox = excludedBoxHtml(event, onCourse);
+  const parts = ['<div class="cards">' + flowCards(flow, onCourse.length).join('') + '</div>'];
   if (!flow.starters && !flow.finishers) {
     parts.push('<p class="empty">' + T('noTimeline') + '</p>');
-    return parts.join('\n');
+    return { html: parts.join('\n'), warnBox };
   }
   const chartId = 'ch' + (++chartSeq);
   const classes = classFlowSeries(event);
@@ -1726,11 +1734,12 @@ function flowSection(event) {
     '<div class="legend" data-chart="' + chartId + '">' + legendInner(cfg, 0) + '</div>' +
     axisToggle(cfg) +
     chartCanvas(cfg)));
-  return parts.join('\n');
+  return { html: parts.join('\n'), warnBox };
 }
 
 function renderIndividual(event) {
-  return renderHeader(event) + '\n' + flowSection(event) + '\n' + paceSection(event);
+  const flow = flowSection(event);
+  return renderHeader(event) + '\n' + flow.html + '\n' + paceSection(event) + '\n' + flow.warnBox;
 }
 
 function paceRefsLegend(refs) {
@@ -1750,8 +1759,8 @@ function paceSection(event) {
 }
 
 function renderRelay(event) {
-  const parts = [renderHeader(event), flowSection(event)];
-  parts.push(paceSection(event));
+  const flow = flowSection(event);
+  const parts = [renderHeader(event), flow.html, paceSection(event), flow.warnBox];
   return parts.join('\n');
 }
 
@@ -1765,8 +1774,10 @@ function renderMultistage() {
   stages.forEach((s, i) => {
     out.push('<div class="stagehead"><h3>' + T('secStage') + ' ' + (s.stageNumber || (i + 1)) +
       (s.name ? ' — ' + esc(s.name) : '') + '</h3></div>');
-    out.push(flowSection(s));
+    const flow = flowSection(s);
+    out.push(flow.html);
     out.push(paceSection(s));
+    out.push(flow.warnBox);
   });
   return out.join('\n');
 }
@@ -1823,6 +1834,11 @@ async function analyze(inputOverride) {
   try {
     const event = await fetchEvent(input);
     state.event = event;
+    if (typeof document !== 'undefined') {
+      // So a shared link's browser tab (and history entry) identifies the
+      // event on its own, without needing to open it first.
+      document.title = event.name ? event.name + ' – Kilpailuanalyysi' : 'Tulospalvelupaavon kilpailuanalyysi - Navisport tapahtumasta';
+    }
     const id = extractSlug(input);
     if (id) setShareHash(id);
     const sb = $('shareBtn');
@@ -1952,10 +1968,7 @@ function wireUI() {
   const pb = $('printBtn');
   if (pb) pb.addEventListener('click', () => { try { window.print(); } catch (e) {} });
   const cb = $('csvBtn');
-  if (cb) {
-    cb.style.display = '';
-    cb.addEventListener('click', exportCSV);
-  }
+  if (cb) cb.addEventListener('click', exportCSV);
   const sb = $('shareBtn');
   if (sb) sb.addEventListener('click', shareLink);
   if (typeof window !== 'undefined' && window.addEventListener) {
