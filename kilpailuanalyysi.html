@@ -118,10 +118,15 @@
   .evlogo { max-height: 48px; max-width: 130px; object-fit: contain; margin-left: auto; }
 
   .cards {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    /* flex, not grid: with an uneven card count grid's auto-fit leaves the
+       last row's leftover columns empty (a blank gap at the edge on mobile,
+       where only 1-2 columns fit); flex-wrap stretches the last row's cards
+       to fill the full width instead. */
+    display: flex; flex-wrap: wrap;
     gap: 10px; margin-bottom: 18px;
   }
   .card {
+    flex: 1 1 150px;
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 12px 14px; box-shadow: var(--shadow);
   }
@@ -139,9 +144,14 @@
   }
   .panel h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0 8px; }
 
-  canvas.chart { display: block; max-width: 100%; touch-action: manipulation; }
+  /* pan-y (not "manipulation"): "manipulation" still permits pinch-zoom, which
+     is what was actually zooming in on every touch — only page panning should
+     pass through, so pinch-zoom and double-tap-zoom are both disabled here. */
+  canvas.chart { display: block; max-width: 100%; touch-action: pan-y; }
   .chartwrap { position: relative; }
   .chartcap { margin: 4px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+  .pacerefs { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+  .pacerefs .prswatch { display: inline-block; width: 14px; height: 0; margin-right: 5px; border-top: 2px dashed #c46a2a; vertical-align: middle; }
   .charttip {
     position: absolute; pointer-events: none; z-index: 30;
     background: #1c2430; color: #e8edf3; font-size: 12px; line-height: 1.55;
@@ -196,6 +206,7 @@
     margin-bottom: 14px;
   }
   .warnbox .wtitle { font-weight: 700; margin-bottom: 2px; }
+  .warnbox .wtitle.sub { margin-top: 10px; }
   .warnrow { display: block; }
 
   @media print {
@@ -203,6 +214,16 @@
     body { background: #fff; }
     .panel, .evhead { box-shadow: none; }
     #output { max-width: none; padding: 0; }
+  }
+
+  /* Four header buttons (share/print/csv/lang) no longer fit on one line next
+     to the brand on narrow phones — wrap them onto their own row instead of
+     letting the bar overflow the screen width. */
+  @media (max-width: 480px) {
+    .topbar { flex-wrap: wrap; row-gap: 8px; padding: 12px 14px; }
+    .topbar .acts { margin-left: 0; width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+    .brand p { display: none; }
+    .urlbar, .status, #output { padding-left: 14px; padding-right: 14px; }
   }
 </style>
 </head>
@@ -215,6 +236,7 @@
     <p>Navisport-event flow · Tulospalvelupaavo</p>
   </div>
   <div class="acts">
+    <button id="shareBtn" class="btn-hdr btn-hdr-sec" type="button" style="display:none;"></button>
     <button id="printBtn" class="btn-hdr btn-hdr-sec" type="button"></button>
     <button id="csvBtn" class="btn-hdr btn-hdr-sec" type="button" style="display:none;"></button>
     <button id="langBtn" class="btn-hdr btn-hdr-accent" type="button">EN</button>
@@ -241,6 +263,8 @@ const LANGS = {
     btnAnalyze: 'Analysoi',
     btnCsv: 'Lataa CSV',
     btnPrint: 'Tulosta',
+    btnShare: 'Jaa',
+    shareCopied: 'Linkki kopioitu leikepöydälle',
     statusLoading: 'Ladataan ja analysoidaan',
     statusDone: 'Valmis',
     errSlug: 'Tunnista ei voitu päätellä (URL, slug tai UUID)',
@@ -283,6 +307,7 @@ const LANGS = {
     secClassPaces: 'Keskivauhti sarjoittain',
     hPace: 'min/km',
     hRunners: 'Juoksijat',
+    lFastest: 'Nopein',
     secStage: 'Osuus',
     noStages: 'Kilpailun osuuksia ei löytynyt',
     noTimeline: 'Aikaleimoja ei ole saatavilla tästä kisasta',
@@ -302,6 +327,8 @@ const LANGS = {
     btnAnalyze: 'Analyze',
     btnCsv: 'Download CSV',
     btnPrint: 'Print',
+    btnShare: 'Share',
+    shareCopied: 'Link copied to clipboard',
     statusLoading: 'Loading and analyzing',
     statusDone: 'Done',
     errSlug: 'Could not determine an event identifier (URL, slug or UUID)',
@@ -344,6 +371,7 @@ const LANGS = {
     secClassPaces: 'Average pace by class',
     hPace: 'min/km',
     hRunners: 'Runners',
+    lFastest: 'Fastest',
     secStage: 'Stage',
     noStages: 'No stages found for this event',
     noTimeline: 'No timestamps available for this event',
@@ -391,6 +419,7 @@ function setLang(l) {
     ['analyzeBtn', T('btnAnalyze')],
     ['csvBtn', T('btnCsv')],
     ['printBtn', T('btnPrint')],
+    ['shareBtn', T('btnShare')],
   ];
   for (const [id, txt] of els) {
     const el = $(id);
@@ -656,11 +685,23 @@ function warnLabel(w) {
   return parts.filter(Boolean).join(' · ');
 }
 
-function warnBoxHtml(title, intro, warnings) {
-  return '<div class="warnbox"><div class="wtitle">' + esc(title) + '</div>' +
+function warnRowsHtml(warnings) {
+  return warnings.map(w => '<span class="warnrow">' + (w.count > 1 ? esc(w.count + ' × ') : '') + esc(warnLabel(w)) + '</span>').join('');
+}
+
+// `extra` appends a second title/intro/warnings section at the end of the
+// same box (used to tack the still-on-course list onto the excluded-results
+// box instead of showing it as a separate box).
+function warnBoxHtml(title, intro, warnings, extra) {
+  let html = '<div class="warnbox"><div class="wtitle">' + esc(title) + '</div>' +
     '<div>' + esc(intro) + '</div>' +
-    warnings.map(w => '<span class="warnrow">' + (w.count > 1 ? esc(w.count + ' × ') : '') + esc(warnLabel(w)) + '</span>').join('') +
-    '</div>';
+    warnRowsHtml(warnings);
+  if (extra && extra.warnings.length) {
+    html += '<div class="wtitle sub">' + esc(extra.title) + '</div>' +
+      '<div>' + esc(extra.intro) + '</div>' +
+      warnRowsHtml(extra.warnings);
+  }
+  return html + '</div>';
 }
 
 // A mass re-start (relay "jälkilähtö"): a group of leg-N runners sent out
@@ -780,6 +821,13 @@ function eventFlow(event) {
 // distinct hues). Cycles via index % length for events with many classes.
 const CLASS_PALETTE = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
 
+// Fixed elite-pace benchmarks shown as reference lines on the class-pace
+// chart, so a class's average pace can be eyeballed against known results.
+const PACE_REFS = [
+  { label: 'Jukola 2026', paceSec: 5 * 60 + 47, color: '#c46a2a' },
+  { label: 'Alisa Vainio, EM-maraton 2026', paceSec: 3 * 60 + 23, color: '#4e79a7' },
+];
+
 // Per-class finish curves (minutes since first start), largest classes first.
 // Every class gets its own curve.
 function classFlowSeries(event) {
@@ -835,6 +883,7 @@ function classPaces(event) {
   return Object.entries(byClass).map(([cid, paces]) => ({
     className: cc[cid] || cid,
     paceSec: Math.round(paces.reduce((a, b) => a + b, 0) / paces.length),
+    fastestSec: Math.round(Math.min(...paces)),
     runners: paces.length,
   })).sort((a, b) => a.paceSec - b.paceSec);
 }
@@ -1091,6 +1140,7 @@ function drawCrosshair(ctx, w, h, padL, padR, padT, ph, cross) {
   ctx.beginPath();
   ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
 }
 
 // Horizontal bar chart of average pace (min/km) per relay class. No runner
@@ -1100,6 +1150,7 @@ function paintPace(ctx, w, h, cfg) {
   const paces = cfg.paces || [];
   const n = paces.length;
   if (!n) return;
+  const refs = cfg.refs || [];
   const padT = 6, padB = 22;
   const rowH = Math.max(18, Math.floor((h - padT - padB) / n));
   ctx.font = '12px sans-serif';
@@ -1112,7 +1163,10 @@ function paintPace(ctx, w, h, cfg) {
   const padL = nameW;
   const padR = 52;
   const pw = w - padL - padR;
-  const maxV = Math.max(1, Math.ceil(Math.max(...paces.map(p => p.paceSec / 60))));
+  const maxV = Math.max(1, Math.ceil(Math.max(
+    ...paces.map(p => p.paceSec / 60),
+    ...refs.map(r => r.paceSec / 60)
+  )));
   const X = v => padL + (v / maxV) * pw;
   const step = niceStep(maxV);
   ctx.textAlign = 'center';
@@ -1133,12 +1187,85 @@ function paintPace(ctx, w, h, cfg) {
     if (typeof ctx.roundRect === 'function') ctx.roundRect(padL, y + 3, bw, rowH - 8, 4);
     else { ctx.rect(padL, y + 3, bw, rowH - 8); }
     ctx.fill();
+    // Fastest individual pace in the class, overprinted on the same bar as a
+    // plain tick — no static label, the value only shows up in the tooltip
+    // (see attachPaceTip) so the chart doesn't get cluttered with a second number.
+    if (p.fastestSec != null) {
+      const fx = X(p.fastestSec / 60);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fx, y + 3);
+      ctx.lineTo(fx, y + rowH - 5);
+      ctx.stroke();
+    }
     ctx.fillStyle = '#33475b';
     ctx.textAlign = 'right';
     ctx.fillText(p.className, padL - 8, y + rowH / 2);
     ctx.textAlign = 'left';
     ctx.fillText(fmtTime(p.paceSec), X(v) + 6, y + rowH / 2);
   }
+  if (refs.length) drawPaceRefs(ctx, w, padL, padR, padT, h - padB, refs, X);
+  cfg._paceMap = { padL, padR, padT, rowH, paces, X };
+}
+
+// Hit-tests hover/tap position against each row's fastest-pace tick and shows
+// its value in the shared tooltip element — the only place that number appears.
+function attachPaceTip(c) {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
+  if (!tip) return;
+  const cfgOf = () => chartStore[c.dataset.chartId];
+  const show = (clientX, clientY) => {
+    const cfg = cfgOf();
+    const map = cfg && cfg._paceMap;
+    if (!map) { tip.hidden = true; return; }
+    const rect = c.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    const i = Math.floor((py - map.padT) / map.rowH);
+    const p = i >= 0 && i < map.paces.length ? map.paces[i] : null;
+    if (!p || p.fastestSec == null) { tip.hidden = true; return; }
+    const fx = map.X(p.fastestSec / 60);
+    if (Math.abs(px - fx) > 8) { tip.hidden = true; return; }
+    tip.innerHTML = '<b>' + esc(p.className) + '</b><br>' + esc(T('lFastest')) + ': ' + esc(fmtTime(p.fastestSec));
+    tip.hidden = false;
+    const wrap = c.parentElement;
+    const wr = wrap.getBoundingClientRect();
+    const ww = wrap.clientWidth || rect.width;
+    tip.style.left = Math.max(0, Math.min(clientX - wr.left + 14, ww - 220)) + 'px';
+    let ty = clientY - wr.top - (tip.offsetHeight || 0) - 10;
+    if (ty < 2) ty = clientY - wr.top + 16;
+    tip.style.top = ty + 'px';
+  };
+  c.addEventListener('mousemove', (e) => show(e.clientX, e.clientY));
+  c.addEventListener('mouseleave', () => { tip.hidden = true; });
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) show(t.clientX, t.clientY);
+  }, { passive: true });
+  c.addEventListener('touchend', () => { tip.hidden = true; }, { passive: true });
+  c.addEventListener('touchcancel', () => { tip.hidden = true; }, { passive: true });
+}
+
+// Dashed vertical lines + labels marking fixed pace benchmarks (e.g. elite
+// race winners) against the class bars, so classes can be sized up visually.
+// Draws just the dashed reference lines — no in-chart labels, since two refs
+// close in pace would overlap. Names/values are listed in paceRefsLegend()
+// instead, placed below the chart.
+function drawPaceRefs(ctx, w, padL, padR, padT, bottomY, refs, X) {
+  ctx.save();
+  refs.forEach((r) => {
+    const x = X(r.paceSec / 60);
+    if (x < padL || x > w - padR) return;
+    ctx.strokeStyle = r.color || '#c46a2a';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, bottomY);
+    ctx.stroke();
+  });
+  ctx.restore();
 }
 
 function tipHtmlFor(cfg, m) {
@@ -1341,12 +1468,19 @@ function setupChartInteractions() {
 const DBL_TAP_MS = 500;
 
 // True when a touch should be cancelled to stop double-tap-to-zoom — i.e. a
-// new single-finger touch starting within DBL_TAP_MS of the previous tap.
-// `now` is injectable for tests.
-function isDoubleTapSecond(touches, lastTapMs, now) {
+// new single-finger touch starting within DBL_TAP_MS of, and close to, the
+// previous tap's start. `now` is injectable for tests. Deliberately keyed off
+// the previous touchSTART (not touchend): when the browser's own gesture
+// recognizer claims a tap as the first half of a double-tap, it fires
+// touchcancel instead of touchend, so any state that only updates on touchend
+// silently stops tracking taps on real devices.
+function isDoubleTapSecond(touches, lastTapStartMs, lastTapStartX, lastTapStartY, now) {
   if (!touches || touches.length !== 1) return false;
+  const t = touches[0];
   const n = now != null ? now : Date.now();
-  return n - lastTapMs < DBL_TAP_MS;
+  return n - lastTapStartMs < DBL_TAP_MS &&
+    Math.abs(t.clientX - lastTapStartX) < 25 &&
+    Math.abs(t.clientY - lastTapStartY) < 25;
 }
 
 function attachChartTip(c) {
@@ -1391,29 +1525,36 @@ function attachChartTip(c) {
   c.addEventListener('mouseleave', () => { tip.hidden = true; redraw(); });
   // Touch: tap to inspect, release to hide. Suppresses the synthesized
   // mousemove that immediately follows a tap so the tooltip does not stick.
-  let tapX = 0, tapY = 0, lastTapMs = 0;
+  let tapX = 0, tapY = 0;
+  let lastTapStartMs = 0, lastTapStartX = 0, lastTapStartY = 0;
   c.addEventListener('touchstart', (e) => {
     const t = e.touches && e.touches[0];
     if (t) { tapX = t.clientX; tapY = t.clientY; show({ clientX: t.clientX, clientY: t.clientY }); }
     // Kill the browser's double-tap-to-zoom on the chart: cancel the second
     // tap of a double-tap at touchstart, before the browser can arm the zoom.
-    // preventDefault() on touchend alone is too late in several browsers. A
-    // drag is never caught here (a second finger cannot go down mid-drag), so
-    // scrolling over the chart keeps working and the tooltip was already shown.
-    if (isDoubleTapSecond(e.touches, lastTapMs)) {
+    // preventDefault() on touchend alone is too late in several browsers.
+    // Timing/position is tracked from touchSTART to touchSTART rather than
+    // through touchend: when the browser's gesture recognizer claims a tap as
+    // the first half of a double-tap, it fires touchcancel instead of
+    // touchend, and anything keyed off touchend would stop seeing that tap.
+    // A drag is never caught here (a second finger cannot go down mid-drag),
+    // so scrolling over the chart keeps working and the tooltip was already shown.
+    if (t && isDoubleTapSecond(e.touches, lastTapStartMs, lastTapStartX, lastTapStartY)) {
       e.preventDefault();
     }
+    if (t) { lastTapStartMs = Date.now(); lastTapStartX = t.clientX; lastTapStartY = t.clientY; }
   }, { passive: false });
-  c.addEventListener('touchend', (e) => {
+  const endTap = (e) => {
     lastTouchEnd = Date.now();
     const t = e.changedTouches && e.changedTouches[0];
     if (t && Math.abs(t.clientX - tapX) < 10 && Math.abs(t.clientY - tapY) < 10) {
-      lastTapMs = Date.now();
       if (e.cancelable) e.preventDefault();
     }
     tip.hidden = true;
     redraw();
-  }, { passive: false });
+  };
+  c.addEventListener('touchend', endTap, { passive: false });
+  c.addEventListener('touchcancel', endTap, { passive: false });
 }
 
 function paintCharts() {
@@ -1441,6 +1582,7 @@ function paintCharts() {
       const ctx = c.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       paintPace(ctx, w, h, cfg);
+      attachPaceTip(c);
     }
   }
 }
@@ -1519,12 +1661,12 @@ function durSec(a, b) {
   return (a != null && b != null) ? fmtTime(Math.round((b - a) / 1000)) : '—';
 }
 
-function flowCards(flow) {
+function flowCards(flow, onCourseCount) {
   const c = t => t != null ? fmtClock(t) : '—';
   const cards = [
     cardHtml(T('cStarters'), String(flow.starters)),
     cardHtml(T('cFinishers'), String(flow.finishers)),
-    cardHtml(T('cDnf'), String(flow.dnf)),
+    cardHtml(T('cDnf'), String(flow.dnf), onCourseCount ? esc(onCourseCount + ' ' + T('ocTitle').toLowerCase()) : null),
     cardHtml(T('cIntoForest'), durSec(flow.firstStart, flow.lastStart),
       esc(T('tFirstStart') + ' ' + c(flow.firstStart) + ' · ' + T('tLastStart') + ' ' + c(flow.lastStart))),
     cardHtml(T('cFirstResult'), durSec(flow.firstStart, flow.firstFinish),
@@ -1548,11 +1690,17 @@ function flowCards(flow) {
 
 function flowSection(event) {
   const flow = eventFlow(event);
-  const parts = ['<div class="cards">' + flowCards(flow).join('') + '</div>'];
-  const excluded = droppedWarnings(event);
-  if (excluded.length) parts.push(warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded));
   const onCourse = onCourseWarnings(event);
-  if (onCourse.length) parts.push(warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse));
+  const parts = ['<div class="cards">' + flowCards(flow, onCourse.length).join('') + '</div>'];
+  const excluded = droppedWarnings(event);
+  if (excluded.length) {
+    // Still-on-course entries are tacked onto the end of this same box
+    // rather than shown as a separate box below it.
+    parts.push(warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded,
+      onCourse.length ? { title: T('ocTitle'), intro: T('ocIntro'), warnings: onCourse } : null));
+  } else if (onCourse.length) {
+    parts.push(warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse));
+  }
   if (!flow.starters && !flow.finishers) {
     parts.push('<p class="empty">' + T('noTimeline') + '</p>');
     return parts.join('\n');
@@ -1585,12 +1733,20 @@ function renderIndividual(event) {
   return renderHeader(event) + '\n' + flowSection(event) + '\n' + paceSection(event);
 }
 
+function paceRefsLegend(refs) {
+  return '<div class="pacerefs">' + refs.map(r =>
+    '<span><span class="prswatch" style="border-top-color:' + escAttr(r.color || '#c46a2a') + '"></span>' +
+    esc(r.label + ' ' + fmtTime(r.paceSec)) + '</span>'
+  ).join('') + '</div>';
+}
+
 function paceSection(event) {
   const paces = classPaces(event);
   if (!paces.length) return '';
   const id = 'ch' + (++chartSeq);
   return sectionHtml(T('secClassPaces'),
-    chartCanvas({ type: 'pace', id, paces }) + '<p class="chartcap">' + esc(T('hPace')) + '</p>');
+    chartCanvas({ type: 'pace', id, paces, refs: PACE_REFS }) + '<p class="chartcap">' + esc(T('hPace')) + '</p>' +
+    paceRefsLegend(PACE_REFS));
 }
 
 function renderRelay(event) {
@@ -1630,6 +1786,32 @@ function render() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Share link: the resolved slug/UUID lives directly as the URL hash (e.g.
+//  "#hyvinkaan-talvirastit-2026") — no query-string key, since the slug is
+//  the only piece of state worth persisting and this keeps the link short.
+// ════════════════════════════════════════════════════════════════════
+function slugFromHash() {
+  if (typeof location === 'undefined' || !location.hash) return '';
+  try { return decodeURIComponent(location.hash.slice(1)); } catch (e) { return ''; }
+}
+function setShareHash(slug) {
+  if (typeof history === 'undefined' || typeof location === 'undefined') return;
+  const enc = encodeURIComponent(slug);
+  if (location.hash.slice(1) !== enc) {
+    history.replaceState(null, '', location.pathname + location.search + '#' + enc);
+  }
+}
+async function shareLink() {
+  if (typeof location === 'undefined') return;
+  try {
+    await navigator.clipboard.writeText(location.href);
+    setStatus(T('shareCopied'), 'ok');
+  } catch (e) {
+    setStatus(location.href, 'ok');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Orchestration
 // ════════════════════════════════════════════════════════════════════
 async function analyze(inputOverride) {
@@ -1641,6 +1823,10 @@ async function analyze(inputOverride) {
   try {
     const event = await fetchEvent(input);
     state.event = event;
+    const id = extractSlug(input);
+    if (id) setShareHash(id);
+    const sb = $('shareBtn');
+    if (sb) sb.style.display = '';
     if (isMultistageEvent(event)) {
       const stages = event.events || [];
       for (let i = 0; i < stages.length; i++) {
@@ -1770,10 +1956,17 @@ function wireUI() {
     cb.style.display = '';
     cb.addEventListener('click', exportCSV);
   }
+  const sb = $('shareBtn');
+  if (sb) sb.addEventListener('click', shareLink);
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('resize', () => { if (state.event) paintCharts(); });
   }
   setupChartInteractions();
+  const fromHash = slugFromHash();
+  if (fromHash) {
+    if (slug) slug.value = fromHash;
+    analyze(fromHash);
+  }
 }
 
 if (typeof document !== 'undefined' && document.addEventListener) {
