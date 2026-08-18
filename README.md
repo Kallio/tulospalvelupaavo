@@ -19,6 +19,7 @@ install, no server, no account: download the file (or just open it) and go.
 | Build balanced 25-manna teams from a runner pool | [25-manna Team Planner](#25-manna-team-planner) |
 | Build balanced Nuorten Jukola teams | [Nuorten Jukola Team Planner](#nuorten-jukola-team-planner) |
 | Build balanced Halikko-viesti teams | [Halikko-viesti Team Planner](#halikko-viesti-team-planner) |
+| Build SM-viesti teams (age classes + veteran age-sum rules) | [SM-viesti Team Planner](#sm-viesti-team-planner) |
 | Get an up-to-date list of Finnish orienteering clubs | [IRMA Club Registry Fetcher](#irma-club-registry-fetcher) |
 | ...with district/area info attached | [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts) |
 | Convert Purple Pen course files to IOF XML | [Purple Pen → IOF Converter](#purple-pen--iof-converter) |
@@ -149,6 +150,48 @@ auto-replacement, per-runner scores and team wishes, [Navisport](#navisport) sta
 export (15 blocks with `Osuus`/`Alaosuus`, matching the Rastilippu Halikko
 profile), JSON save/load and `localStorage` autosave, plus built-in example
 pools of 45/60/75 runners.
+
+</details>
+
+### SM-viesti Team Planner
+
+File: [`sm_viesti_joukkuesuunnittelija.html`](sm_viesti_joukkuesuunnittelija.html)
+
+Splitting SM-viesti entrants into teams by hand? Feed it a runner pool and it
+forms 3-runner teams for the age classes (H21/H20/H18/H16, D21/D20/D18/D16)
+and, for the veteran classes, automatically works out who runs together *and
+in which class* — since a veteran class needs a minimum team age sum, not just
+a minimum age per runner.
+
+<details>
+<summary>Details</summary>
+
+SM-viesti team planner. Three legs throughout. The 8 age classes (H21/D21 is
+the open/no-age-limit class; H20/H18/H16 and D-equivalents are for younger
+runners) have no team-composition rule — teams are formed directly from the
+declared class tag. The only hard age rule enforced anywhere is the
+federation-wide floor (must turn at least 14 in the competition year); this is
+surfaced as a non-blocking warning, not an error, since younger entrants in
+other classes are an allowed special case.
+
+The 14 veteran classes (H35–H80, D35–D70) each require a minimum individual
+age *and* a minimum team age sum (birth-year based) — and since a runner old
+enough for a hard class also always qualifies for every easier one, which
+class a group of three actually competes in is a real choice. The planner
+resolves this automatically: it works hardest class first (oldest/highest
+sum requirement), pairing the two youngest eligible runners with the oldest
+available one whenever that meets the required sum, so older runners aren't
+"wasted" on easier classes before harder ones are filled. This is a
+heuristic, not a proven globally-optimal solver.
+
+Other features: optional per-runner "Pari" tag so two runners who've raced
+together before are preferentially kept on the same team; three separate
+per-leg role scores (starter/middle/finisher) instead of one strength number,
+used to pick which of the three legs each team member runs; drag-and-drop
+adjustment, sick-runner auto-replacement (respecting the destination team's
+age-sum requirement), per-runner team wishes, [Navisport](#navisport)
+start-list CSV export, JSON save/load with `localStorage` autosave, and a
+built-in example pool covering both class types.
 
 </details>
 

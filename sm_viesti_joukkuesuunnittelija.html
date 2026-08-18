@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SM-viesti joukkuesuunnittelija</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps:last-child { margin-top: auto; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.step-hdr { cursor: pointer; user-select: none; }
+.step-hdr:hover { opacity: .85; }
+.step-toggle { display: inline-block; width: 16px; color: #7ec8e3; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+textarea, input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bp { background: #e94560; color: #fff; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; }
+.chk input { width: auto; }
+
+#main { padding: 16px; margin-left: 386px; }
+
+#statusBar { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+#statusBar .ok  { color: #27ae60; font-weight: bold; }
+#statusBar .err { color: #e94560; font-weight: bold; }
+#statusBar .warn { color: #e67e22; font-weight: bold; }
+#statusBar .line { margin-top: 4px; }
+
+.card { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #1a2a4a; margin-bottom: 8px; }
+
+.warnbox { background: #fff7ec; border: 1px solid #e6b566; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: #6b4a10; }
+.warnbox .wtitle { font-weight: 700; margin-bottom: 4px; }
+.warnbox ul { margin: 0 0 0 18px; padding: 0; }
+.warnbox li { margin: 2px 0; }
+
+table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
+.scores th { background: #16213e; color: #7ec8e3; padding: 5px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+.scores td { padding: 3px 8px; border-bottom: 1px solid #e5e5e5; }
+.scores input[type="number"] { width: 52px; padding: 2px 4px; }
+.scores select { width: auto; padding: 2px 4px; }
+.scores tr.sick td { background: #fdeaea; color: #b05050; }
+.scores tr.varamies td { background: rgba(39,174,96,.12); }
+.scores td.til { font-size: 11px; color: #667; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.rng { width: 76px; vertical-align: middle; accent-color: #7ec8e3; }
+.stp-val { display: inline-block; min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+
+#teamsWrap { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; flex-wrap: wrap; padding-bottom: 8px; }
+.group-hdr {
+  flex: 1 1 100%; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: #667; padding: 10px 2px 2px; border-top: 1px solid #ddd;
+}
+.group-hdr:first-child { border-top: none; padding-top: 0; }
+.team-col {
+  flex: 0 0 260px; min-width: 250px; background: #fff; border: 1px solid #ccc;
+  border-radius: 8px; overflow: hidden; font-size: 12px;
+}
+.team-hdr { color: #fff; padding: 8px 10px; }
+.team-hdr .tname { font-weight: bold; color: #fff; font-size: 13px; }
+.team-hdr .tmeta { font-size: 11px; color: rgba(255,255,255,.85); margin-top: 2px; }
+.team-hdr .status { font-size: 10px; font-weight: bold; padding: 1px 7px; border-radius: 9px; margin-left: 6px; }
+.team-hdr .status.ok { background: #27ae60; color: #fff; }
+.team-hdr .status.err { background: #e94560; color: #fff; }
+.team-hdr .problems { font-size: 10.5px; color: #ffe1e1; margin-top: 4px; line-height: 1.4; }
+.slot-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-bottom: 1px solid #f0f0f0; }
+.slot-row.invalid { background: #fdeaea; }
+.slot-row.vet-in-open { background: #ffd9ea; }
+.slot-row.vet-in-open.invalid { background: #fdeaea; }
+.slot-row.drop-over { outline: 2px solid #27ae60; outline-offset: -1px; background: #e4f7ea; }
+.slot-lab { font-family: ui-monospace, Menlo, Consolas, monospace; color: #445; width: 52px; flex: none; font-weight: bold; font-size: 10.5px; }
+.runner {
+  flex: 1; background: #0f3460; color: #eee; border-radius: 4px; padding: 2px 7px;
+  cursor: grab; user-select: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.runner:hover { background: #14467c; }
+.runner.sick { background: #8b3a3a; text-decoration: line-through; cursor: not-allowed; }
+.runner .str { color: #7ec8e3; font-size: 10px; margin-left: 4px; }
+.vetbadge { background: #ff8fc4; color: #4a0030; font-size: 9px; font-weight: bold; border-radius: 8px; padding: 0 5px; margin-left: 3px; }
+.slot-empty { flex: 1; background: #f0f2f5; color: #bbb; border-radius: 4px; padding: 2px 7px; border: 1px dashed #ccc; font-style: italic; text-align: center; }
+.rm-btn { flex: none; background: transparent; border: none; color: #c66; cursor: pointer; font-size: 12px; padding: 0 2px; }
+.sick-btn { flex: none; background: transparent; border: none; cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; }
+.sick-btn:hover { transform: scale(1.2); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: #1f6f4a; color: #eee; border-radius: 4px; padding: 2px 8px; font-size: 11px;
+  cursor: grab; user-select: none;
+}
+.chip.sick { background: #8b3a3a; text-decoration: line-through; cursor: not-allowed; }
+.pari-chip { background: #5b3a8b; color: #eee; border-radius: 4px; padding: 1px 6px; font-size: 11px; white-space: nowrap; }
+.pari-chip a { color: #e0d4f7; text-decoration: none; margin-left: 3px; }
+.pari-chip a:hover { color: #fff; }
+
+#saveWrap { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+#saveStatus { font-size: 12px; color: #667; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+
+@media print {
+  #top, #statusBar .no-print, .no-print { display: none !important; }
+  #main { margin: 0; padding: 0; }
+  body { background: #fff; color: #000; }
+  .card { border: none; padding: 4px 0; }
+  #teamsWrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .team-col { border: 1px solid #999; page-break-inside: avoid; break-inside: avoid; }
+  .group-hdr { grid-column: 1 / -1; }
+  .slot-row { background: #fff !important; }
+  .slot-row.vet-in-open { background: #ffd9ea !important; }
+  .slot-row.invalid { background: #fdeaea !important; }
+  .scores, .chips { display: none; }
+}
+@page { size: A4 landscape; margin: 10mm; }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps">
+    <h3 class="step-hdr" onclick="toggleStep('pool')"><span class="step-toggle" id="stepTogglePool">▾</span> 1. Juoksijapooli</h3>
+    <div class="ps-body" id="psBodyPool">
+    <label>Ikäsarjat (H21/H20/H18/H16/D21/D20/D18/D16): <code>Sarja:Nimi:Syntymävuosi[:Pari]</code>. Veteraanit (H35–H80/D35–D70, sarja päätellään iästä): <code>Nimi:Syntymävuosi:Sukupuoli[:Toivesarja][:Pari]</code>. Ryhmät (Pari) voi muodostaa myös alla olevasta listasta valitsemalla.</label>
+    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa:1995&#10;H16:Korhonen Ilmari:2010&#10;Virtanen Matti:1975:M:H45:vets-a&#10;Lehtonen Ari:1974:M::vets-a"></textarea>
+    <div class="row">
+      <button class="bg btn-sm" onclick="loadExamplePool(30)">Esimerkkipooli (30)</button>
+      <button class="bg btn-sm" onclick="loadExamplePool(60)">(60)</button>
+      <label class="chk"><input type="file" id="poolFile" accept=".csv,.txt" style="width:auto;"> Tiedosto</label>
+    </div>
+    <label>Seura</label>
+    <input id="klubi" type="text" value="Angelniemen Ankkuri">
+    <label>Kilpailuvuosi (iän laskentaan)</label>
+    <input id="compYear" type="number" min="2000" max="2100" step="1">
+    </div>
+  </div>
+  <div class="ps">
+    <h3 class="step-hdr" onclick="toggleStep('gen')"><span class="step-toggle" id="stepToggleGen">▾</span> 2. Generointi</h3>
+    <div class="ps-body" id="psBodyGen">
+    <div class="row">
+      <button class="bs" onclick="generateAll()">Generoi joukkueet</button>
+      <button class="bg" onclick="optimize()">Optimoi</button>
+      <button class="bg" onclick="fillGaps()">Täytä aukot</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet/parit ensin (muuten vahvuus ensin)</label>
+    <label style="font-size:11px;color:#7ec8e3;">Ikäsarjat: kolme osuutta, ei joukkuevaatimuksia (ainoa kova sääntö: kilpailuvuonna vähintään 14 v). Veteraanisarjat: kolme osuutta, joukkueen ikäsumma ja jäsenten ikäraja tarkistetaan; työkalu päättää parhaan sarjan automaattisesti.</label>
+    </div>
+  </div>
+  <div class="ps" id="statusPanel"></div>
+  <div class="ps">
+    <h3 class="step-hdr" onclick="toggleStep('save')"><span class="step-toggle" id="stepToggleSave">▾</span> 3. Tulosta / tallenna</h3>
+    <div class="ps-body" id="psBodySave">
+    <div class="row">
+      <button class="bs" onclick="exportCSV()">Vie Navisport-CSV</button>
+      <button class="bg" onclick="window.print()">Tulosta</button>
+    </div>
+    <div class="row">
+      <button class="bg btn-sm" onclick="saveState()">Tallenna (JSON)</button>
+      <label class="chk"><input type="file" id="loadFile" accept=".json" style="width:auto;"> Lataa (JSON)</label>
+    </div>
+    <button class="bp btn-sm" onclick="resetAll()" style="margin-top:6px;">Tyhjennä kaikki</button>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="statusBar"></div>
+  <div class="card no-print" id="warnWrap"></div>
+  <div class="card no-print" id="poolWrap"></div>
+  <div class="card no-print" id="chipsWrap"></div>
+  <div class="card" id="teamsCard">
+    <h3 style="margin-bottom:2px;">Joukkuelistat (3 osuutta: aloitus / toinen osuus / ankkuri)</h3>
+    <div id="teamsWrap"></div>
+  </div>
+  <div class="card no-print" id="csvWrap" style="display:none;">
+    <h3>Navisport-CSV (esikatselu)</h3>
+    <textarea id="csvOut" rows="6" style="width:100%;"></textarea>
+  </div>
+</div>
+
+<script>
+// ── SM-viesti -säännöt ──────────────────────────────────────────────────
+// Ikäsarjat: H21/D21 on avoin pääsarja (ei ikärajaa), H20/H18/H16 (ja
+// D-vastineet) ovat nuorille, mutta niille ei ole virallista syntymävuosi-
+// katkoa tässä työkalussa — sarja on järjestäjän ilmoittama. Ainoa kova
+// sääntö on liiton yleinen alaikäraja.
+const AGE_SARJAT = ['H21','H20','H18','H16','D21','D20','D18','D16'];
+const MIN_AGE = 14;
+
+// Veteraanisarjat: sarja, yksilön vähimmäisikä, joukkueen ikäsumman vähimmäismäärä.
+// Arvot annetun taulukon mukaan sellaisenaan (ei kaavaa — esim. H45 ja H35
+// jakavat saman yksilörajan mutta eri summan).
+const VETERAN_RULES = {
+  H35: { minAge: 35, minSum: 105 }, H45: { minAge: 35, minSum: 130 },
+  H50: { minAge: 40, minSum: 150 }, H55: { minAge: 45, minSum: 170 },
+  H60: { minAge: 50, minSum: 190 }, H70: { minAge: 60, minSum: 210 },
+  H75: { minAge: 70, minSum: 225 }, H80: { minAge: 75, minSum: 240 },
+  D35: { minAge: 35, minSum: 105 }, D45: { minAge: 35, minSum: 130 },
+  D50: { minAge: 40, minSum: 150 }, D55: { minAge: 45, minSum: 170 },
+  D60: { minAge: 50, minSum: 190 }, D70: { minAge: 60, minSum: 210 },
+};
+// Vaikeimmasta helpoimpaan (yksilöraja desc, sitten summa desc) — täytetään
+// niukimmat (vanhimmat) sarjat ensin, jotta iäkkäitä juoksijoita ei "tuhlata"
+// helpompiin sarjoihin ennen kuin vaikeammat on täytetty.
+const VETERAN_ORDER_H = ['H80','H75','H70','H60','H55','H50','H45','H35'];
+const VETERAN_ORDER_D = ['D70','D60','D55','D50','D45','D35'];
+const ALL_SARJAT_ORDER = AGE_SARJAT.concat(VETERAN_ORDER_H, VETERAN_ORDER_D);
+const LEG_NAMES = ['Aloitus', 'Toinen osuus', 'Ankkuri'];
+const TEAM_COLORS = ['#0f3460', '#7a1f1f', '#1f6f4a', '#5b3a8b'];
+
+function isVeteranSarja(sarja) { return Object.prototype.hasOwnProperty.call(VETERAN_RULES, sarja); }
+
+// H21/D21 on avoin sarja — myös veteraani-ikäinen (35+, nuorimman
+// veteraanisarjan yksilöraja) saa juosta siinä. Sallittua, mutta
+// erikoistapaus, joten se merkitään joukkuelistassa erottuvalla värillä.
+const OPEN_CLASS_VET_AGE = 35;
+function vetInOpenClass(r, sarja) {
+  if (sarja !== 'H21' && sarja !== 'D21') return false;
+  const age = ageOf(r);
+  return age != null && age >= OPEN_CLASS_VET_AGE;
+}
+
+function normalizeAgeSarja(tok) {
+  const t = String(tok || '').trim().toUpperCase().replace(/\s+/g, '');
+  return AGE_SARJAT.includes(t) ? t : null;
+}
+
+function parseGender(tok) {
+  const t = String(tok || '').trim().toLowerCase();
+  if (t === 'm' || t === 'h' || t === 'mies') return 'M';
+  if (t === 'n' || t === 'd' || t === 'nainen') return 'N';
+  return null;
+}
+
+// Rivimuodot:
+//  1) "Sarja:Nimi:Syntymävuosi[:Pari]" — ikäsarja on ilmoitettu suoraan, joten
+//     sillä ei ole toivesarjaa (kuuluu jo täsmälleen yhteen sarjaan).
+//  2) "Nimi:Syntymävuosi:Sukupuoli[:Toivesarja][:Pari]" — veteraaniehdokas,
+//     sarja päätellään iästä (assignVeteranSeries); Toivesarja on valinnainen
+//     toive siitä, mihin omista kelpaavista veteraanisarjoista haluaisi
+//     mieluiten (esim. "H45"), kunnioitetaan parhaan kyvyn mukaan.
+function parsePool(text) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split(':').map(s => s.trim());
+    let nimi, sarja = null, gender, kind, birthYear = null, toive = null, pari = null;
+    const ageSarja = normalizeAgeSarja(parts[0]);
+    if (ageSarja) {
+      sarja = ageSarja; nimi = parts[1]; kind = 'age';
+      gender = ageSarja[0] === 'H' ? 'M' : 'N';
+      if (!nimi) continue;
+      birthYear = /^\d{4}$/.test(parts[2] || '') ? parseInt(parts[2], 10) : null;
+      pari = parts[3] || null;
+    } else if (parts.length >= 3 && /^\d{4}$/.test(parts[1]) && parseGender(parts[2])) {
+      nimi = parts[0]; kind = 'vet';
+      birthYear = parseInt(parts[1], 10);
+      gender = parseGender(parts[2]);
+      const wantTok = String(parts[3] || '').trim().toUpperCase();
+      const wantGender = gender === 'M' ? 'H' : 'D';
+      toive = (isVeteranSarja(wantTok) && wantTok[0] === wantGender) ? wantTok : null;
+      pari = parts[4] || null;
+    } else {
+      continue;
+    }
+    if (!nimi) continue;
+    pari = (pari && pari.length) ? pari : null;
+    const key = kind + ':' + (sarja || '') + ':' + nimi;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ nimi, kind, sarja, gender, birthYear, toive, pari, aloitus: 0, keski: 0, lopetus: 0, kipea: false });
+  }
+  return out;
+}
+
+function ageOf(r) {
+  return (r.birthYear != null) ? (S.compYear - r.birthYear) : null;
+}
+
+// Ei-estävät varoitukset: alle liiton ikärajan olevat (sallittu
+// "erikoistapauksissa") ja rivit, joilta puuttuu syntymävuosi (ikää ei
+// voitu tarkistaa lainkaan).
+function computeWarnings() {
+  const warns = [];
+  for (const r of S.runners) {
+    const age = ageOf(r);
+    if (age == null) {
+      if (r.kind === 'age') warns.push(`${r.nimi}: syntymävuosi puuttuu — ikää ei voitu tarkistaa.`);
+      continue;
+    }
+    if (age < MIN_AGE) warns.push(`${r.nimi}: ikä ${age} v — alle SM-viestin ${MIN_AGE} vuoden alaikärajan. Tarkista osallistumisoikeus.`);
+  }
+  return warns;
+}
+
+function strengthOf(r) {
+  if (!r) return 0;
+  return ((r.aloitus || 0) + (r.keski || 0) + (r.lopetus || 0)) / 3;
+}
+
+// Yksilön kelpoisuus tiettyyn sarjaan (ei riipu osuudesta — SM-viestin 3
+// osuudella ei ole erillisiä ikä-/sukupuolirajoja, kunhan koko joukkue
+// kelpaa valittuun sarjaan).
+function memberEligible(r, sarja) {
+  if (!r || r.kipea || !sarja) return false;
+  if (isVeteranSarja(sarja)) {
+    const rule = VETERAN_RULES[sarja];
+    const gender = sarja[0] === 'H' ? 'M' : 'N';
+    if (r.gender !== gender) return false;
+    const age = ageOf(r);
+    if (age == null) return false;
+    return age >= rule.minAge;
+  }
+  return r.sarja === sarja;
+}
+
+function teamRequirements(members, sarja) {
+  const problems = [];
+  if (members.length !== 3) { problems.push(`keskeneräinen (${members.length}/3)`); return problems; }
+  members.forEach(r => { if (!memberEligible(r, sarja)) problems.push(`${r.nimi} ei kelpaa sarjaan ${sarja}`); });
+  if (isVeteranSarja(sarja) && problems.length === 0) {
+    const rule = VETERAN_RULES[sarja];
+    const sum = members.reduce((s, r) => s + (ageOf(r) || 0), 0);
+    if (sum < rule.minSum) problems.push(`ikäsumma ${sum}/${rule.minSum}`);
+  }
+  return problems;
+}
+
+function validateTeam(team, sarja) {
+  return teamRequirements(team.filter(Boolean), sarja);
+}
+
+// Kaikki 6 järjestystä kolmelle juoksijalle osuuksille [aloitus, keski, loppu];
+// valitaan roolipisteiden summaa maksimoiva järjestys. Ei taaksepalaavaa hakua —
+// kiinteän kokoinen (6) tarkistus riittää.
+const PERMS3 = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+function bestLegOrder(members) {
+  if (members.length !== 3) return members.slice();
+  let best = members, bestScore = -Infinity;
+  for (const perm of PERMS3) {
+    const m = perm.map(i => members[i]);
+    const score = (m[0].aloitus || 0) + (m[1].keski || 0) + (m[2].lopetus || 0);
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  return best;
+}
+
+function reorderTeamLegs(t) {
+  const members = S.teams[t].filter(Boolean);
+  if (members.length !== 3) return;
+  S.teams[t] = bestLegOrder(members);
+}
+
+// ── Ikäsarjojen ryhmittely (H21/H20/H18/H16/D21/D20/D18/D16) ──────────────
+// Ei joukkuevaatimuksia — muodostetaan mahdollisimman monta 3 hengen
+// joukkuetta per sarja. Parikkain merkityt (Pari-tunniste) yritetään
+// ensin täydentää kolmanneksi jäseneksi valitulla parhaalla ehdokkaalla.
+function groupAgeSeries(pool) {
+  const bySarja = new Map();
+  for (const r of pool) {
+    if (!bySarja.has(r.sarja)) bySarja.set(r.sarja, []);
+    bySarja.get(r.sarja).push(r);
+  }
+  const groups = [];
+  for (const [sarja, list] of bySarja) {
+    const used = new Set();
+    const pariMap = new Map();
+    for (const r of list) if (r.pari) {
+      if (!pariMap.has(r.pari)) pariMap.set(r.pari, []);
+      pariMap.get(r.pari).push(r);
+    }
+    for (const [, arr] of pariMap) {
+      if (arr.some(r => used.has(r))) continue;
+      if (arr.length >= 3) {
+        // Käyttäjä on jo valinnut koko kolmikon — käytetään sellaisenaan.
+        const trio = arr.slice(0, 3);
+        trio.forEach(r => used.add(r));
+        groups.push({ sarja, members: trio });
+      } else if (arr.length === 2) {
+        const cands = list.filter(r => !used.has(r) && !arr.includes(r))
+          .sort((a, b) => strengthOf(b) - strengthOf(a));
+        if (cands.length) {
+          const third = cands[0];
+          arr.forEach(r => used.add(r));
+          used.add(third);
+          groups.push({ sarja, members: [arr[0], arr[1], third] });
+        }
+      }
+    }
+    let rest = list.filter(r => !used.has(r));
+    rest.sort((a, b) => strengthOf(b) - strengthOf(a));
+    while (rest.length >= 3) groups.push({ sarja, members: rest.splice(0, 3) });
+  }
+  return groups;
+}
+
+// ── Veteraanisarjojen automaattinen sarjanvalinta ────────────────────────
+// Käydään sarjat vaikeimmasta helpoimpaan. Kullekin sarjalle: täydennetään
+// ensin parikkain merkityt parit kolmanneksi jäseneksi (pienin riittävä ikä,
+// jotta muita vanhempia säästyy vaikeampiin/muihin sarjoihin), sitten
+// muodostetaan lisää joukkueita ahneella "kaksi pienintä + yksi suurin ikä"
+// -säännöllä: jos näiden kolmen ikien summa riittää vaadittuun summaan,
+// joukkue muodostetaan; muuten kyseiselle sarjalle ei enää löydy joukkueita
+// (jäljelle jäävät siirtyvät helpompiin sarjoihin). Heuristiikka, ei taattu
+// globaalisti optimaalinen ratkaisu.
+// "Kaksi pienintä + yksi suurin ikä" -ahne täyttö annetulle ehdokaslistalle;
+// muokkaa ehdokkaiden `.used`-lippuja paikallaan ja työntää muodostetut
+// joukkueet `groups`-listaan. Käytetään sekä toivesarjan mukaisiin ehdokkaisiin
+// että yleiseen jäljellä olevaan joukkoon (ks. assignVeteranSeries).
+function greedyFormTeams(cands, rule, sarja, groups) {
+  while (true) {
+    const cur = cands.filter(x => !x.used).sort((a, b) => a.age - b.age);
+    if (cur.length < 3) break;
+    const lo1 = cur[0], lo2 = cur[1], hi = cur[cur.length - 1];
+    if (lo1 === hi || lo2 === hi) break;
+    if (lo1.age + lo2.age + hi.age >= rule.minSum) {
+      lo1.used = lo2.used = hi.used = true;
+      groups.push({ sarja, members: [lo1.r, lo2.r, hi.r] });
+    } else break;
+  }
+}
+
+// Kaksi vaihetta:
+//  1) Toiveet kunnioittaen — jokaisen sarjan ehdokasjoukosta suljetaan pois
+//     kaikki, jotka ovat toivoneet jotain TOISTA nimettyä sarjaa, jottei
+//     vaikeampi sarja "nappaa" ketään, joka nimenomaan halusi helpompaan
+//     (tai päinvastoin). Ilman tätä hardest-first-järjestys ohittaisi
+//     yksilön toiveen aina, kun hän sattuu kelpaamaan myös vaikeampaan.
+//  2) Loppusiivous — käydään kaikki sarjat uudelleen läpi jättäen toiveet
+//     huomiotta, jotta yksikään muodostettavissa oleva joukkue ei jää
+//     tekemättä pelkästään tyydyttämättömän toiveen takia.
+function assignVeteranSeries(pool, order) {
+  let remaining = pool.filter(r => !r.kipea && ageOf(r) != null)
+    .map(r => ({ r, age: ageOf(r), used: false }));
+  const groups = [];
+
+  function runPass(honorPreference) {
+    for (const sarja of order) {
+      const rule = VETERAN_RULES[sarja];
+
+      if (honorPreference) {
+        const pariMap = new Map();
+        for (const x of remaining) {
+          if (x.used || x.age < rule.minAge || !x.r.pari) continue;
+          if (!pariMap.has(x.r.pari)) pariMap.set(x.r.pari, []);
+          pariMap.get(x.r.pari).push(x);
+        }
+        for (const [, arr] of pariMap) {
+          if (arr.some(x => x.used)) continue;
+          if (arr.length >= 3) {
+            // Käyttäjä on jo valinnut koko kolmikon — kelpuutetaan
+            // sellaisenaan, jos ikäsumma riittää tähän sarjaan.
+            const trio = arr.slice(0, 3);
+            const sum = trio.reduce((s, x) => s + x.age, 0);
+            if (sum >= rule.minSum) {
+              trio.forEach(x => x.used = true);
+              groups.push({ sarja, members: trio.map(x => x.r) });
+            }
+          } else if (arr.length === 2) {
+            const need = rule.minSum - (arr[0].age + arr[1].age);
+            const cands = remaining.filter(x => !x.used && x !== arr[0] && x !== arr[1] && x.age >= rule.minAge && x.age >= need)
+              .sort((a, b) => a.age - b.age);
+            if (cands.length) {
+              const third = cands[0];
+              arr[0].used = arr[1].used = third.used = true;
+              groups.push({ sarja, members: [arr[0].r, arr[1].r, third.r] });
+            }
+          }
+        }
+      }
+
+      const eligibleNow = () => remaining.filter(x => !x.used && x.age >= rule.minAge &&
+        (!honorPreference || !x.r.toive || x.r.toive === sarja));
+      greedyFormTeams(eligibleNow().filter(x => x.r.toive === sarja), rule, sarja, groups);
+      greedyFormTeams(eligibleNow(), rule, sarja, groups);
+    }
+  }
+
+  runPass(true);
+  runPass(false);
+
+  const leftovers = remaining.filter(x => !x.used).map(x => x.r);
+  return { groups, leftovers };
+}
+
+function scoreState() {
+  let pref = 0, pariScore = 0;
+  for (let i = 0; i < S.teams.length; i++) {
+    for (const r of S.teams[i]) if (r && r.toive === S.teamSarja[i]) pref++;
+    const members = S.teams[i].filter(Boolean);
+    for (let a = 0; a < members.length; a++) for (let b = a + 1; b < members.length; b++) {
+      if (members[a].pari && members[a].pari === members[b].pari) pariScore++;
+    }
+  }
+  const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
+  let balance = 0;
+  for (let i = 0; i < sums.length - 1; i++) for (let j = i + 1; j < sums.length; j++) balance += (sums[i] - sums[j]);
+  const prefW = S.toiveFirst ? 5000 : 1;
+  const pariW = S.toiveFirst ? 2000 : 1;
+  return pref * prefW + pariScore * pariW + balance;
+}
+
+// Neljä näyttöryhmää: ikäsarjat/veteraanit × H/D. ALL_SARJAT_ORDER pitää nämä
+// jo peräkkäin (ikäsarjat H, ikäsarjat D, veteraanit H, veteraanit D), joten
+// ryhmäotsikko vaihtuu vain kerran per lohko.
+function groupLabel(sarja) {
+  const kind = isVeteranSarja(sarja) ? 'Veteraanit' : 'Ikäsarjat';
+  const gender = sarja[0] === 'H' ? 'H-sarjat' : 'D-sarjat';
+  return kind + ' — ' + gender;
+}
+
+function teamLabel(t) {
+  const sarja = S.teamSarja[t];
+  let n = 1;
+  for (let i = 0; i < t; i++) if (S.teamSarja[i] === sarja) n++;
+  return sarja + ' ' + n;
+}
+
+function swapSlots(aT, aS, bT, bS) {
+  const A = S.teams[aT], B = S.teams[bT];
+  const ra = A[aS], rb = B[bS];
+  if (ra === rb) return true;
+  if ((ra && ra.kipea) || (rb && rb.kipea)) return false;
+  const sarjaA = S.teamSarja[aT], sarjaB = S.teamSarja[bT];
+  if (ra && !memberEligible(ra, sarjaB)) return false;
+  if (rb && !memberEligible(rb, sarjaA)) return false;
+  A[aS] = rb; B[bS] = ra;
+  const ok = aT === bT
+    ? validateTeam(A, sarjaA).length === 0
+    : validateTeam(A, sarjaA).length === 0 && validateTeam(B, sarjaB).length === 0;
+  if (!ok) { A[aS] = ra; B[bS] = rb; }
+  return ok;
+}
+
+function optimizePasses() {
+  if (!S.teams.length) return;
+  for (let pass = 0; pass < 80; pass++) {
+    let improved = false;
+    const before = scoreState();
+
+    for (let t = 0; t < S.teams.length; t++) {
+      for (let s = 0; s < 3; s++) {
+        if (S.teams[t][s]) continue;
+        const cands = unassignedRunners().filter(r => memberEligible(r, S.teamSarja[t]));
+        if (!cands.length) continue;
+        cands.sort((a, b) => (b.toive === S.teamSarja[t]) - (a.toive === S.teamSarja[t]) || strengthOf(b) - strengthOf(a));
+        S.teams[t][s] = cands[0];
+        if (validateTeam(S.teams[t], S.teamSarja[t]).length === 0) improved = true;
+        else S.teams[t][s] = null;
+      }
+    }
+
+    for (let i = 0; i < S.teams.length; i++) {
+      for (let j = i + 1; j < S.teams.length; j++) {
+        for (let a = 0; a < 3; a++) {
+          for (let b = 0; b < 3; b++) {
+            const A = S.teams[i][a], B = S.teams[j][b];
+            if (!A || !B || A === B) continue;
+            if (swapSlots(i, a, j, b)) {
+              if (scoreState() > before) improved = true;
+              else swapSlots(j, b, i, a);
+            }
+          }
+        }
+      }
+    }
+
+    const poolNow = unassignedRunners();
+    for (let i = 0; i < S.teams.length; i++) {
+      for (let s = 0; s < 3; s++) {
+        const r = S.teams[i][s];
+        if (!r) continue;
+        for (let p = 0; p < poolNow.length; p++) {
+          const pr = poolNow[p];
+          if (pr.kipea || pr === r || findLocation(pr).kind === 'team') continue;
+          if (!memberEligible(pr, S.teamSarja[i])) continue;
+          S.teams[i][s] = pr;
+          if (validateTeam(S.teams[i], S.teamSarja[i]).length === 0 && scoreState() > before) {
+            updatePoolFromTeams();
+            improved = true;
+            continue;
+          }
+          S.teams[i][s] = r;
+        }
+      }
+    }
+
+    if (!improved) break;
+  }
+}
+
+function optimize() {
+  if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
+  if (S.teams.some((t, i) => validateTeam(t, S.teamSarja[i]).length !== 0)) repairTeamGaps();
+  optimizePasses();
+  for (let t = 0; t < S.teams.length; t++) reorderTeamLegs(t);
+  renderAll();
+  autosave();
+  const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
+  showInfo('Optimoitu. Joukkueiden vahvuudet: ' + sums.map((v, i) => teamLabel(i) + ' ' + v.toFixed(1)).join(', '));
+}
+
+function readInputs() {
+  S.klubi = getEl('klubi').value.trim() || 'Seura';
+  const cy = parseInt(getEl('compYear').value, 10);
+  S.compYear = Number.isInteger(cy) ? cy : S.compYear;
+  S.toiveFirst = getEl('toiveFirst').checked;
+  S.poolText = getEl('poolText').value;
+}
+
+function mergePoolState(parsed) {
+  const prev = new Map();
+  for (const r of S.runners) prev.set(r.kind + ':' + (r.sarja || '') + ':' + r.nimi, r);
+  for (const r of parsed) {
+    const old = prev.get(r.kind + ':' + (r.sarja || '') + ':' + r.nimi);
+    if (old) {
+      r.kipea = old.kipea;
+      r.aloitus = old.aloitus; r.keski = old.keski; r.lopetus = old.lopetus;
+      r.toive = old.toive;
+      // Pari-ryhmät voi muodostaa poolin tekstistä riippumatta (ks. linkSelected),
+      // joten ne on säilytettävä yli syncPool/generateAll-uudelleenjäsennysten.
+      if (old.pari) r.pari = old.pari;
+    }
+  }
+}
+
+function poolSignature(r) { return r.kind + ':' + (r.sarja || '') + ':' + r.nimi + ':' + (r.toive || '') + ':' + (r.pari || ''); }
+
+function syncPool() {
+  readInputs();
+  const runners = parsePool(S.poolText);
+  const same = S.runners.length === runners.length &&
+    S.runners.every((r, i) => poolSignature(r) === poolSignature(runners[i]));
+  if (same) return;
+  mergePoolState(runners);
+  S.runners = runners;
+  S.teams = []; S.teamSarja = [];
+  selectedIdx.clear();
+  renderAll();
+  autosave();
+  if (!runners.length) showWarn('Pooli tyhjä — liitä juoksijoita tai lataa tiedosto.');
+}
+
+function readPool() { syncPool(); }
+
+function generateAll() {
+  readInputs();
+  const parsed = parsePool(S.poolText);
+  if (!parsed.length) { showError('Poolissa ei ollut yhtään juoksijaa.'); return; }
+  mergePoolState(parsed);
+  S.runners = parsed;
+  selectedIdx.clear();
+
+  const ageRunners = S.runners.filter(r => r.kind === 'age' && !r.kipea);
+  const vetM = S.runners.filter(r => r.kind === 'vet' && r.gender === 'M' && !r.kipea);
+  const vetD = S.runners.filter(r => r.kind === 'vet' && r.gender === 'N' && !r.kipea);
+
+  const ageGroups = groupAgeSeries(ageRunners);
+  const vetResM = assignVeteranSeries(vetM, VETERAN_ORDER_H);
+  const vetResD = assignVeteranSeries(vetD, VETERAN_ORDER_D);
+
+  const allGroups = ageGroups.concat(vetResM.groups, vetResD.groups)
+    .sort((a, b) => ALL_SARJAT_ORDER.indexOf(a.sarja) - ALL_SARJAT_ORDER.indexOf(b.sarja));
+
+  S.teams = allGroups.map(g => bestLegOrder(g.members));
+  S.teamSarja = allGroups.map(g => g.sarja);
+  S.showPool = false;
+
+  if (!S.teams.length) {
+    renderAll();
+    showError('Joukkuetta ei voitu muodostaa. Tarkista pooli: ikäsarjatunnukset (H21/H20/H18/H16/D21/D20/D18/D16) tai veteraaneille syntymävuosi+sukupuoli.');
+    return;
+  }
+  optimizePasses();
+  for (let t = 0; t < S.teams.length; t++) reorderTeamLegs(t);
+  renderAll();
+  autosave();
+}
+
+function unassignedRunners() {
+  if (!S.teams.length) return S.runners.slice();
+  return S.runners.filter(r => !S.teams.some(t => t.includes(r)));
+}
+
+function updatePoolFromTeams() {
+  for (let t = 0; t < S.teams.length; t++) {
+    const seen = new Set();
+    for (let s = 0; s < 3; s++) {
+      if (S.teams[t][s] && seen.has(S.teams[t][s])) S.teams[t][s] = null;
+      if (S.teams[t][s]) seen.add(S.teams[t][s]);
+    }
+  }
+}
+
+function findLocation(r) {
+  for (let t = 0; t < S.teams.length; t++) {
+    const s = S.teams[t].indexOf(r);
+    if (s !== -1) return { kind: 'team', t, s };
+  }
+  return { kind: 'pool' };
+}
+
+function fillSlot(teamIdx, slotIdx) {
+  const t = S.teams[teamIdx];
+  const sarja = S.teamSarja[teamIdx];
+  if (t[slotIdx]) return true;
+  const poolNow = unassignedRunners();
+  const cands = poolNow.filter(r => memberEligible(r, sarja));
+  if (cands.length) {
+    cands.sort((a, b) => (b.toive === sarja) - (a.toive === sarja) || strengthOf(b) - strengthOf(a));
+    t[slotIdx] = cands[0];
+    return validateTeam(t, sarja).length === 0;
+  }
+  const backup = cloneTeams();
+  for (let j = 0; j < S.teams.length; j++) {
+    if (j === teamIdx) continue;
+    const tj = S.teams[j];
+    const sarjaJ = S.teamSarja[j];
+    for (let s = 0; s < 3; s++) {
+      const r = tj[s];
+      if (!r || r.kipea || !memberEligible(r, sarja)) continue;
+      tj[s] = null;
+      t[slotIdx] = r;
+      if (validateTeam(t, sarja).length === 0) {
+        const pNow = unassignedRunners();
+        const pc = pNow.filter(p => memberEligible(p, sarjaJ));
+        if (pc.length) {
+          pc.sort((a, b) => strengthOf(b) - strengthOf(a));
+          tj[s] = pc[0];
+          if (validateTeam(tj, sarjaJ).length === 0) return true;
+        } else if (validateTeam(tj, sarjaJ).length === 0) {
+          return true;
+        }
+      }
+      tj[s] = r;
+      t[slotIdx] = null;
+    }
+  }
+  restoreTeams(backup);
+  return false;
+}
+
+function cloneTeams() { return S.teams.map(t => t.slice()); }
+function restoreTeams(backup) { S.teams = backup; }
+
+function performMove(runnerIdx, teamIdx, slotIdx) {
+  const r = S.runners[runnerIdx];
+  if (!r || r.kipea) return;
+  const sarja = S.teamSarja[teamIdx];
+  const loc = findLocation(r);
+  if (loc.kind === 'team' && loc.t === teamIdx && loc.s === slotIdx) return;
+  if (!memberEligible(r, sarja)) { showWarn('Siirto estetty: ' + r.nimi + ' ei kelpaa sarjaan ' + sarja + '.'); return; }
+  const backup = cloneTeams();
+  if (loc.kind === 'team') S.teams[loc.t][loc.s] = null;
+  S.teams[teamIdx][slotIdx] = r;
+  let ok = true;
+  const affected = new Set([teamIdx]);
+  if (loc.kind === 'team') affected.add(loc.t);
+  for (const t of affected) {
+    if (S.teams[t].filter(Boolean).length < 3) continue;
+    if (validateTeam(S.teams[t], S.teamSarja[t]).length) { ok = false; break; }
+  }
+  if (!ok) {
+    restoreTeams(backup);
+    showWarn('Siirto estetty: rikkoo sarjan vaatimuksia (ikäraja/ikäsumma).');
+    return;
+  }
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+function removeFromTeam(teamIdx, slotIdx) {
+  const r = S.teams[teamIdx][slotIdx];
+  if (!r || r.kipea) return;
+  S.teams[teamIdx][slotIdx] = null;
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+function repairTeamGaps() {
+  const N = S.teams.length;
+  if (!N) return 0;
+  let filled = 0;
+  for (let t = 0; t < N; t++) {
+    for (let s = 0; s < 3; s++) {
+      if (S.teams[t][s]) continue;
+      const cands = unassignedRunners().filter(r => memberEligible(r, S.teamSarja[t]));
+      if (!cands.length) continue;
+      cands.sort((a, b) => (b.toive === S.teamSarja[t]) - (a.toive === S.teamSarja[t]) || strengthOf(b) - strengthOf(a));
+      S.teams[t][s] = cands[0];
+      filled++;
+    }
+  }
+  updatePoolFromTeams();
+  for (let t = 0; t < N; t++) filled += cascadeFillTeam(t);
+  updatePoolFromTeams();
+  packIncompleteTeams();
+  return filled;
+}
+
+// Täyttää joukkueen t aukot: poolista ensin, muuten ryöstää kelvollisen
+// juoksijan miltä tahansa toiselta joukkueelta (mieluiten sellaiselta, jonka
+// oma aukko voidaan paikata poolista). Koko operaatio on kirjattu (journal)
+// ja perutaan, jos joukkue t ei lopulta ole kelvollinen — muut joukkueet
+// pysyvät siis koskemattomina epäonnistuneesta yrityksestä.
+function cascadeFillTeam(t) {
+  const team = S.teams[t];
+  const sarja = S.teamSarja[t];
+  if (!team.some(x => !x)) return 0;
+  const N = S.teams.length;
+  let filled = 0;
+  const journal = [];
+  for (let s = 0; s < 3; s++) {
+    if (team[s]) continue;
+    const pool = unassignedRunners().filter(r => memberEligible(r, sarja));
+    if (pool.length) {
+      pool.sort((a, b) => (b.toive === sarja) - (a.toive === sarja) || strengthOf(b) - strengthOf(a));
+      team[s] = pool[0];
+      journal.push([t, s, null]);
+      filled++;
+      continue;
+    }
+    let best = null, bestRefill = false;
+    for (let j = 0; j < N; j++) {
+      if (j === t) continue;
+      const tj = S.teams[j];
+      const sarjaJ = S.teamSarja[j];
+      for (let sj = 0; sj < 3; sj++) {
+        const r = tj[sj];
+        if (!r || r.kipea || !memberEligible(r, sarja)) continue;
+        const refillable = unassignedRunners().some(p => memberEligible(p, sarjaJ));
+        if (!best || (refillable && !bestRefill)) { best = { j, sj, r, refillable }; bestRefill = refillable; }
+      }
+    }
+    if (!best) break;
+    team[s] = best.r;
+    journal.push([t, s, null]);
+    S.teams[best.j][best.sj] = null;
+    journal.push([best.j, best.sj, best.r]);
+    if (best.refillable) {
+      const pc = unassignedRunners().filter(p => memberEligible(p, S.teamSarja[best.j]));
+      pc.sort((a, b) => (b.toive === S.teamSarja[best.j]) - (a.toive === S.teamSarja[best.j]) || strengthOf(b) - strengthOf(a));
+      S.teams[best.j][best.sj] = pc[0];
+      journal.push([best.j, best.sj, null]);
+    }
+    filled++;
+  }
+  if (validateTeam(team, sarja).length !== 0) {
+    for (let k = journal.length - 1; k >= 0; k--) {
+      const [ti, si, before] = journal[k];
+      S.teams[ti][si] = before;
+    }
+    return 0;
+  }
+  return filled;
+}
+
+function packTeam(t) {
+  const compact = S.teams[t].filter(Boolean);
+  while (compact.length < 3) compact.push(null);
+  S.teams[t] = compact;
+}
+
+function packIncompleteTeams() {
+  for (let t = 0; t < S.teams.length; t++) packTeam(t);
+}
+
+function fillGaps() {
+  if (!S.teams.length) { showWarn('Generoi ensin joukkuelistat.'); return; }
+  const filled = repairTeamGaps();
+  for (let t = 0; t < S.teams.length; t++) reorderTeamLegs(t);
+  renderAll();
+  autosave();
+  const gaps = S.teams.reduce((n, tm) => n + tm.filter(x => !x).length, 0);
+  showInfo(gaps
+    ? `Täytettiin ${filled} aukkoa; ${gaps} aukkoa jäi (ei kelvollisia varamiehiä).`
+    : `Kaikki aukot täytetty (${filled} juoksijaa).`);
+}
+
+function setSick(idx, checked) {
+  const r = S.runners[idx];
+  r.kipea = checked;
+  if (checked) {
+    const loc = findLocation(r);
+    if (loc.kind === 'team') {
+      S.teams[loc.t][loc.s] = null;
+      fillSlot(loc.t, loc.s);
+      packTeam(loc.t);
+      reorderTeamLegs(loc.t);
+    }
+  }
+  updatePoolFromTeams();
+  renderAll();
+  autosave();
+}
+
+// Kutsutaan liu'un vapautuessa (onchange, ei oninput) — arvon eläminen
+// kesken vedon hoidetaan suoraan DOM:issa (ks. renderPoolTable), jottei koko
+// taulukon uudelleenpiirto tuhoa parhaillaan vedettävää liukusäädintä.
+function commitScore() {
+  renderAll();
+  autosave();
+}
+
+// Veteraanijuoksijan omien kelpaavien sarjojen lista (oma sukupuoli + ikä
+// riittää yksilörajaan) — käytetään sekä toivesarjan valitsimessa että sen
+// rajaamisessa mahdottomiin toiveisiin.
+function feasibleVetSarjat(r) {
+  const age = ageOf(r);
+  if (age == null) return [];
+  const order = r.gender === 'M' ? VETERAN_ORDER_H : VETERAN_ORDER_D;
+  return order.filter(s => age >= VETERAN_RULES[s].minAge);
+}
+
+function setToive(idx, value) {
+  const r = S.runners[idx];
+  const wantGender = r.gender === 'M' ? 'H' : 'D';
+  r.toive = (value && isVeteranSarja(value) && value[0] === wantGender) ? value : null;
+  renderAll();
+  autosave();
+}
+
+// Valinta ja ryhmitys (pari/kolmikko): käyttäjä rastittaa 2-3 juoksijaa
+// poolista ja klikkaa "Muodosta ryhmä", jolloin heille annetaan yhteinen
+// automaattinen ryhmätunniste — ei tarvetta kirjoittaa Pari-kenttää käsin.
+let selectedIdx = new Set();
+
+function toggleSelect(idx, checked) {
+  if (checked) selectedIdx.add(idx); else selectedIdx.delete(idx);
+  renderPoolTable();
+}
+
+function nextGroupTag() {
+  const used = new Set(S.runners.map(r => r.pari).filter(Boolean));
+  let n = 1;
+  while (used.has('Ryhmä ' + n)) n++;
+  return 'Ryhmä ' + n;
+}
+
+function linkSelected() {
+  if (selectedIdx.size < 2) { showWarn('Valitse vähintään 2 juoksijaa ryhmitettäväksi.'); return; }
+  if (selectedIdx.size > 3) { showWarn('Ryhmässä voi olla enintään 3 juoksijaa (yhden joukkueen koko).'); return; }
+  const tag = nextGroupTag();
+  for (const idx of selectedIdx) S.runners[idx].pari = tag;
+  const n = selectedIdx.size;
+  selectedIdx.clear();
+  renderAll();
+  autosave();
+  showInfo(`Muodostettiin ${tag} (${n} juoksijaa). He pyritään pitämään samassa joukkueessa.`);
+}
+
+function clearPari(idx) {
+  S.runners[idx].pari = null;
+  renderAll();
+  autosave();
+}
+
+const S = {
+  runners: [], teams: [], teamSarja: [],
+  klubi: 'Seura', firstNum: 1, compYear: new Date().getFullYear(), toiveFirst: true,
+  poolText: '', showPool: true, poolSort: 'order', poolDir: 1,
+};
+
+function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+function csvCell(v) { const s = String(v); return /^[=+\-@]/.test(s) ? q("'" + s) : q(s); }
+
+function toCSV() {
+  if (!S.teams.length) return '';
+  const base = ['Kilpailunumero', 'Sarja', 'Joukkueen nimi', 'Kansalaisuus', 'Seura'];
+  const header = base.map(q);
+  for (let b = 1; b <= 3; b++) {
+    header.push(q(' '.repeat(b)));
+    header.push(q(`Nimi-${b}`), q(`Kilpailukortti-${b}`), q(`Lainakortti-${b}`),
+      q(`Osuus-${b}`), q(`Alaosuus-${b}`), q(`Rata-${b}`), q(`Lähtöaika-${b}`));
+  }
+  const lines = [header.join(',')];
+  S.teams.forEach((team, ti) => {
+    const sarja = S.teamSarja[ti];
+    const n = teamLabel(ti).split(' ').pop();
+    const cells = [q(String(S.firstNum + ti)), q(sarja), csvCell(`${S.klubi} ${sarja} ${n}`), q('FIN'), csvCell(S.klubi)];
+    for (let s = 0; s < 3; s++) {
+      const r = team[s];
+      cells.push(q(' '.repeat(s + 1)));
+      cells.push(csvCell(r ? r.nimi : ''), q(''), q(''), q(String(s + 1)), q(''), q(''), q(''));
+    }
+    lines.push(cells.join(','));
+  });
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+
+function exportCSV() {
+  const csv = toCSV();
+  if (!csv) { showWarn('Ei joukkuelistoja — generoi ensin.'); return; }
+  download('sm_viesti_navisport.csv', csv);
+  getEl('csvOut').value = csv;
+  getEl('csvWrap').style.display = 'block';
+}
+
+function download(name, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function serializeState() {
+  readInputs();
+  return {
+    v: 1,
+    klubi: S.klubi, firstNum: S.firstNum, compYear: S.compYear, toiveFirst: S.toiveFirst, poolText: S.poolText,
+    showPool: S.showPool, poolSort: S.poolSort, poolDir: S.poolDir,
+    runners: S.runners.map(r => ({ nimi: r.nimi, kind: r.kind, sarja: r.sarja, gender: r.gender, birthYear: r.birthYear, toive: r.toive, pari: r.pari, aloitus: r.aloitus, keski: r.keski, lopetus: r.lopetus, kipea: r.kipea })),
+    teams: S.teams.map(t => t.map(r => r ? S.runners.indexOf(r) : null)),
+    teamSarja: S.teamSarja,
+  };
+}
+
+function restoreState(data) {
+  if (!data || data.v !== 1) return false;
+  S.klubi = data.klubi || 'Seura';
+  S.firstNum = data.firstNum || 1;
+  S.compYear = data.compYear || new Date().getFullYear();
+  S.toiveFirst = data.toiveFirst !== false;
+  S.poolText = data.poolText || '';
+  S.showPool = data.showPool !== false;
+  S.poolSort = data.poolSort || 'order';
+  S.poolDir = data.poolDir || 1;
+  S.runners = (data.runners || []).map(d => ({
+    nimi: d.nimi, kind: d.kind, sarja: d.sarja || null, gender: d.gender || null,
+    birthYear: d.birthYear != null ? d.birthYear : null,
+    toive: d.toive, pari: d.pari || null,
+    aloitus: d.aloitus || 0, keski: d.keski || 0, lopetus: d.lopetus || 0, kipea: !!d.kipea,
+  }));
+  S.teams = (data.teams || []).map(t => t.map(i => (Number.isInteger(i) && S.runners[i]) ? S.runners[i] : null));
+  S.teamSarja = data.teamSarja || [];
+  getEl('klubi').value = S.klubi;
+  getEl('compYear').value = S.compYear;
+  getEl('toiveFirst').checked = S.toiveFirst;
+  getEl('poolText').value = S.poolText;
+  return true;
+}
+
+function saveState() {
+  download('sm_viesti_suunnitelma.json', JSON.stringify(serializeState(), null, 2));
+}
+
+function autosave() {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem('sm_viesti_state_v1', JSON.stringify(serializeState())); } catch (e) {}
+}
+
+function resetAll() {
+  S.runners = []; S.teams = []; S.teamSarja = []; S.poolText = '';
+  S.showPool = true; S.poolSort = 'order'; S.poolDir = 1;
+  getEl('poolText').value = '';
+  if (typeof localStorage !== 'undefined') { try { localStorage.removeItem('sm_viesti_state_v1'); } catch (e) {} }
+  renderAll();
+}
+
+function esc(v) { return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+function genderLabel(r) {
+  if (!r.gender) return '?';
+  return r.gender === 'M' ? 'Mies' : 'Nainen';
+}
+
+function renderStatus() {
+  const el = getEl('statusBar');
+  if (!S.runners.length) {
+    el.innerHTML = '<span class="warn">Liitä juoksijapooli tai lataa tiedosto — juoksijat päivittyvät automaattisesti.</span>';
+    return;
+  }
+  const lines = [];
+  lines.push(`<b>${S.runners.length}</b> juoksijaa`);
+  if (S.teams.length) {
+    lines.push(`<b>${S.teams.length}</b> joukkuetta`);
+    lines.push(`<b>${unassignedRunners().length}</b> vapaana`);
+  }
+  let html = lines.join(' · ');
+  if (S.teams.length) {
+    let allOk = true;
+    for (let t = 0; t < S.teams.length; t++) {
+      const probs = validateTeam(S.teams[t], S.teamSarja[t]);
+      if (probs.length) { allOk = false; html += `<div class="line err">${esc(teamLabel(t))}: ${esc(probs.join('; '))}</div>`; }
+    }
+    if (allOk) html += `<div class="line ok">Kaikki joukkuelistat kelvollisia.</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderWarnings() {
+  const el = getEl('warnWrap');
+  const warns = S.runners.length ? computeWarnings() : [];
+  if (!warns.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="warnbox"><div class="wtitle">⚠ Tarkistettavaa (${warns.length})</div><ul>${warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>`;
+}
+
+function renderPanel() {
+  const el = getEl('statusPanel');
+  if (!S.teams.length) { el.innerHTML = ''; return; }
+  const sums = S.teams.map(t => t.reduce((s, r) => s + strengthOf(r), 0));
+  let html = '<h3>Joukkueiden vahvuudet</h3>';
+  for (let t = 0; t < S.teams.length; t++) {
+    const probs = validateTeam(S.teams[t], S.teamSarja[t]);
+    html += `<div class="row" style="justify-content:space-between;"><span style="color:${TEAM_COLORS[t % TEAM_COLORS.length]};">● ${esc(teamLabel(t))}</span><span>${sums[t].toFixed(1)} <span class="${probs.length ? 'err-msg' : 'ok'}">${probs.length ? '✖' : '✔'}</span></span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+const POOL_COLS = [
+  { key: 'nimi', label: 'Nimi', cmp: r => r.nimi, dir: 1 },
+  { key: 'sarja', label: 'Sarja/ikä', cmp: r => r.sarja || '', dir: 1 },
+  { key: 'toive', label: 'Toivesarja', cmp: r => r.toive || '', dir: 1 },
+  { key: 'pari', label: 'Ryhmä', cmp: r => r.pari || '', dir: 1 },
+  { key: 'aloitus', label: 'Aloitus', cmp: r => r.aloitus, dir: -1 },
+  { key: 'keski', label: 'Toinen osuus', cmp: r => r.keski, dir: -1 },
+  { key: 'lopetus', label: 'Ankkuri', cmp: r => r.lopetus, dir: -1 },
+  { key: 'vahvuus', label: 'Vahvuus', cmp: r => strengthOf(r), dir: -1 },
+  { key: 'kipea', label: 'Kipeä', cmp: r => r.kipea ? 1 : 0, dir: -1 },
+  { key: 'tilanne', label: 'Tilanne', cmp: (r, loc) => loc.kind === 'team' ? 0 : (r.kipea ? 2 : 1), dir: 1 },
+];
+
+function poolRows() {
+  const rows = S.runners.map((r, idx) => ({ r, idx, loc: findLocation(r) }));
+  const col = POOL_COLS.find(c => c.key === S.poolSort);
+  if (!col) return rows;
+  const dir = S.poolDir || col.dir;
+  const v = col.cmp;
+  return rows.sort((a, b) => {
+    const va = v(a.r, a.loc), vb = v(b.r, b.loc);
+    const an = va == null, bn = vb == null;
+    if (an && bn) return a.idx - b.idx;
+    if (an) return 1;
+    if (bn) return -1;
+    let c = va < vb ? -1 : va > vb ? 1 : 0;
+    return (c || (a.idx - b.idx)) * dir;
+  });
+}
+
+function sortPool(key) {
+  if (S.poolSort === key) S.poolDir = -S.poolDir;
+  else { S.poolSort = key; S.poolDir = (POOL_COLS.find(c => c.key === key) || {}).dir || 1; }
+  autosave();
+  renderPoolTable();
+}
+
+function poolHeader(col) {
+  const active = S.poolSort === col.key;
+  const arrow = active ? (S.poolDir > 0 ? ' ▲' : ' ▼') : '';
+  return `<th style="cursor:pointer;user-select:none;" onclick="sortPool('${col.key}')" title="Lajittele">${col.label}${arrow}</th>`;
+}
+
+function renderPoolTable() {
+  const wrap = getEl('poolWrap');
+  if (!S.runners.length) { wrap.innerHTML = ''; return; }
+  let html = '<h3>Juoksijat ja pisteet</h3>' +
+    '<div class="row" style="justify-content:flex-start;align-items:center;margin-bottom:4px;">' +
+    `<label class="chk"><input type="checkbox" id="showPool" style="width:auto;" ${S.showPool ? 'checked' : ''} onchange="togglePool()"> Näytä lista</label>` +
+    `<button class="bg btn-sm" onclick="linkSelected()" ${selectedIdx.size < 2 ? 'disabled' : ''}>Muodosta ryhmä valituista (${selectedIdx.size})</button>` +
+    '<span style="font-size:11px;color:#667;">Rastita 2-3 juoksijaa, jotka haluat samaan joukkueeseen (esim. aiemmin yhdessä juosseet), ja klikkaa "Muodosta ryhmä".</span>' +
+    '</div>' +
+    '<div id="poolTableWrap"' + (S.showPool ? '' : ' style="display:none;"') + '>' +
+    '<table class="scores"><thead><tr>' +
+    '<th></th>' +
+    POOL_COLS.map(poolHeader).join('') +
+    '</tr></thead><tbody>';
+  poolRows().forEach(({ r, idx, loc }) => {
+    const inTeam = loc.kind === 'team';
+    const til = inTeam
+      ? `<span style="color:${TEAM_COLORS[loc.t % TEAM_COLORS.length]};">● ${esc(teamLabel(loc.t))} · ${esc(LEG_NAMES[loc.s] || '')}</span>`
+      : (r.kipea ? 'kipeä' : 'varamies');
+    const cls = r.kipea ? 'sick' : (inTeam ? '' : 'varamies');
+    const age = ageOf(r);
+    const sarjaCell = r.kind === 'age' ? `${esc(r.sarja)}${age != null ? ' (' + age + ' v)' : ''}` : `${esc(genderLabel(r))}, ${age != null ? age + ' v' : '?'}`;
+    html += `<tr class="${cls}">` +
+      `<td><input type="checkbox" style="width:auto;" ${selectedIdx.has(idx) ? 'checked' : ''} onchange="toggleSelect(${idx}, this.checked)" title="Valitse ryhmitettäväksi"></td>` +
+      `<td>${esc(r.nimi)}</td>` +
+      `<td>${sarjaCell}</td>` +
+      `<td>${r.kind === 'vet'
+        ? `<select onchange="setToive(${idx}, this.value)">` +
+          `<option value="" ${!r.toive ? 'selected' : ''}>— ei toivetta —</option>` +
+          feasibleVetSarjat(r).map(s => `<option value="${s}" ${r.toive === s ? 'selected' : ''}>${s}</option>`).join('') +
+          `</select>`
+        : '<span style="color:#bbb;">—</span>'}</td>` +
+      `<td>${r.pari ? `<span class="pari-chip">${esc(r.pari)} <a href="javascript:void(0)" onclick="clearPari(${idx})" title="Poista ryhmästä">✕</a></span>` : '—'}</td>` +
+      `<td>${scoreSlider(idx, 'aloitus', r.aloitus)}</td>` +
+      `<td>${scoreSlider(idx, 'keski', r.keski)}</td>` +
+      `<td>${scoreSlider(idx, 'lopetus', r.lopetus)}</td>` +
+      `<td>${strengthOf(r).toFixed(1)}</td>` +
+      `<td><input type="checkbox" style="width:auto;" ${r.kipea ? 'checked' : ''} onchange="setSick(${idx}, this.checked)"></td>` +
+      `<td class="til">${til}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+// Liukusäädin roolipisteelle (0-10, näytetään prosentteina). "oninput" (kesken
+// vedon) päivittää vain arvon ja viereisen prosenttitekstin suoraan DOM:issa —
+// ei koko taulukon uudelleenpiirtoa, koska se tuhoaisi parhaillaan vedettävän
+// säätimen. Täysi uudelleenpiirto + tallennus tapahtuu vasta "onchange":ssa,
+// kun käyttäjä vapauttaa liu'un.
+function scoreSlider(idx, field, value) {
+  return `<span class="stepper">` +
+    `<input type="range" class="rng" min="0" max="10" step="1" value="${value}" ` +
+    `oninput="S.runners[${idx}].${field}=parseInt(this.value,10); this.nextElementSibling.textContent=(this.value*10)+'%';" ` +
+    `onchange="commitScore()">` +
+    `<span class="stp-val">${value * 10}%</span></span>`;
+}
+
+function togglePool() {
+  S.showPool = getEl('showPool').checked;
+  autosave();
+  const tbl = getEl('poolTableWrap');
+  if (tbl) tbl.style.display = S.showPool ? '' : 'none';
+}
+
+function renderChips() {
+  const wrap = getEl('chipsWrap');
+  const un = S.runners.length ? unassignedRunners() : [];
+  if (!S.teams.length || !un.length) { wrap.innerHTML = ''; return; }
+  let html = '<h3>Varamiehet (vedä joukkuelistaan)</h3><div class="chips">';
+  un.forEach(r => {
+    html += `<span class="chip ${r.kipea ? 'sick' : ''}" draggable="true"
+      data-drag="${S.runners.indexOf(r)}"
+      ondragstart="dragStart(event)">${esc(r.nimi)} (${esc(r.sarja || (r.gender === 'M' ? 'H' : 'D') + '?')})${r.kipea ? ' ✖' : ''}</span>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function renderTeams() {
+  const wrap = getEl('teamsWrap');
+  if (!S.teams.length) { wrap.innerHTML = '<div style="color:#667;">Generoi joukkuelistat poolista.</div>'; return; }
+  let html = '';
+  let lastGroup = null;
+  S.teams.forEach((team, t) => {
+    const sarja = S.teamSarja[t];
+    const grp = groupLabel(sarja);
+    if (grp !== lastGroup) {
+      html += `<div class="group-hdr">${esc(grp)}</div>`;
+      lastGroup = grp;
+    }
+    const probs = validateTeam(team, sarja);
+    const sum = team.reduce((s, r) => s + strengthOf(r), 0);
+    const col = TEAM_COLORS[t % TEAM_COLORS.length];
+    html += `<div class="team-col">` +
+      `<div class="team-hdr" style="background:${col}"><div class="tname">${esc(teamLabel(t))} <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
+      `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/3</div>` +
+      (probs.length ? `<div class="problems">${probs.map(esc).join('<br>')}</div>` : '') +
+      `</div>`;
+    for (let s = 0; s < 3; s++) {
+      const r = team[s];
+      const valid = !r || memberEligible(r, sarja);
+      const vetOpen = r && vetInOpenClass(r, sarja);
+      const rowCls = [vetOpen ? 'vet-in-open' : '', (r && !valid) ? 'invalid' : ''].filter(Boolean).join(' ');
+      html += `<div class="slot-row ${rowCls}" data-team="${t}" data-slot="${s}" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropSlot(event, ${t}, ${s})">` +
+        `<span class="slot-lab">${LEG_NAMES[s]}</span>` +
+        (r
+          ? `<span class="runner ${r.kipea ? 'sick' : ''}" draggable="${r.kipea ? 'false' : 'true'}" data-drag="${S.runners.indexOf(r)}" ondragstart="dragStart(event)" ondragover="allowDrop(event)" ondrop="dropSlot(event, ${t}, ${s})"` +
+            (vetOpen ? ` title="Veteraani-ikäinen (${ageOf(r)} v) avoimessa ${sarja}-sarjassa — sallittua, mutta tarkista tarkoituksellisuus."` : '') +
+            `>${esc(r.nimi)}${vetOpen ? ' <span class="vetbadge">35+</span>' : ''}<span class="str">${strengthOf(r).toFixed(0)}${r.toive === sarja ? ' ★' : ''}</span></span>` +
+            `<button class="sick-btn" title="Merkitse kipeäksi" onclick="setSick(${S.runners.indexOf(r)}, true)">🤒</button>` +
+            `<button class="rm-btn" title="Poista joukkueesta" onclick="removeFromTeam(${t}, ${s})">✕</button>`
+          : `<span class="slot-empty" ondragover="event.preventDefault()" ondrop="dropSlot(event, ${t}, ${s})">— tyhjä —</span>`) +
+        `</div>`;
+    }
+    html += '</div>';
+  });
+  wrap.innerHTML = html;
+}
+
+function dragStart(e) {
+  const el = e.target.closest('[data-drag]');
+  if (!el) return;
+  e.dataTransfer.setData('text/plain', String(el.getAttribute('data-drag')));
+}
+
+let dropEl = null;
+function allowDrop(e) {
+  e.preventDefault();
+  clearDropHighlight();
+  const el = e.currentTarget;
+  if (el && el.classList) { el.classList.add('drop-over'); dropEl = el; }
+}
+function dragLeave(e) {
+  const el = e.currentTarget;
+  if (dropEl === el) clearDropHighlight();
+}
+function clearDropHighlight() {
+  if (dropEl && dropEl.classList) dropEl.classList.remove('drop-over');
+  dropEl = null;
+}
+
+function dropSlot(e, teamIdx, slotIdx) {
+  e.preventDefault();
+  clearDropHighlight();
+  const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+  if (Number.isInteger(id)) performMove(id, teamIdx, slotIdx);
+}
+
+const STEP_KEYS = ['pool', 'gen', 'save'];
+const stepCollapsed = { pool: false, gen: true, save: true };
+let stepManual = {};
+let prevHasPool = null, prevHasTeams = null;
+
+function toggleStep(k) {
+  stepCollapsed[k] = !stepCollapsed[k];
+  stepManual[k] = true;
+  applySteps();
+}
+
+function updateSteps() {
+  const hasPool = S.runners.length > 0;
+  const hasTeams = S.teams.length > 0;
+  if (hasPool !== prevHasPool || hasTeams !== prevHasTeams) stepManual = {};
+  prevHasPool = hasPool; prevHasTeams = hasTeams;
+  stepCollapsed.pool = stepManual.pool ? stepCollapsed.pool : hasTeams;
+  stepCollapsed.gen = stepManual.gen ? stepCollapsed.gen : !hasPool;
+  stepCollapsed.save = stepManual.save ? stepCollapsed.save : !hasPool;
+  applySteps();
+}
+
+function applySteps() {
+  for (const k of STEP_KEYS) {
+    const cap = k[0].toUpperCase() + k.slice(1);
+    const body = getEl('psBody' + cap), tog = getEl('stepToggle' + cap);
+    if (body) body.style.display = stepCollapsed[k] ? 'none' : '';
+    if (tog) tog.textContent = stepCollapsed[k] ? '▸' : '▾';
+  }
+}
+
+function renderAll() {
+  if (!S.teams.length) S.showPool = true;
+  renderStatus();
+  renderWarnings();
+  renderPanel();
+  renderPoolTable();
+  renderChips();
+  renderTeams();
+  updateSteps();
+}
+
+function showError(msg) { getEl('statusBar').innerHTML = `<span class="err">✖ ${esc(msg)}</span>`; }
+function showWarn(msg) { getEl('statusBar').innerHTML = `<span class="warn">⚠ ${esc(msg)}</span>`; }
+function showInfo(msg) { getEl('statusBar').innerHTML = `<span class="ok">✔ ${esc(msg)}</span>`; }
+
+function getEl(id) { return document.getElementById(id); }
+
+function decodeText(buf) {
+  const u8 = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  try { const t = decodeURIComponent(escape(s)); if (!t.includes('�')) return t; } catch (e) {}
+  return s;
+}
+
+let poolTimer = null;
+getEl('poolText').addEventListener('input', function() {
+  clearTimeout(poolTimer);
+  poolTimer = setTimeout(syncPool, 800);
+});
+
+getEl('poolFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    getEl('poolText').value = decodeText(rd.result);
+    syncPool();
+  };
+  rd.readAsArrayBuffer(f);
+  this.value = '';
+});
+
+getEl('loadFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      if (restoreState(JSON.parse(rd.result))) { renderAll(); }
+      else showError('Tiedosto ei ole kelvollinen SM-viesti-suunnitelma.');
+    } catch (e) { showError('JSON:n lukeminen epäonnistui: ' + e.message); }
+  };
+  rd.readAsText(f);
+  this.value = '';
+});
+
+// Esimerkkipooli: sekoitus ikäsarjoja (H21/D21 avoimena, H16-H20/D16-D20
+// nuorina esimerkkeinä) ja veteraaniehdokkaita eri ikäluokista. Puhtaasti
+// havainnollistava — ei väitä tietävänsä todellisia ikäluokkarajoja nuorten
+// sarjoille (niitä ei tässä työkalussa tarkisteta, ks. yläikäraja-varoitus).
+function loadExamplePool(count) {
+  const n = count > 0 ? count : 30;
+  const year = S.compYear || new Date().getFullYear();
+  const boys = ['Aapo','Aleksi','Antti','Eino','Esa','Jari','Jouni','Jukka','Juha','Kalle','Lauri','Mikko','Miika','Niilo','Olli','Harri','Risto','Paavo','Pasi','Pekka','Petri','Sami','Seppo','Teemu','Vesa','Ville'];
+  const girls = ['Aino','Astra','Anu','Anna','Elina','Emma','Hanna','Hanne','Heidi','Iida','Kaisa','Karoliina','Johanna','Katariina','Katja','Liisa','Lotta','Maija','Marja','Minna','Outi','Pauliina','Päivi','Riikka','Sanna','Satu','Suvi','Tuuli','Venla'];
+  const surnames = ['Aaltonen','Aho','Hakala','Hilo','Hyvärinen','Heikkinen','Heinonen','Järvinen','Kivelä','Korhonen','Koskela','Laine','Lehtonen','Miettinen','Mäkelä','Nieminen','Nurmi','Ojapalo','Pesonen','Ranta','Räsänen','Salmi','Salminen','Sipilä','Toivonen','Vehmas','Virtanen'];
+  const names = new Set();
+  const name = (g) => { let nm; do { nm = surnames[Math.floor(Math.random() * surnames.length)] + ' ' + g[Math.floor(Math.random() * g.length)]; } while (names.has(nm)); names.add(nm); return nm; };
+
+  const lines = [];
+  const half = Math.round(n * 0.5);
+  const ageCount = half, vetCount = n - half;
+
+  for (let i = 0; i < ageCount; i++) {
+    const sarja = AGE_SARJAT[Math.floor(Math.random() * AGE_SARJAT.length)];
+    const g = sarja[0] === 'H' ? boys : girls;
+    const byear = sarja.endsWith('21') ? year - (18 + Math.floor(Math.random() * 40))
+      : year - (14 + Math.floor(Math.random() * 6));
+    lines.push(`${sarja}:${name(g)}:${byear}`);
+  }
+
+  let pariSeq = 0;
+  for (let i = 0; i < vetCount; i++) {
+    const gender = Math.random() < 0.5 ? 'M' : 'N';
+    const g = gender === 'M' ? boys : girls;
+    const byear = year - (35 + Math.floor(Math.random() * 45));
+    const age = year - byear;
+    const order = gender === 'M' ? VETERAN_ORDER_H : VETERAN_ORDER_D;
+    const feasible = order.filter(s => age >= VETERAN_RULES[s].minAge);
+    const toiveSarja = (feasible.length && Math.random() < 0.1) ? feasible[Math.floor(Math.random() * feasible.length)] : null;
+    const pari = Math.random() < 0.2 ? 'pari' + (pariSeq++ % Math.max(1, Math.floor(vetCount / 6))) : null;
+    lines.push(`${name(g)}:${byear}:${gender}${toiveSarja ? ':' + toiveSarja : (pari ? ':' : '')}${pari ? ':' + pari : ''}`);
+  }
+
+  getEl('poolText').value = lines.join('\n');
+  syncPool();
+}
+
+(function init() {
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('dragend', clearDropHighlight);
+  }
+  getEl('compYear').value = S.compYear;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('sm_viesti_state_v1');
+      if (raw) { if (restoreState(JSON.parse(raw))) { renderAll(); return; } }
+    } catch (e) {}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

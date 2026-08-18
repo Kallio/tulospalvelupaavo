@@ -16,6 +16,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 | Tasavahvat 25-manna-joukkueet juoksijapoolista | [25-manna joukkuesuunnittelu](#25-manna-joukkuesuunnittelu) |
 | Tasavahvat Nuorten Jukola -joukkueet | [Nuorten Jukola -joukkuesuunnittelu](#nuorten-jukola--joukkuesuunnittelu) |
 | Tasavahvat Halikko-viesti -joukkueet | [Halikko-viesti -joukkuesuunnittelu](#halikko-viesti--joukkuesuunnittelu) |
+| SM-viesti-joukkueet (ikäsarjat + veteraanien ikäsummasäännöt) | [SM-viesti -joukkuesuunnittelu](#sm-viesti--joukkuesuunnittelu) |
 | Ajantasaisen listan Suomen suunnistusseuroista | [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija) |
 | ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
 | Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
@@ -153,6 +154,48 @@ juoksijakohtaisia pisteitä ja joukkuetoiveita, [Navisport](#navisport)-alkulist
 -profiilin kanssa), JSON-tallennuksen/latauksen ja
 `localStorage`-autotallennuksen sekä sisäänrakennetut esimerkkipoolit 45/60/75
 juoksijalle.
+
+</details>
+
+### SM-viesti -joukkuesuunnittelu
+
+Tiedosto: [`sm_viesti_joukkuesuunnittelija.html`](sm_viesti_joukkuesuunnittelija.html)
+
+Jaatko SM-viestin osallistujia joukkueisiin käsin? Syötä juoksijapooli, ja
+työkalu muodostaa 3 hengen joukkueet ikäsarjoihin (H21/H20/H18/H16,
+D21/D20/D18/D16) ja päättää veteraanisarjoissa automaattisesti, ketkä
+juoksevat yhdessä *ja missä sarjassa* — koska veteraanisarja vaatii
+vähimmäisikäsumman koko joukkueelle, ei vain vähimmäisikää juoksijaa kohti.
+
+<details>
+<summary>Lisätiedot</summary>
+
+SM-viesti-joukkuesuunnittelija. Kolme osuutta läpi linjan. Kahdeksalla
+ikäsarjalla (H21/D21 on avoin, ilman ikärajaa; H20/H18/H16 ja D-vastineet
+nuoremmille) ei ole joukkuetason vaatimuksia — joukkueet muodostetaan suoraan
+ilmoitetun sarjatunnisteen mukaan. Ainoa kaikkialla tarkistettava kova
+ikäsääntö on liiton yleinen alaikäraja (kilpailuvuonna vähintään 14 v); tämä
+näytetään ei-estävänä varoituksena, ei virheenä, koska nuorempien
+osallistuminen muihinkin sarjoihin on sallittu erikoistapaus.
+
+14 veteraanisarjaa (H35–H80, D35–D70) vaativat kukin sekä yksilön
+vähimmäisiän että joukkueen ikäsumman (syntymävuoteen perustuen) — ja koska
+vaikeampaan sarjaan kelpaava juoksija kelpaa aina myös kaikkiin helpompiin,
+se missä sarjassa kolmikko lopulta juoksee on oikea valinta. Suunnittelija
+ratkaisee tämän automaattisesti: se käsittelee vaikeimman sarjan ensin
+(vanhin/suurin summavaatimus), yhdistäen kaksi nuorinta kelpaavaa juoksijaa
+vanhimpaan saatavilla olevaan aina kun summa riittää, jotta iäkkäitä
+juoksijoita ei "tuhlata" helpompiin sarjoihin ennen vaikeampien täyttämistä.
+Tämä on heuristiikka, ei todistetusti globaalisti optimaalinen ratkaisu.
+
+Muita ominaisuuksia: valinnainen "Pari"-tunniste, jolla kaksi aiemmin yhdessä
+juossutta juoksijaa pyritään pitämään samassa joukkueessa; kolme erillistä
+osuuskohtaista roolipistettä (aloitus/keski/loppu) yhden vahvuusluvun sijaan,
+joilla päätetään kunkin joukkueen jäsenen osuus; vedä-ja-pudota-säätö, kipeän
+juoksijan automaattinen korvaus (kohdejoukkueen ikäsummavaatimusta
+kunnioittaen), juoksijakohtaiset joukkuetoiveet, [Navisport](#navisport)-alkulista-CSV-vienti,
+JSON-tallennus/lataus `localStorage`-autotallennuksella sekä sisäänrakennettu
+esimerkkipooli, joka kattaa molemmat sarjatyypit.
 
 </details>
 
