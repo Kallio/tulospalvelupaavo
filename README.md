@@ -5,29 +5,41 @@
 **Tulospalvelupaavo** is a collection of tools — just a growing box of helpers that
 extend what [Navisport](#navisport) can offer, making data equally accessible to organisers,
 broadcasters, and participants. Some are full HTML applications, others are
-quick one-off scripts.
+quick one-off scripts. All the HTML tools run entirely in your browser — no
+install, no server, no account: download the file (or just open it) and go.
+
 ---
 
+## What do you need?
+
+| I need to... | Tool |
+|---|---|
+| Print bib numbers with barcodes and sponsor logos | [Bib Number Generator](#bib-number-generator) |
+| Turn a Rastilippu relay signup into a Navisport start list | [Rastilippu → Navisport Parallel-Leg Fixer](#rastilippu--navisport-parallel-leg-fixer) |
+| Build balanced 25-manna teams from a runner pool | [25-manna Team Planner](#25-manna-team-planner) |
+| Build balanced Nuorten Jukola teams | [Nuorten Jukola Team Planner](#nuorten-jukola-team-planner) |
+| Build balanced Halikko-viesti teams | [Halikko-viesti Team Planner](#halikko-viesti-team-planner) |
+| Get an up-to-date list of Finnish orienteering clubs | [IRMA Club Registry Fetcher](#irma-club-registry-fetcher) |
+| ...with district/area info attached | [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts) |
+| Convert Purple Pen course files to IOF XML | [Purple Pen → IOF Converter](#purple-pen--iof-converter) |
+| Lay out kids' maps on A4 sheets for printing | [Map Merger](#map-merger) |
+| Show live results/splits on stream (OBS/vMix) | [OBS Broadcast Overlays](#obs-broadcast-overlays) |
+| Track points across a multi-event tournament | [Pokaalijahti WordPress Plugin](#pokaalijahti-wordpress-plugin) |
+| Format results for a press release / newspaper | [Press Results Formatter](#press-results-formatter) |
+| See how an event actually went — timings, pace, bottlenecks | [Event Flow Analysis](#event-flow-analysis) |
+
 ## Main tools
-
-### Contents
-
-- [Bib Number Generator](#bib-number-generator)
-- [Rastilippu → Navisport Parallel-Leg Fixer](#rastilippu--navisport-parallel-leg-fixer)
-- [25-manna Team Planner](#25-manna-team-planner)
-- [Nuorten Jukola Team Planner](#nuorten-jukola-team-planner)
-- [Halikko-viesti Team Planner](#halikko-viesti-team-planner)
-- [IRMA Club Registry Fetcher](#irma-club-registry-fetcher)
-- [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts)
-- [Purple Pen → IOF Converter](#purple-pen--iof-converter)
-- [Map Merger](#map-merger)
-- [OBS Broadcast Overlays](#obs-broadcast-overlays)
-- [Pokaalijahti WordPress Plugin](#pokaalijahti-wordpress-plugin)
-- [Press Results Formatter](#press-results-formatter)
 
 ### Bib Number Generator
 
 File: [`bibgenerator.html`](bibgenerator.html)
+
+Need bib numbers with barcodes, sponsor logos, and colour-coded classes ready
+to print before race day? Import a CSV or pull straight from Navisport, drag
+your layout into place, and print.
+
+<details>
+<summary>Details</summary>
 
 Bib number card generator for running races, adventure races, and orienteering.
 Imports CSV (ESP/IRMA format) or loads from [Navisport](#navisport) API. Generates individual
@@ -35,9 +47,18 @@ competitor cards with barcodes, sponsor logos, colour-coded classes, and fully
 drag-and-drop configurable layout (A5 landscape). Supports relay legs,
 multi-stage events, and sticker sheets.
 
+</details>
+
 ### Rastilippu → Navisport Parallel-Leg Fixer
 
 File: [`rastilippu_parallel_legs_to_navisport.html`](rastilippu_parallel_legs_to_navisport.html)
+
+Your relay signed up through Rastilippu, but Navisport wants per-leg
+`Osuus`/`Alaosuus` columns? Drop in the registration CSV and get a start list
+Navisport will accept.
+
+<details>
+<summary>Details</summary>
 
 Converts a Rastilippu relay-registration CSV into a [Navisport](#navisport) start-list CSV
 with per-leg `Osuus`/`Alaosuus` columns. Teams are mapped onto configurable leg
@@ -55,9 +76,18 @@ numbers); overlapping numbers across profiles block saving.
 
 Example: `rastilippu_parallel_legs_to_navisport.html?teams=40&ex=halikko&seed=123`
 
+</details>
+
 ### 25-manna Team Planner
 
 File: [`25manna_joukkuesuunnittelija.html`](25manna_joukkuesuunnittelija.html)
+
+Splitting a few hundred runners into balanced 25-manna teams by hand in a
+spreadsheet? This does it in seconds — eligibility rules included — and still
+lets you drag-and-drop tweak the result.
+
+<details>
+<summary>Details</summary>
 
 25-manna team planner. Reads a runner pool (`Sarja:Nimi`, optional team wish as a
 third field, e.g. `D16:Virtanen Aino:1`) and generates as many valid 25-runner
@@ -70,9 +100,18 @@ via the browser, and JSON save/load with `localStorage` autosave. 25-manna
 eligibility rules (women-only legs, restricted age/gender legs 3–10/23, ≥9 men
 with ≥1 H≤16, ≥9 women with ≥1 D≤16, ≤8 H21) are built in.
 
+</details>
+
 ### Nuorten Jukola Team Planner
 
 File: [`nuorten_jukola_joukkuesuunnittelija.html`](nuorten_jukola_joukkuesuunnittelija.html)
+
+Same idea for Nuorten Jukola: feed it a runner pool, get back as many valid
+7-runner teams as fit, with the 2026 age/gender rules for every leg already
+baked in.
+
+<details>
+<summary>Details</summary>
 
 Nuorten Jukola team planner. Reads a runner pool (`Sarja:Nimi`, optional team
 wish as a third field) and generates as many valid 7-runner teams as fit,
@@ -86,9 +125,17 @@ team wishes, [Navisport](#navisport) start-list CSV export (7 blocks matching th
 converter), JSON save/load and `localStorage` autosave, plus built-in example
 pools of 21/28/35 runners.
 
+</details>
+
 ### Halikko-viesti Team Planner
 
 File: [`halikkoviesti_joukkuesuunnittelija.html`](halikkoviesti_joukkuesuunnittelija.html)
+
+Same again for Halikko-viesti: automatically splits your runners into
+Kilpasarja teams (quotas and all) and puts the rest into Avoin teams.
+
+<details>
+<summary>Details</summary>
 
 Halikko-viesti team planner. Reads a runner pool (`Sarja:Nimi`, optional team
 wish as a third field) and automatically splits the runners into as many valid
@@ -103,17 +150,33 @@ export (15 blocks with `Osuus`/`Alaosuus`, matching the Rastilippu Halikko
 profile), JSON save/load and `localStorage` autosave, plus built-in example
 pools of 45/60/75 runners.
 
+</details>
+
 ### IRMA Club Registry Fetcher
 
 File: [`fetch_irma_clubs.bash`](fetch_irma_clubs.bash)
+
+Need a current list of every Finnish orienteering club, e.g. to normalise club
+names in your own data? One command, full JSON list.
+
+<details>
+<summary>Details</summary>
 
 Downloads the public club registry from the Finnish Orienteering Federation's
 IRMA system (`irma.suunnistusliitto.fi`). Outputs the full club list as JSON.
 Used by multiple other tools for club name normalisation.
 
+</details>
+
 ### IRMA Club Fetcher with Districts
 
 File: [`fetch_irma_clubs_with_districts.py`](fetch_irma_clubs_with_districts.py)
+
+Same club list, but with each club's district/area attached — useful for
+district-level filtering and reporting.
+
+<details>
+<summary>Details</summary>
 
 Extends the basic club list with district (area) mapping from IRMA's
 ClubEndpoint/viewClub API. Fetches each club's area and produces
@@ -122,9 +185,18 @@ repo). Supports resuming — only fetches clubs missing from an existing output
 file. The data is gathered from IRMA's public API but is not an official IRMA
 export; use at your own risk.
 
+</details>
+
 ### Purple Pen → IOF Converter
 
 File: [`ppen_to_iof.html`](ppen_to_iof.html) (browser) · CLI: [`ppen_to_iof.py`](ppen_to_iof.py)
+
+Designed your courses in Purple Pen but the results system wants IOF 3.0
+CourseData XML? Drop in your `.ppen` file(s), preview the courses, and
+download the XML — no install needed.
+
+<details>
+<summary>Details</summary>
 
 Converts Purple Pen (`.ppen`) course design files to IOF 3.0 CourseData XML
 format — control positions, course layouts, and leg lengths.
@@ -145,9 +217,18 @@ language. A built-in demo button loads an obfuscated "Nuorten kisa" (youth race)
 example for testing without any files on disk. The Python CLI produces identical
 output.
 
+</details>
+
 ### Map Merger
 
 Directory: [`map_merger/`](map_merger/) · open [`index.html`](map_merger/index.html)
+
+Printing a stack of kids' maps at a print shop? Load the PDFs/images and get
+back print-ready A4 sheets, auto-cropped and laid out, with nothing else to
+configure.
+
+<details>
+<summary>Details</summary>
 
 Combines children's orienteering map PDFs/images into print-ready A4 sheets
 for a printing service (e.g. Crano). Every PDF page or image becomes one map;
@@ -196,33 +277,86 @@ it works when opened straight from disk (`file://`).
   heading five times in quick succession (the same five clicks hide them
   again). They are not persisted — hidden again on the next load.
 
+</details>
+
 ### OBS Broadcast Overlays
 
 File: [`OBS_helper/`](OBS_helper/)
+
+Streaming a race? Wire this up to Navisport's live data and get finish
+results, checkpoint passings, and start lists as ready-made OBS/vMix overlays.
+
+<details>
+<summary>Details</summary>
 
 Tools for live orienteering broadcast overlays in OBS (Browser Source) and vMix
 (JSON endpoints). Connects to [Navisport](#navisport) live Socket.IO data and renders finish
 results, checkpoint passings, and start lists. Includes a URL generator UI and a
 Python vMix server. Designed for TV and streaming production.
 
+</details>
+
 ### Pokaalijahti WordPress Plugin
 
 File: [`pokaalijahti-wp-plugin/`](pokaalijahti-wp-plugin/)
+
+Tallying points across a multi-event tournament by hand? This tracks the
+standings from Navisport events automatically and displays them on your site.
+
+<details>
+<summary>Details</summary>
 
 WordPress plugin ("Pokaalijahti" / Trophy Hunt) for multi-event tournament
 scoring from [Navisport](#navisport) events. Tracks points across several events, displays
 trophy standings, and includes club name normalisation. A standalone version
 ([`pokaalijahti.html`](pokaalijahti.html)) works outside WordPress.
 
+</details>
+
 ### Press Results Formatter
 
 File: [`stopthelegacypress.html`](stopthelegacypress.html)
+
+Need results in classic newspaper-column format for a press release? Load
+them from Navisport or paste JSON and get filterable, printable, copy-pasteable
+output.
+
+<details>
+<summary>Details</summary>
 
 Press results formatter for [Navisport](#navisport) events. Loads data via [Navisport](#navisport) public API
 or pasted JSON, then renders class-filterable, printable results in traditional
 newspaper-style layout with district (area) filtering. Supports plain-text export
 for copy/paste into publishing systems. Loads club→area mapping from
 [`clubs_with_districts.json`](clubs_with_districts.json).
+
+</details>
+
+### Event Flow Analysis
+
+File: [`kilpailuanalyysi.html`](kilpailuanalyysi.html)
+
+Curious how the event actually ran — how long from first start to last
+finish, when the finish line got busiest, how classes compared on pace? Paste
+in a Navisport event slug and get an instant flow report, no spreadsheet work.
+
+<details>
+<summary>Details</summary>
+
+Event flow analytics for [Navisport](#navisport) events. Fetches an event by slug (also
+supports relay and multistage events, analysed stage-by-stage) and reports
+starters, finishers, DNFs, time from first start to last start ("into the
+forest"), time to first result, time from first to last finish, and total
+event duration, each with the underlying start/finish timestamps. Shows a
+finish-time timeline per class (relative or clock time, with mass-start/
+exchange/restart markers for relays and a highlighted peak finishing window)
+and a per-class pace comparison chart against reference paces; timeline
+series can be combined for comparison. Flags likely-wrong results (excluded
+results, competitors still shown as on-course) in a separate warnings panel.
+Exports the full report as CSV, prints cleanly, and can generate a shareable
+link that reloads the same analysis. UI available in Finnish and English.
+
+</details>
 
 ## AM tools (Suunnistava Uusimaa)
 

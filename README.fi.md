@@ -3,29 +3,40 @@
 [English](README.md) · **Suomi**
 
 **Tulospalvelupaavo**
-on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tulospalvelun, kuten [Navisport](#navisport), ominaisuuksia ja näkymiä tulospalvelun toteutukseen, streamaukseen sekä osallistujille. Osa työkaluista on täysimittaisia HTML-sovelluksia, toiset taas nopeita kertakäyttöscriptejä. HTML-tiedostojen käyttö on helppoa. Lataa tiedosto koneellesi ja käytä paikallisesti.
+on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tulospalvelun, kuten [Navisport](#navisport), ominaisuuksia ja näkymiä tulospalvelun toteutukseen, streamaukseen sekä osallistujille. Osa työkaluista on täysimittaisia HTML-sovelluksia, toiset taas nopeita kertakäyttöscriptejä. Kaikki HTML-työkalut toimivat kokonaan selaimessa — ei asennuksia, ei palvelinta, ei tiliä: lataa tiedosto (tai avaa se suoraan) ja aloita.
+
 ---
 
+## Mitä tarvitset?
+
+| Tarvitsen... | Työkalu |
+|---|---|
+| Lähtönumeroita viivakoodeineen ja sponsorilogoineen | [Lähtönumerojen generaattori](#lähtönumerojen-generaattori) |
+| Rastilippu-viestin ilmoittautumisen Navisport-alkulistaksi | [Rastilippu → Navisport -rinnakkaisosuuksien korjaaja](#rastilippu--navisport--rinnakkaisosuuksien-korjaaja) |
+| Tasavahvat 25-manna-joukkueet juoksijapoolista | [25-manna joukkuesuunnittelu](#25-manna-joukkuesuunnittelu) |
+| Tasavahvat Nuorten Jukola -joukkueet | [Nuorten Jukola -joukkuesuunnittelu](#nuorten-jukola--joukkuesuunnittelu) |
+| Tasavahvat Halikko-viesti -joukkueet | [Halikko-viesti -joukkuesuunnittelu](#halikko-viesti--joukkuesuunnittelu) |
+| Ajantasaisen listan Suomen suunnistusseuroista | [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija) |
+| ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
+| Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
+| Lasten kartat A4-arkeiksi painoon | [Map Merger](#map-merger) |
+| Live-tulokset/väliajat streamiin (OBS/vMix) | [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat) |
+| Pisteseurannan moniosaiselle sarjalle | [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen) |
+| Tulokset lehdistötiedotteeseen | [Lehdistötulokset](#lehdistötulokset) |
+| Nähdä, miten kisa oikeasti sujui — ajat, vauhti, pullonkaulat | [Kilpailuanalyysi](#kilpailuanalyysi) |
+
 ## Päätyökalut
-
-### Sisällysluettelo
-
-- [Lähtönumerojen generaattori](#lähtönumerojen-generaattori)
-- [Rastilippu → Navisport -rinnakkaisosuuksien korjaaja](#rastilippu--navisport--rinnakkaisosuuksien-korjaaja)
-- [25-manna joukkuesuunnittelu](#25-manna-joukkuesuunnittelu)
-- [Nuorten Jukola -joukkuesuunnittelu](#nuorten-jukola--joukkuesuunnittelu)
-- [Halikko-viesti -joukkuesuunnittelu](#halikko-viesti--joukkuesuunnittelu)
-- [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija)
-- [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen)
-- [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin)
-- [Map Merger](#map-merger)
-- [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat)
-- [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen)
-- [Lehdistötulokset](#lehdistötulokset)
 
 ### Lähtönumerojen generaattori
 
 Tiedosto: [`bibgenerator.html`](bibgenerator.html)
+
+Tarvitsetko lähtönumerot viivakoodeineen, sponsorilogoineen ja väreillä
+merkityin sarjoin ennen kisapäivää? Tuo CSV tai hae suoraan Navisportista,
+raahaa asettelu kohdilleen ja tulosta.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Luo lähtönumeroita juoksu-, seikkailu- ja suunnistuskilpailuihin. Tuo CSV:n
 (IRMA-muoto) tai lataa suoraan [Navisport](#navisport)-API:sta. Generoi yksittäisiä
@@ -33,9 +44,18 @@ numerolappuja viivakoodeineen, sponsorilogoineen, värikoodattuine luokkineen
 ja täysin vedä-ja-pudota-konfiguroitavalla asettelulla (esim. A5 vaakasuunta).
 Tukee viestiosuuksia, moniosaistapahtumia ja tarralistoja.
 
+</details>
+
 ### Rastilippu → Navisport -rinnakkaisosuuksien korjaaja
 
 Tiedosto: [`rastilippu_parallel_legs_to_navisport.html`](rastilippu_parallel_legs_to_navisport.html)
+
+Viesti ilmoittautui Rastilipun kautta, mutta Navisport haluaa
+osuuskohtaiset `Osuus`/`Alaosuus`-sarakkeet? Pudota ilmoittautumis-CSV sisään
+ja saat Navisportin hyväksymän alkulistan.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Muuntaa Rastilippu-viestin ilmoittautumis-CSV:n [Navisportin](#navisport) alkulista-CSV:ksi,
 jossa on osuuskohtaiset `Osuus`/`Alaosuus`-sarakkeet. Joukkeet kartoitetaan
@@ -55,9 +75,18 @@ tallennuksen.
 
 Esimerkki: `rastilippu_parallel_legs_to_navisport.html?teams=40&ex=halikko&seed=123`
 
+</details>
+
 ### 25-manna joukkuesuunnittelu
 
 Tiedosto: [`25manna_joukkuesuunnittelija.html`](25manna_joukkuesuunnittelija.html)
+
+Jaatko satojen juoksijoiden poolia tasavahvoiksi 25-hengen joukkueiksi käsin
+taulukkolaskennassa? Tämä tekee sen sekunneissa — säännöt sisäänrakennettuina
+— ja tuloksen voi silti hienosäätää vedä-ja-pudota-tekniikalla.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Lukee juoksijapoolin (`Sarja:Nimi`, valinnainen joukkuetoive kolmantena kenttänä,
 esim. `D16:Virtanen Aino:1`) ja generoi niin monta kelvollista 25-juoksijan
@@ -72,9 +101,18 @@ tulostusvalmiin PDF:n selaimen kautta sekä JSON-tallennuksen/latauksen
 (vain naisille -osuudet, rajatut ikä-/sukupuoliosuudet 3–10/23, ≥9 miestä ja
 ≥1 H≤16, ≥9 naista ja ≥1 D≤16, ≤8 H21).
 
+</details>
+
 ### Nuorten Jukola -joukkuesuunnittelu
 
 Tiedosto: [`nuorten_jukola_joukkuesuunnittelija.html`](nuorten_jukola_joukkuesuunnittelija.html)
+
+Sama idea Nuorten Jukolalle: syötä juoksijapooli, saat takaisin niin monta
+kelvollista 7-juoksijan joukkuetta kuin mahtuu, 2026-sääntöjen ikä-/
+sukupuolirajoitukset jokaiselle osuudelle jo valmiina.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Lukee juoksijapoolin (`Sarja:Nimi`, valinnainen joukkuetoive kolmantena kenttänä)
 ja generoi niin monta kelvollista 7-juoksijan joukkuetta kuin mahtuu, optimoiden
@@ -90,9 +128,17 @@ juoksijakohtaisia pisteitä ja joukkuetoiveita, [Navisport](#navisport)-alkulist
 ja `localStorage`-autotallennuksen sekä sisäänrakennetut esimerkkipoolit
 21/28/35 juoksijalle.
 
+</details>
+
 ### Halikko-viesti -joukkuesuunnittelu
 
 Tiedosto: [`halikkoviesti_joukkuesuunnittelija.html`](halikkoviesti_joukkuesuunnittelija.html)
+
+Sama Halikko-viestille: jakaa juoksijasi automaattisesti Kilpasarja-joukkueisiin
+(kiintiöineen) ja loput Avoin-joukkueisiin.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Jakaa juoksijat automaattisesti mahdollisimman moneen kelvolliseen
 **Kilpasarja**-joukkueeseen, muodostaen **Avoin**-joukkueita lopuista.
@@ -108,17 +154,33 @@ juoksijakohtaisia pisteitä ja joukkuetoiveita, [Navisport](#navisport)-alkulist
 `localStorage`-autotallennuksen sekä sisäänrakennetut esimerkkipoolit 45/60/75
 juoksijalle.
 
+</details>
+
 ### IRMA-seurarekisterin hakija
 
 Tiedosto: [`fetch_irma_clubs.bash`](fetch_irma_clubs.bash)
+
+Tarvitsetko ajantasaisen listan kaikista Suomen suunnistusseuroista, vaikka
+seuranimien normalisointiin omassa datassasi? Yksi komento, koko lista JSON:na.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Lataa julkisen seurarekisterin Suomen Suunnistusliiton IRMA-järjestelmästä
 (`irma.suunnistusliitto.fi`). Tulostaa koko seuralistan JSON:na. Useat muut
 työkalut käyttävät sitä seuranimien normalisointiin.
 
+</details>
+
 ### IRMA-seurahaku piirikarttoineen
 
 Tiedosto: [`fetch_irma_clubs_with_districts.py`](fetch_irma_clubs_with_districts.py)
+
+Sama seuralista, mutta jokaisen seuran alue/piiri mukana — hyödyllinen
+piirikohtaiseen suodatukseen ja raportointiin.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Laajentaa perusseuralistan alue (piiri) -kartoituksella IRMA:n
 ClubEndpoint/viewClub-API:sta. Hakee kunkin seuran alueen ja tuottaa
@@ -127,9 +189,18 @@ valmiiksi rakennettu tässä repossa). Tukee jatkamista — hakee vain seurat, j
 puuttuvat olemassa olevasta tulostiedostosta. Tiedot on kerätty IRMA:n julkisesta
 API:sta, mutta ne eivät ole virallinen liiton tieto; käyttö omalla vastuulla.
 
+</details>
+
 ### Purple Pen → IOF -muunnin
 
 Tiedosto: [`ppen_to_iof.html`](ppen_to_iof.html) (selain) · CLI: [`ppen_to_iof.py`](ppen_to_iof.py)
+
+Suunnittelitko radat Purple Penillä, mutta tulospalvelu haluaa IOF 3.0
+CourseData XML:n? Pudota `.ppen`-tiedosto(t) sisään, esikatsele radat ja
+lataa XML — ei asennuksia.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Muuntaa Purple Pen (`.ppen`) -radansuunnittelutiedostot IOF 3.0 CourseData XML
 -muotoon — rastien sijainnit, ratojen asettelut ja välimatkat.
@@ -150,9 +221,17 @@ FI/EN-painike vaihtaa käyttöliittymän kielen. Yksi sisäänrakennettu
 demopainike lataa nimetön (obfuskoitu) "Nuorten kisa" -esimerkin ilman tiedostoja.
 Python-CLI tuottaa identtisen tulosteen.
 
+</details>
+
 ### Map Merger
 
 Hakemisto: [`map_merger/`](map_merger/) · avaa [`index.html`](map_merger/index.html)
+
+Tulostatko lasten karttoja painoon? Lataa PDF:t/kuvat sisään ja saat
+valmiiksi rajatut, aseteltut A4-arkit — muuta ei tarvitse säätää.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Yhdistää lasten suunnistuskarttojen PDF:t/kuvat painovalmiksi A4-arkeiksi
 painolaitokselle (esim. Grano). Jokainen PDF-sivu tai kuva tulee yhdeksi
@@ -206,9 +285,17 @@ ja toimii myös suoraan levyltä avattuna (`file://`).
   kertaa nopeasti (sama viiden klikkauksen sarja piilottaa ne uudelleen).
   Valintaa ei säilytetä — asetukset ovat seuraavalla latauksella taas piilossa.
 
+</details>
+
 ### OBS-lähetysgrafiikat
 
 Tiedosto: [`OBS_helper/`](OBS_helper/)
+
+Striimaatko kisaa? Kytke tämä Navisportin live-dataan ja saat maaliintulot,
+rastinohitukset ja alkulistat valmiina OBS/vMix-grafiikoina.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Työkaluja live-suunnistuslähetysten grafiikoihin OBS:ssä (Browser Source) ja
 vMixissä (JSON-päätepisteet). Yhdistyy [Navisportin](#navisport) live Socket.IO-dataan ja
@@ -216,9 +303,17 @@ renderöi maaliintuloja, rastinohituksia ja alkulistoja. Sisältää
 URL-generaattorin käyttöliittymän ja Python-vMix-palvelimen. Suunniteltu TV- ja
 striimituotantoon.
 
+</details>
+
 ### Pokaalijahti WordPress -liitännäinen
 
 Tiedosto: [`pokaalijahti-wp-plugin/`](pokaalijahti-wp-plugin/)
+
+Lasketko moniosaisen sarjan pisteitä käsin taulukossa? Tämä seuraa
+pisteitä Navisport-tapahtumista automaattisesti ja näyttää tilanteen sivustollasi.
+
+<details>
+<summary>Lisätiedot</summary>
 
 WordPress-liitännäinen ("Pokaalijahti" / Trophy Hunt) monitapahtumaisen
 kilpailun pisteidenlaskentaan [Navisport](#navisport)-tapahtumista. Seuraa pisteitä useiden
@@ -226,15 +321,55 @@ tapahtumien välillä, näyttää pokaalitilanteen ja sisältää seuranimien
 normalisoinnin. Erillinen versio ([`pokaalijahti.html`](pokaalijahti.html))
 toimii myös ilman WordPressiä.
 
+</details>
+
 ### Lehdistötulokset
 
 Tiedosto: [`stopthelegacypress.html`](stopthelegacypress.html)
+
+Tarvitsetko tulokset klassisessa sanomalehtiasussa lehdistötiedotteeseen?
+Lataa ne Navisportista tai liitä JSON, ja saat suodatettavan,
+tulostettavan, kopioitavan tuloksen.
+
+<details>
+<summary>Lisätiedot</summary>
 
 Lehdistötulokset [Navisport](#navisport)-tapahtumille. Lataa dataa [Navisportin](#navisport) julkisen API:n
 kautta tai liitetystä JSON:sta. Muodostaa luokittain suodatettavat, tulostettavat
 tulosnäkymät perinteisessä sanomalehtityylisessä asussa alue (piiri) -suodatuksella.
 Tukee pelkkänä tekstinä vientiä kopiointia varten julkaisujärjestelmiin. Lataa
 seura→alue-kartoituksen tiedostosta [`clubs_with_districts.json`](clubs_with_districts.json).
+
+</details>
+
+### Kilpailuanalyysi
+
+Tiedosto: [`kilpailuanalyysi.html`](kilpailuanalyysi.html)
+
+Kiinnostaako, miten kisa oikeasti sujui — kuinka kauan ensimmäisestä
+lähdöstä viimeiseen maaliintuloon, milloin maalilla oli ruuhkaisinta, miten
+sarjat vertautuivat vauhdiltaan? Liitä Navisport-tapahtuman tunnus (slug) ja
+saat heti valmiin analyysin ilman taulukkolaskentaa.
+
+<details>
+<summary>Lisätiedot</summary>
+
+Kilpailun kulun analytiikkaa [Navisport](#navisport)-tapahtumille. Hakee tapahtuman
+tunnuksella (slug), tukee myös viesti- ja moniosaistapahtumia (analysoidaan
+osuuksittain), ja raportoi lähtijät, maaliintulleet, keskeyttäneet, ajan
+ensimmäisestä lähdöstä viimeiseen lähtöön ("metsään"), ajan ensimmäiseen
+tulokseen, ajan ensimmäisestä maaliintulosta viimeiseen sekä koko tapahtuman
+keston, kunkin taustalla olevine lähtö-/maaliaikoineen. Näyttää
+maaliintuloaikataulun sarjoittain (suhteellinen tai kellonaika, viesteille
+joukkolähtö-/vaihto-/uusintalähtömerkinnöin ja korostetun ruuhkahuipun) sekä
+sarjojen vauhtivertailun referenssivauhteja vasten; aikajanoja voi yhdistää
+vertailua varten. Merkitsee todennäköisesti virheelliset tulokset (poistetut
+tulokset, kilpailijat jotka näkyvät yhä radalla) erilliseen
+varoituspaneeliin. Vie koko raportin CSV:ksi, tulostuu siististi, ja voi
+luoda jaettavan linkin, joka lataa saman analyysin uudelleen. Käyttöliittymä
+saatavilla suomeksi ja englanniksi.
+
+</details>
 
 ## AM-työkalut (Suunnistava Uusimaa)
 
