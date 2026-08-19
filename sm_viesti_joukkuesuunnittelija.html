@@ -770,6 +770,16 @@ function performMove(runnerIdx, teamIdx, slotIdx) {
   const sarja = S.teamSarja[teamIdx];
   const loc = findLocation(r);
   if (loc.kind === 'team' && loc.t === teamIdx && loc.s === slotIdx) return;
+  if (loc.kind === 'team' && loc.t === teamIdx) {
+    if (swapSlots(loc.t, loc.s, teamIdx, slotIdx)) {
+      updatePoolFromTeams();
+      renderAll();
+      autosave();
+    } else {
+      showWarn('Siirto estetty: rikkoo sarjan vaatimuksia (ikäraja/ikäsumma).');
+    }
+    return;
+  }
   if (!memberEligible(r, sarja)) { showWarn('Siirto estetty: ' + r.nimi + ' ei kelpaa sarjaan ' + sarja + '.'); return; }
   const backup = cloneTeams();
   if (loc.kind === 'team') S.teams[loc.t][loc.s] = null;
