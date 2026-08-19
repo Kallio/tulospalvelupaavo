@@ -58,6 +58,7 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
 .stepper { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .stp { width: 22px; height: 22px; padding: 0; border: 1px solid #334; border-radius: 4px; background: #0f3460; color: #7ec8e3; font-size: 13px; line-height: 1; cursor: pointer; }
 .stp-val { display: inline-block; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.rng { width: 76px; vertical-align: middle; accent-color: #7ec8e3; }
 
 #teamsWrap { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
 .team-col {
@@ -655,7 +656,21 @@ function performMove(runnerIdx, teamIdx, slotIdx) {
   if (!r || r.kipea) return;
   const loc = findLocation(r);
   if (loc.kind === 'team' && loc.t === teamIdx && loc.s === slotIdx) return;
+  if (loc.kind === 'team' && loc.t === teamIdx) {
+    if (swapSlots(loc.t, loc.s, teamIdx, slotIdx)) {
+      updatePoolFromTeams(); renderAll(); autosave();
+    } else {
+      showWarn('Siirto estetty: rikkoo osuus- tai joukkuuvaatimuksia.');
+    }
+    return;
+  }
   if (!legEligible(r, SLOTS[slotIdx].osuus)) { showWarn('Siirto estetty: ei kelvollinen tälle osuudelle.'); return; }
+  if (loc.kind === 'team') {
+    if (swapSlots(loc.t, loc.s, teamIdx, slotIdx)) {
+      updatePoolFromTeams(); renderAll(); autosave();
+      return;
+    }
+  }
   const backup = cloneTeams();
   if (loc.kind === 'team') S.teams[loc.t][loc.s] = null;
   S.teams[teamIdx][slotIdx] = r;
@@ -824,12 +839,15 @@ function setSick(idx, checked) {
   autosave();
 }
 
-function bumpScore(idx, field, delta) {
-  const v = (S.runners[idx][field] || 0) + delta;
-  S.runners[idx][field] = Math.max(0, Math.min(10, v));
-  renderAll();
-  autosave();
+function scoreSlider(idx, field, value) {
+  return `<span class="stepper">` +
+    `<input type="range" class="rng" min="0" max="10" step="1" value="${value}" ` +
+    `oninput="S.runners[${idx}].${field}=parseInt(this.value,10); this.nextElementSibling.textContent=(this.value*10)+'%';" ` +
+    `onchange="commitScore()">` +
+    `<span class="stp-val">${value * 10}%</span></span>`;
 }
+
+function commitScore() { renderAll(); autosave(); }
 
 function setToive(idx, value) {
   const v = parseInt(value, 10);
@@ -1049,8 +1067,8 @@ function renderPoolTable() {
       `<td>${esc(r.nimi)}</td>` +
       `<td>${esc(r.sarja)} (${genderLabel(r)})</td>` +
       `<td><select onchange="setToive(${idx}, this.value)">${[null,1,2,3,4,5].map(n => `<option value="${n || ''}" ${r.toive === n ? 'selected' : ''}>${n ? 'Joukkue ' + n : '—'}</option>`).join('')}</select></td>` +
-      `<td><span class="stepper"><button class="stp" onclick="bumpScore(${idx}, 'nopeus', -1)" ${r.nopeus <= 0 ? 'disabled' : ''}>−</button><span class="stp-val">${r.nopeus * 10}%</span><button class="stp" onclick="bumpScore(${idx}, 'nopeus', 1)" ${r.nopeus >= 10 ? 'disabled' : ''}>+</button></span></td>` +
-      `<td><span class="stepper"><button class="stp" onclick="bumpScore(${idx}, 'luotettavuus', -1)" ${r.luotettavuus <= 0 ? 'disabled' : ''}>−</button><span class="stp-val">${r.luotettavuus * 10}%</span><button class="stp" onclick="bumpScore(${idx}, 'luotettavuus', 1)" ${r.luotettavuus >= 10 ? 'disabled' : ''}>+</button></span></td>` +
+      `<td>${scoreSlider(idx, 'nopeus', r.nopeus)}</td>` +
+      `<td>${scoreSlider(idx, 'luotettavuus', r.luotettavuus)}</td>` +
       `<td>${strengthOf(r).toFixed(1)}</td>` +
       `<td><input type="checkbox" style="width:auto;" ${r.kipea ? 'checked' : ''} onchange="setSick(${idx}, this.checked)"></td>` +
       `<td class="til">${til}</td></tr>`;
