@@ -781,6 +781,14 @@ function performMove(runnerIdx, teamIdx, slotIdx) {
     return;
   }
   if (!memberEligible(r, sarja)) { showWarn('Siirto estetty: ' + r.nimi + ' ei kelpaa sarjaan ' + sarja + '.'); return; }
+  if (loc.kind === 'team') {
+    if (swapSlots(loc.t, loc.s, teamIdx, slotIdx)) {
+      updatePoolFromTeams();
+      renderAll();
+      autosave();
+      return;
+    }
+  }
   const backup = cloneTeams();
   if (loc.kind === 'team') S.teams[loc.t][loc.s] = null;
   S.teams[teamIdx][slotIdx] = r;
