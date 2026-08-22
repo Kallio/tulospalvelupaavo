@@ -426,7 +426,8 @@ merkinnät:
 - **[`map_AM_status_to_navisport_csv_export.bash`](map_AM_status_to_navisport_csv_export.bash)** — Merkitsee
   Uusimaalaisten seurojen yksittäiset juoksijat `(AM)`-merkinnällä CSV-vienneissä
 - **[`map_relay_AM_status_to_navisport_csv_export.bash`](map_relay_AM_status_to_navisport_csv_export.bash)** — Sama
-  viestitapahtumiin, merkitsee joukkuenimet
+  viestitapahtumiin, merkitsee joukkuenimet; `-p` täyttää myös tuntemattomat juoksijat
+  `N N`-paikkamerkinnöillä, `-r` poistaa ` (AM)`-merkinnät, `-o` asettaa tulostiedoston nimen
 - **[`top_filtering_from_results.html`](top_filtering_from_results.html)** — Tulosten
   koosteselausnäkymä, jossa on vain-AM-suodatus ja seuran korostus
 
