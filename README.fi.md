@@ -424,7 +424,8 @@ merkinnät:
 - **[`fetch_AM_seurat.sh`](fetch_AM_seurat.sh)** — Hakee Uudenmaan piirin seuralistan
   osoitteesta `suunnistavauusimaa.fi`
 - **[`map_AM_status_to_navisport_csv_export.bash`](map_AM_status_to_navisport_csv_export.bash)** — Merkitsee
-  Uusimaalaisten seurojen yksittäiset juoksijat `(AM)`-merkinnällä CSV-vienneissä
+  Uusimaalaisten seurojen yksittäiset juoksijat `(AM)`-merkinnällä CSV-vienneissä;
+  `-r` poistaa merkinnät, `-o` asettaa tulostiedoston nimen
 - **[`map_relay_AM_status_to_navisport_csv_export.bash`](map_relay_AM_status_to_navisport_csv_export.bash)** — Sama
   viestitapahtumiin, merkitsee joukkuenimet; `-p` täyttää myös tuntemattomat juoksijat
   `N N`-paikkamerkinnöillä, `-r` poistaa ` (AM)`-merkinnät, `-o` asettaa tulostiedoston nimen

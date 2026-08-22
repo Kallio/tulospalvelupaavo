@@ -410,7 +410,8 @@ exports into a combined district view with AM-participant marking:
 - **[`fetch_AM_seurat.sh`](fetch_AM_seurat.sh)** — Fetches the Uusimaa district club list from
   `suunnistavauusimaa.fi`
 - **[`map_AM_status_to_navisport_csv_export.bash`](map_AM_status_to_navisport_csv_export.bash)** — Marks individual runners
-  from Uusimaa clubs with `(AM)` in CSV exports
+  from Uusimaa clubs with `(AM)` in CSV exports; `-r` removes the markings,
+  `-o` sets the output file name
 - **[`map_relay_AM_status_to_navisport_csv_export.bash`](map_relay_AM_status_to_navisport_csv_export.bash)** — Same for relay
   events, marks team names; `-p` also fills unknown runner slots with `N N` placeholders,
   `-r` removes the ` (AM)` markings, `-o` sets the output file name
