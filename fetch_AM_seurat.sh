@@ -11,14 +11,16 @@ URL="https://www.suunnistavauusimaa.fi/yhteystiedot/"
 collect_entries() {
     local -a entries=()
     while IFS= read -r tr; do
-        # poimitaan ensimmäinen ja toinen <td>
-        nimi=$(printf '%s' "$tr" |
-               grep -oP '(?<=<td>).*?(?=</td>)' | sed -n 1p)
-        lyhenne=$(printf '%s' "$tr" |
-                  grep -oP '(?<=<td>).*?(?=</td>)' | sed -n 2p)
+        # poimitaan ensimmäinen ja toinen <td>; solut voivat sisältää
+        # attribuutteja (<td colspan=...>) ja sisäkkäisiä tageja (<p>, <a>)
+        rivit=$(printf '%s' "$tr" |
+                sed -E 's/<t[rd][^>]*>/\n/g; s/<[^>]+>//g' |
+                sed '/^[[:space:]]*$/d')
+        nimi=$(printf '%s\n' "$rivit" | sed -n 1p)
+        lyhenne=$(printf '%s\n' "$rivit" | sed -n 2p)
 
-        # suodatetaan pois OK77‑lyhenne ja <strong>-merkinnät
-        if [[ "$lyhenne" != "OK77" && "$nimi" != *"<strong>"* ]]; then
+        # suodatetaan pois OK77‑lyhenne ja <strong>-otsikkorivit
+        if [[ "$lyhenne" != "OK77" && "$tr" != *"<strong"* ]]; then
             entries+=("$nimi")
         fi
     done < <(
