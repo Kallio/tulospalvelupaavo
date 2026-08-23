@@ -685,6 +685,7 @@ function addSponsorLogo() {
   rd.onload = e => {
     const parts = pi ? new Set(pi.split(',').map(x=>x.trim())) : null;
     sponsorLogos.push({ src: e.target.result, name, parts });
+    ensureSponsorSlots();
     renderSponsorList();
     fi.value = '';
     document.getElementById('sponsorParts').value = '';
@@ -716,10 +717,31 @@ function updateSponsorParts(i, val) {
   sponsorLogos[i].parts = trimmed ? new Set(trimmed.split(',').map(x=>x.trim()).filter(Boolean)) : null;
 }
 
-function getSponsor(osuus) {
-  for (const s of sponsorLogos) if (s.parts && s.parts.has(osuus)) return s.src;
-  for (const s of sponsorLogos) if (!s.parts) return s.src;
-  return null;
+// Layout slot key for sponsor index i (0-based). The first sponsor keeps the
+// legacy single-logo key, so layouts/bundles saved before multi-sponsor support
+// still position it correctly; extra sponsors get their own slots.
+function SPONSOR_SLOT(i) { return i === 0 ? 'sponsorLogo' : 'sponsorLogo' + (i + 1); }
+
+// Create a layout entry for every sponsor slot that doesn't have one yet. New
+// slots stack below the previous sponsor's slot so freshly added logos never
+// land on top of each other. Idempotent.
+function ensureSponsorSlots() {
+  let prev = null;
+  sponsorLogos.forEach((s, i) => {
+    const k = SPONSOR_SLOT(i);
+    if (!layout[k]) {
+      const d = prev || layout.sponsorLogo || DEF_LAYOUT.sponsorLogo;
+      layout[k] = { cx: d.cx, y: clamp(d.y + d.h + 1, 0, 95), w: d.w, h: d.h };
+    }
+    prev = layout[k];
+  });
+}
+
+// A sponsor applies to a runner when its parts filter is empty (= all legs)
+// or contains the runner's leg number. Each applicable sponsor renders in its
+// own slot (see SPONSOR_SLOT).
+function sponsorApplies(s, osuus) {
+  return !s.parts || s.parts.has(osuus);
 }
 
 // ═══════════════════════════════════════════
@@ -810,6 +832,7 @@ function generateBibs() {
   if (!csvTeams.length) { alert('Load a CSV file first'); return; }
 
   classPrefixMap = useClassPrefix ? buildClassPrefixes(csvTeams) : {};
+  ensureSponsorSlots();
 
   const area = document.getElementById('print-area');
   area.innerHTML = '';
@@ -839,8 +862,10 @@ function generateBibs() {
 function createBib(team, runner) {
   const isSingle   = !runner.osuus;
   const showAlao   = runner.alaosuus && runner.alaosuus !== runner.osuus;
-  const sponsorSrc = getSponsor(runner.osuus);
-  const hasSponsor = !!sponsorSrc;
+  const sponsorImgs = sponsorLogos
+    .map((s, i) => sponsorApplies(s, runner.osuus) ? { src: s.src, slot: SPONSOR_SLOT(i) } : null)
+    .filter(Boolean);
+  const hasSponsor = sponsorImgs.length > 0;
   const hasEvLogo  = !!eventLogoSrc;
 
   // Barcode value
@@ -896,10 +921,10 @@ function createBib(team, runner) {
     card.appendChild(d);
   }
 
-  // Sponsor logo
-  if (hasSponsor) {
-    const d = posDiv('sponsorLogo');
-    d.innerHTML = `<img src="${sponsorSrc}" style="width:100%;height:100%;object-fit:contain;">`;
+  // Sponsor logos — each applicable sponsor renders in its own layout slot
+  for (const sp of sponsorImgs) {
+    const d = posDiv(sp.slot);
+    d.innerHTML = `<img src="${sp.src}" style="width:100%;height:100%;object-fit:contain;">`;
     card.appendChild(d);
   }
 
@@ -1419,6 +1444,7 @@ function resetLayout() {
     setStatus('Sticker layout reset to default');
   } else {
     layout = deepClone(DEF_LAYOUT);
+    ensureSponsorSlots();
     setStatus('Layout reset to default');
   }
   syncLayout();
@@ -1728,6 +1754,7 @@ function applyImportedBundle(parsed) {
       src: i.src, name: i.name, parts: i.parts && i.parts.length ? new Set(i.parts) : null,
     }));
   }
+  ensureSponsorSlots();
   applyStateData(parsed.data);
   const needsNavisport = !!parsed.data && parsed.data.source === 'navisport'
     && !!parsed.data.navisportUrl && !(parsed.data.csv && parsed.data.csv.trim());

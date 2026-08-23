@@ -38,7 +38,7 @@ global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, getSponsor, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l };');
+  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, SPONSOR_SLOT, ensureSponsorSlots, sponsorApplies, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -227,6 +227,43 @@ assert('createBib single: no leg color', numArea2.style.background === '' || num
 assert('createBib single: runnerInfo', card2.children.some(c => c.dataset.lk === 'runnerInfo'));
 assert('createBib single: no teamInfo', !card2.children.some(c => c.dataset.lk === 'teamInfo'));
 assert('createBib single: barcode no leg suffix', card2.children.find(c => c.dataset.lk === 'barcode').innerHTML.includes('data-val="H21-101"'));
+
+// ── sponsor slots: one layout slot per sponsor logo ──
+const dA = 'data:image/png;base64,QUE=', dB = 'data:image/png;base64,QkI=', dC = 'data:image/png;base64,Q0M=';
+S.setSponsorLogos([
+  { src: dA, name: 'a.png', parts: null },
+  { src: dB, name: 'b.png', parts: null },
+  { src: dC, name: 'c.png', parts: new Set(['2']) },
+]);
+assert('sponsorSlot: index keys', P.SPONSOR_SLOT(0) === 'sponsorLogo' && P.SPONSOR_SLOT(1) === 'sponsorLogo2' && P.SPONSOR_SLOT(2) === 'sponsorLogo3');
+assert('sponsorApplies: default fits any leg', P.sponsorApplies({ parts: null }, '2') && P.sponsorApplies({ parts: null }, ''));
+assert('sponsorApplies: leg filter', P.sponsorApplies({ parts: new Set(['1']) }, '1') && !P.sponsorApplies({ parts: new Set(['1']) }, '2') && !P.sponsorApplies({ parts: new Set(['1']) }, ''));
+
+// Legacy saved layouts contain only the first slot — it must be left untouched,
+// missing slots stack below it (y = prev.y + prev.h + 1).
+S.setLayout(Object.assign(P.deepClone(S.layout()), { sponsorLogo: { cx: 20, y: 60, w: 30, h: 10 } }));
+P.ensureSponsorSlots();
+let L = S.layout();
+assert('slots: legacy slot untouched', L.sponsorLogo.cx === 20 && L.sponsorLogo.y === 60);
+assert('slots: new slots stacked', L.sponsorLogo2 && L.sponsorLogo2.y === 71 && L.sponsorLogo3 && L.sponsorLogo3.y === 82, JSON.stringify([L.sponsorLogo2, L.sponsorLogo3]));
+P.ensureSponsorSlots();
+assert('slots: idempotent', S.layout().sponsorLogo2.y === 71);
+
+// createBib renders one positioned img per applicable sponsor
+const cardLeg2 = P.createBib({ kilpailunumero: '101', sarja: '', joukkue: 'T' }, { nimi: 'x', osuus: '2', alaosuus: '', rata: '', lahtöaika: '' });
+const sl2 = cardLeg2.children.filter(c => c.dataset.lk && String(c.dataset.lk).startsWith('sponsorLogo'));
+assert('createBib: all applicable sponsors on matching leg', sl2.length === 3 && sl2.map(c => c.dataset.lk).join(',') === 'sponsorLogo,sponsorLogo2,sponsorLogo3', JSON.stringify(sl2.map(c => c.dataset.lk)));
+assert('createBib: per-slot srcs', sl2[0].innerHTML.includes(dA) && sl2[1].innerHTML.includes(dB) && sl2[2].innerHTML.includes(dC));
+const cardLeg1 = P.createBib({ kilpailunumero: '101', sarja: '', joukkue: 'T' }, { nimi: 'x', osuus: '1', alaosuus: '', rata: '', lahtöaika: '' });
+const sl1 = cardLeg1.children.filter(c => c.dataset.lk && String(c.dataset.lk).startsWith('sponsorLogo'));
+assert('createBib: leg-specific skipped on other legs', sl1.length === 2 && sl1.every(c => c.innerHTML !== dC) && !sl1.some(c => c.innerHTML.includes(dC)));
+
+// bundle round-trip keeps extra sponsor slots
+S.setSponsorLogos([{ src: dA, name: 'a.png', parts: null }, { src: dB, name: 'b.png', parts: null }]);
+const bcSlots = P.buildBundleContent();
+const rtSlotFiles = Object.fromEntries(bcSlots.files.map(v => [v.path, v.text !== undefined ? { text: v.text } : { base64: v.base64 }]));
+P.applyImportedBundle(P.parseBundle(rtSlotFiles));
+assert('bundle: sponsor slots survive round-trip', S.layout().sponsorLogo2 && S.layout().sponsorLogo3 && S.sponsorLogos().length === 2, JSON.stringify(S.layout()));
 
 // esc / escA
 assert('esc: basic', typeof P.esc('x') === 'string');
