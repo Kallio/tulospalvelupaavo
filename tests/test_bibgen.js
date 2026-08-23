@@ -38,7 +38,7 @@ global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, SPONSOR_SLOT, ensureSponsorSlots, sponsorApplies, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l };');
+  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, SPONSOR_SLOT, ensureSponsorSlots, sponsorApplies, orderZ, setPos, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l, setSelected: (k, r) => { selectedKey = k; selectedRef = r; } };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -264,6 +264,39 @@ const bcSlots = P.buildBundleContent();
 const rtSlotFiles = Object.fromEntries(bcSlots.files.map(v => [v.path, v.text !== undefined ? { text: v.text } : { base64: v.base64 }]));
 P.applyImportedBundle(P.parseBundle(rtSlotFiles));
 assert('bundle: sponsor slots survive round-trip', S.layout().sponsorLogo2 && S.layout().sponsorLogo3 && S.sponsorLogos().length === 2, JSON.stringify(S.layout()));
+
+// ── toolbar: editable position + stacking order ──
+S.setSelected('sponsorLogo2', S.layout().sponsorLogo2);
+P.setPos('cx', '123');
+assert('setPos: cx clamped to 100', S.layout().sponsorLogo2.cx === 100, String(S.layout().sponsorLogo2.cx));
+P.setPos('y', '-5');
+assert('setPos: y clamped to 0', S.layout().sponsorLogo2.y === 0, String(S.layout().sponsorLogo2.y));
+P.setPos('cx', '33.3'); P.setPos('y', '44.4');
+assert('setPos: writes parsed values', S.layout().sponsorLogo2.cx === 33.3 && S.layout().sponsorLogo2.y === 44.4);
+P.setPos('cx', 'junk');
+assert('setPos: junk ignored', S.layout().sponsorLogo2.cx === 33.3);
+
+S.layout().sponsorLogo2.z = 7;
+const zd = P.makePosDiv(S.layout(), 'sponsorLogo2');
+assert('makePosDiv: z applied', String(zd.style.zIndex) === '7', String(zd.style.zIndex));
+delete S.layout().sponsorLogo2.z;
+P.applyPos(zd, 'sponsorLogo2');
+assert('applyPos: z cleared when missing', zd.style.zIndex === '', String(zd.style.zIndex));
+
+// orderZ math — DOM stub querySelectorAll returns [], so the baseline is [0]
+P.orderZ('front');
+assert('orderZ: front above baseline', S.layout().sponsorLogo2.z === 1, String(S.layout().sponsorLogo2.z));
+P.orderZ('front');
+assert('orderZ: repeated front keeps rising', S.layout().sponsorLogo2.z === 2, String(S.layout().sponsorLogo2.z));
+P.orderZ('back');
+assert('orderZ: back below baseline', S.layout().sponsorLogo2.z === -1, String(S.layout().sponsorLogo2.z));
+
+// z persists through the bundle round-trip
+S.layout().sponsorLogo2.z = 5;
+const bcZ = P.buildBundleContent();
+const rtZFiles = Object.fromEntries(bcZ.files.map(v => [v.path, v.text !== undefined ? { text: v.text } : { base64: v.base64 }]));
+P.applyImportedBundle(P.parseBundle(rtZFiles));
+assert('bundle: z survives round-trip', S.layout().sponsorLogo2 && S.layout().sponsorLogo2.z === 5, JSON.stringify(S.layout().sponsorLogo2));
 
 // esc / escA
 assert('esc: basic', typeof P.esc('x') === 'string');

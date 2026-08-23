@@ -64,6 +64,9 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 .bib-card {
   background: white;
   position: relative;
+  /* Stacking context per card so toolbox z-order values (incl. negative)
+     never paint elements behind the card background. */
+  isolation: isolate;
   overflow: hidden;
   border: 1px solid #bbb;
   page-break-after: always;
@@ -120,6 +123,11 @@ button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; f
 .tb-row { display: flex; align-items: center; gap: 8px; }
 .tb-row span { flex: 1; font-size: 11px; color: #9aa; }
 .tb-val { min-width: 44px; text-align: center; font-size: 12px; color: #eee; }
+#toolbar input[type="number"] {
+  width: 58px; padding: 3px 4px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+#toolbar input[type="number"]:disabled { opacity: 0.35; }
 
 /* ─── Print Styles ─── */
 @media print {
@@ -144,6 +152,9 @@ body.stickers-active #sticker-area { display: block; }
 .sticker {
   position: absolute;
   text-align: center;
+  /* Stacking context per cell: negative z-order values from the toolbox must
+     not paint behind the page background. Same reason as .bib-card below. */
+  isolation: isolate;
   /* No overflow:hidden here on purpose — content dragged past this cell's
      edge should stay visible (may overlap the next cell) rather than
      silently disappear behind the cell boundary while editing. */
@@ -495,6 +506,17 @@ body.sidebar-mode.panel-collapsed #setup-panel #panel-controls {
     <button class="bg btn-sm" id="tb-flip" onclick="toggleFlip()" style="min-width:60px;">—</button>
   </div>
   <div class="tb-row">
+    <span>Pos x / y %</span>
+    <input type="number" id="tb-cx" step="0.1" min="0" max="100" title="Center X (% of card)" onchange="setPos('cx', this.value)">
+    <input type="number" id="tb-y" step="0.1" min="0" max="95" title="Top Y (% of card)" onchange="setPos('y', this.value)">
+  </div>
+  <div class="tb-row">
+    <span>Order</span>
+    <button class="bg btn-sm" onclick="orderZ('back')" title="Send to back">⤓ Back</button>
+    <span class="tb-val" id="tb-z">—</span>
+    <button class="bg btn-sm" onclick="orderZ('front')" title="Bring to front">Front ⤒</button>
+  </div>
+  <div class="tb-row">
     <span style="font-size:10px;color:#555;">Drag elements to move</span>
   </div>
 </div>
@@ -823,6 +845,7 @@ function makePosDiv(layoutObj, key, extra) {
   if (l.h) d.style.height = l.h + '%';
   if (l.fontSize) d.style.fontSize = l.fontSize + 'mm';
   if (l.letterSpacing !== undefined) d.style.letterSpacing = l.letterSpacing + 'em';
+  if (l.z !== undefined) d.style.zIndex = l.z;
   d.style.transform = l.flipped ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)';
   if (extra) Object.assign(d.style, extra);
   return d;
@@ -1235,6 +1258,9 @@ function applyPos(el, key) {
   }
   if (l.fontSize !== undefined) el.style.fontSize = l.fontSize + 'mm';
   if (l.letterSpacing !== undefined) el.style.letterSpacing = l.letterSpacing + 'em';
+  // Clear stale inline z (e.g. after Reset removed the property)
+  if (l.z !== undefined) el.style.zIndex = l.z;
+  else                   el.style.zIndex = '';
   if (l.hidden) el.dataset.hidden = 'true';
   else          delete el.dataset.hidden;
 }
@@ -1402,6 +1428,34 @@ function toggleFlip() {
   updateToolbar();
 }
 
+// Stacking order for overlapping elements: Front/Back derive the new z from the
+// values currently applied to all rendered [data-lk] elements, so the result is
+// correct whatever mix of bib/sticker elements exists.
+function orderZ(action) {
+  if (!selectedRef) return;
+  const zs = [0]; // unset z behaves like auto (0)
+  // Include the selection itself so repeated clicks keep moving it even when
+  // it isn't rendered anywhere (e.g. hidden or filtered out of every bib).
+  if (selectedRef.z !== undefined) zs.push(selectedRef.z);
+  document.querySelectorAll('#print-area [data-lk], #sticker-area [data-lk]').forEach(el => {
+    const z = parseInt(el.style.zIndex, 10);
+    if (Number.isFinite(z)) zs.push(z);
+  });
+  selectedRef.z = action === 'front' ? Math.max(...zs) + 1 : Math.min(...zs) - 1;
+  syncLayout();
+  updateToolbar();
+}
+
+// Exact positioning from the toolbox inputs; same clamps as dragging.
+function setPos(prop, rawVal) {
+  if (!selectedRef || selectedRef[prop] === undefined) return;
+  const v = parseFloat(rawVal);
+  if (!Number.isFinite(v)) return;
+  selectedRef[prop] = clamp(v, 0, prop === 'cx' ? 100 : 95);
+  syncLayout();
+  updateToolbar();
+}
+
 function updateToolbar() {
   if (!selectedRef) return;
   const l = selectedRef;
@@ -1410,6 +1464,19 @@ function updateToolbar() {
   document.getElementById('tb-w').textContent    = l.w             !== undefined ? l.w.toFixed(0)+'%'           : '—';
   document.getElementById('tb-h').textContent    = l.h             !== undefined ? l.h.toFixed(0)+'%'           : '—';
   document.getElementById('tb-ls').textContent   = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2)+'em' : '—';
+
+  // Position inputs: blank+disabled for elements without a position (sticker
+  // group members); skip overwriting the field the user is currently typing in.
+  const cxIn = document.getElementById('tb-cx');
+  const cyIn = document.getElementById('tb-y');
+  const hasPos = l.cx !== undefined && l.y !== undefined;
+  cxIn.disabled = !hasPos; cyIn.disabled = !hasPos;
+  if (!hasPos) { cxIn.value = ''; cyIn.value = ''; }
+  else {
+    if (document.activeElement !== cxIn) cxIn.value = l.cx.toFixed(1);
+    if (document.activeElement !== cyIn) cyIn.value = l.y.toFixed(1);
+  }
+  document.getElementById('tb-z').textContent = l.z !== undefined ? String(l.z) : 'auto';
   const vBtn = document.getElementById('tb-visible');
   vBtn.textContent    = l.hidden ? 'Show' : 'Hide';
   vBtn.style.color    = l.hidden ? '#27ae60' : '#e94560';
