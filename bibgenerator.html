@@ -1994,13 +1994,14 @@ async function loadFromNavisport() {
     if (isMultistage) {
       await navLoadMultistage(json);
     } else if (json.raceType === 'Relay') {
-      navLoadRelay(json);
+      var { skipped } = navLoadRelay(json);
     } else {
       navLoadIndividual(json);
     }
 
     const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
-    navStatus(`✓ ${name || slug} — ${csvTeams.length} entries, ${total} runners`, 'ok');
+    const skipNote = skipped ? ` (${skipped} orphaned skipped)` : '';
+    navStatus(`✓ ${name || slug} — ${csvTeams.length} entries, ${total} runners${skipNote}`, 'ok');
     document.getElementById('bibCount').textContent = `${csvTeams.length} entries, ${total} runners`;
     populateSarjaFilter();
     rawCsvText = null; // data now sourced from Navisport, not a CSV file
@@ -2088,9 +2089,12 @@ function navLoadRelay(json) {
   results.filter(r => r.resultType === 'Team').forEach(r => { teamsById[r.id] = r; });
 
   const teamMap = {};
+  let skipped = 0;
+  const hasParentChild = Object.keys(teamsById).length > 0;
   for (const r of results) {
     if (r.resultType === 'Team') continue;
     const parent = r.parentId ? teamsById[r.parentId] : null;
+    if (hasParentChild && !parent) { skipped++; continue; }
     const bibNum = parent?.bibNumber ?? r.bibNumber;
     if (bibNum == null) continue;
     const bib = String(bibNum);
@@ -2120,6 +2124,7 @@ function navLoadRelay(json) {
   csvTeams = Object.values(teamMap);
   csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
   sortTeams();
+  return { skipped };
 }
 
 // Multi-stage individual event: each stage becomes a leg (osuus = stageNumber).

@@ -192,14 +192,14 @@ const relayParent = {
     { resultType: 'Individual', bibNumber: 201, name: 'Ville Hyvärinen', leg: 1, club: 'Club B' },
   ],
 };
-P.navLoadRelay(relayParent);
+const relayParentResult = P.navLoadRelay(relayParent);
 const rel2 = S.csvTeams();
-assert('relay parent: bib from Team row', rel2.length === 2 && rel2[0].kilpailunumero === '101' && rel2[1].kilpailunumero === '201', rel2.map(t => t.kilpailunumero).join(','));
+assert('relay parent: bib from Team row', rel2.length === 1 && rel2[0].kilpailunumero === '101', rel2.map(t => t.kilpailunumero).join(','));
 const teamA = rel2.find(t => t.kilpailunumero === '101');
 assert('relay parent: team name from parent', teamA.joukkue === 'Team A');
 assert('relay parent: sarja from runner classId', teamA.sarja === 'Naisten', teamA.sarja);
 assert('relay parent: two runners sorted', teamA.runners.length === 2 && teamA.runners.map(r => r.osuus).join(',') === '1,2');
-assert('relay parent: standalone runner gets own club', rel2.find(t => t.kilpailunumero === '201').joukkue === 'Club B');
+assert('relay parent: orphaned runner skipped', relayParentResult.skipped === 1, relayParentResult.skipped);
 
 // ── makePosDiv ──
 const d1 = P.makePosDiv(S.layout(), 'numberArea');
