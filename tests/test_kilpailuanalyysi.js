@@ -166,6 +166,36 @@ const multiEvent = {
   events: [{ id: 's1' }, { id: 's2' }], results: [], courseClasses: [], courses: [],
 };
 
+// Event with multiple classes that share same start times (for grouping tests)
+const multiClassEvent = {
+  id: 'e-mc', name: 'Monisarjainen', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [
+    { id: 'cH10', name: 'H10', type: 'Class', courses: [{ id: 'co1', legs: 1 }] },
+    { id: 'cD10', name: 'D10', type: 'Class', courses: [{ id: 'co1', legs: 1 }] },
+    { id: 'cH12', name: 'H12', type: 'Class', courses: [{ id: 'co2', legs: 1 }] },
+    { id: 'cD12', name: 'D12', type: 'Class', courses: [{ id: 'co2', legs: 1 }] },
+    { id: 'cH85', name: 'H85', type: 'Class', courses: [{ id: 'co1', legs: 1 }] },
+    { id: 'cD85', name: 'D85', type: 'Class', courses: [{ id: 'co1', legs: 1 }] },
+  ],
+  courses: [
+    { id: 'co1', name: 'A', distance: 2000, controls: [] },
+    { id: 'co2', name: 'B', distance: 3000, controls: [] },
+  ],
+  results: [
+    // H10 and D10 start at same time 08:00
+    { id: 'r1', classId: 'cH10', courseId: 'co1', bibNumber: 1, name: 'A', status: 'Ok', time: 600, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'r2', classId: 'cH10', courseId: 'co1', bibNumber: 2, name: 'B', status: 'Ok', time: 700, startTime: '2026-03-21T08:02:00.000Z' },
+    { id: 'r3', classId: 'cD10', courseId: 'co1', bibNumber: 3, name: 'C', status: 'Ok', time: 650, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'r4', classId: 'cD10', courseId: 'co1', bibNumber: 4, name: 'D', status: 'Ok', time: 750, startTime: '2026-03-21T08:02:00.000Z' },
+    // H12 and D12 start at same time 08:20
+    { id: 'r5', classId: 'cH12', courseId: 'co2', bibNumber: 5, name: 'E', status: 'Ok', time: 900, startTime: '2026-03-21T08:20:00.000Z' },
+    { id: 'r6', classId: 'cD12', courseId: 'co2', bibNumber: 6, name: 'F', status: 'Ok', time: 950, startTime: '2026-03-21T08:20:00.000Z' },
+    // H85 and D85 start at same time 08:40
+    { id: 'r7', classId: 'cH85', courseId: 'co1', bibNumber: 7, name: 'G', status: 'Ok', time: 1200, startTime: '2026-03-21T08:40:00.000Z' },
+    { id: 'r8', classId: 'cD85', courseId: 'co1', bibNumber: 8, name: 'H', status: 'Ok', time: 1300, startTime: '2026-03-21T08:40:00.000Z' },
+  ],
+};
+
 // Event with a "Si-style" corrupt timestamp: two results carry a finish
 // time hours before the event even begins (time 0, status No time). These must
 // be excluded from the flow and reported as anonymized warnings.
@@ -228,8 +258,9 @@ try {
       legendInner, axisToggle, effectiveClasses, combineSelected, clearCombines, rebuildLegendItems,
       buildCSV, toCSV, addFlowRows, analyze, render, setLang, T,
       runnerRows, statusConst: STATUS_OK, CLASS_PALETTE, paceSection, paintPace, drawFlowChart,
-      flowWarnings, droppedWarnings, onCourseWarnings, warnLabel, warnBoxHtml, flowSection, tsInWindow, initials,
+      flowWarnings, droppedWarnings, onCourseWarnings, orphanWarnings, massStartWarnings, warnLabel, warnBoxHtml, flowSection, tsInWindow, initials,
       isDoubleTapSecond, dblTapMs: DBL_TAP_MS,
+      parseClassName, compareClassNames, classSortKey, autoDetectGroups, scheduleData,
     };
     global.__state = {
       event: () => state.event,
@@ -327,8 +358,11 @@ assert('corrupt: warning has class + status + initials, no full name', cpa && cp
 assert('corrupt: warning label shows initials but not full name', P.warnLabel(cpa).includes('PA') && P.warnLabel(cpa).includes('6:00:00') && P.warnLabel(cpa).includes('No time') && !P.warnLabel(cpa).includes('Aikaleima'), P.warnLabel(cpa));
 assert('corrupt: distinct corrupt runners keep distinct initials', ctp && ctp.name === 'TP' && P.warnLabel(ctp).includes('TP'), P.warnLabel(ctp));
 const warnSec = P.flowSection(corruptEvent);
-assert('corrupt: flow section renders warnbox', warnSec.includes('warnbox') && warnSec.includes('Pois jätetyt tulokset'), warnSec.slice(0, 200));
-assert('corrupt: flow section keeps runner names out', !warnSec.includes('Paha Aikaleima') && !warnSec.includes('Toinen Paha'));
+const warnHtml = warnSec.html || '';
+const warnBoxHtml = warnSec.warnBox || '';
+const combinedWarn = warnHtml + warnBoxHtml;
+assert('corrupt: flow section renders warnbox', combinedWarn.includes('warnbox') && combinedWarn.includes('Pois jätetyt tulokset'), String(combinedWarn).slice(0, 200));
+assert('corrupt: flow section keeps runner names out', !combinedWarn.includes('Paha Aikaleima') && !combinedWarn.includes('Toinen Paha'));
 assert('corrupt: clean event produces no warnings', P.flowWarnings(indEvent).length === 0);
 const rowsC = [];
 P.addFlowRows(rowsC, corruptEvent);
@@ -343,13 +377,65 @@ assert('on-course: one warning per on-course runner', ocs.length === 2, JSON.str
 assert('on-course: warning reason stillOnCourse with initials', ocs.every(w => w.reason === 'stillOnCourse' && w.status === 'Competing') && ocs.some(w => w.name === 'JT') && ocs.some(w => w.name === 'KK'), JSON.stringify(ocs));
 assert('on-course: label has initials + status + reason, no full name', P.warnLabel(ocs[0]).includes('JT') && P.warnLabel(ocs[0]).includes('Competing') && P.warnLabel(ocs[0]).includes('vielä radalla') && !P.warnLabel(ocs[0]).includes('Toropainen'), P.warnLabel(ocs[0]));
 const ocSec = P.flowSection(onCourseEvent);
-assert('on-course: flow section renders its own warnbox', ocSec.includes('Vielä radalla') && ocSec.includes('warnbox'), ocSec.slice(0, 300));
-assert('on-course: flow section keeps runner names out', !ocSec.includes('Jaakko Toropainen') && !ocSec.includes('Kalle Kettunen'));
+const ocHtml = ocSec.html || '';
+const ocBoxHtml = ocSec.warnBox || '';
+const combinedOc = ocHtml + ocBoxHtml;
+assert('on-course: flow section renders its own warnbox', combinedOc.includes('Vielä radalla') && combinedOc.includes('warnbox'), String(combinedOc).slice(0, 300));
+assert('on-course: flow section keeps runner names out', !combinedOc.includes('Jaakko Toropainen') && !combinedOc.includes('Kalle Kettunen'));
 assert('on-course: finishers unaffected (still 1 finisher)', P.eventFlow(onCourseEvent).finishers === 1 && P.eventFlow(onCourseEvent).starters === 1);
 const rowsO = [];
 P.addFlowRows(rowsO, onCourseEvent);
 assert('on-course: CSV has still-on-course block', rowsO.some(r => r[0] === 'Vielä radalla') && rowsO.some(r => Array.isArray(r) && r[0] === 'JT · A · Competing · vielä radalla kisan päättymisen jälkeen'), JSON.stringify(rowsO));
 assert('on-course: no warnings while the event is still running', P.onCourseWarnings({ ...onCourseEvent, ending: '2099-01-01T10:00:00.000Z' }).length === 0);
+
+// ── orphan warnings (parent/child relay with orphaned runners) ──
+const orphanRelayEvent = {
+  id: 'e-orphan', name: 'Orphan viesti', raceType: 'Relay', eventKind: 'Event',
+  begin: '2026-03-21T08:00:00.000Z', ending: '2026-03-21T12:00:00.000Z',
+  courseClasses: [{ id: 'cls1', name: 'H21', courses: [{ id: 'rc1', legs: 1 }] }],
+  courses: [{ id: 'rc1', name: 'Leg 1', distance: 3000, controls: [] }],
+  results: [
+    { id: 't1', resultType: 'Team', bibNumber: 101, name: 'Team A', classId: 'cls1', startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't1l1', resultType: 'Individual', parentId: 't1', bibNumber: 101, leg: 1, classId: 'cls1', name: 'Runner A1', status: 'Ok', time: 300, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'orphan1', resultType: 'Individual', bibNumber: 8, leg: 1, name: 'N.N.', status: 'Ok' },
+    { id: 'orphan2', resultType: 'Individual', bibNumber: 9, leg: 2, name: 'N.N.', status: 'Ok' },
+  ],
+};
+const orphanWarns = P.orphanWarnings(orphanRelayEvent);
+assert('orphan: two orphaned runners detected', orphanWarns.length === 2, JSON.stringify(orphanWarns));
+assert('orphan: warning reason is orphan', orphanWarns.every(w => w.reason === 'orphan'), JSON.stringify(orphanWarns));
+assert('orphan: label shows orphan text', P.warnLabel(orphanWarns[0]).includes('orpo'), P.warnLabel(orphanWarns[0]));
+assert('orphan: no orphans when all runners have parentId', P.orphanWarnings(relayEvent).length === 0);
+assert('orphan: skipped for individual events', P.orphanWarnings(indEvent).length === 0);
+assert('orphan: skipped for legacy relay (no Team rows)', P.orphanWarnings(relayLegacyEvent).length === 0);
+
+// ── mass start deviation warnings ──
+const massDevEvent = {
+  id: 'e-massdev', name: 'Mass dev viesti', raceType: 'Relay', eventKind: 'Event',
+  begin: '2026-03-21T08:00:00.000Z', ending: '2026-03-21T12:00:00.000Z',
+  courseClasses: [{ id: 'cls1', name: 'H21', courses: [{ id: 'rc1', legs: 1 }] }],
+  courses: [{ id: 'rc1', name: 'Leg 1', distance: 3000, controls: [] }],
+  results: [
+    { id: 't1', resultType: 'Team', bibNumber: 1, name: 'Team 1', classId: 'cls1', startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't2', resultType: 'Team', bibNumber: 2, name: 'Team 2', classId: 'cls1', startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't3', resultType: 'Team', bibNumber: 3, name: 'Team 3', classId: 'cls1', startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't4', resultType: 'Team', bibNumber: 4, name: 'Team 4', classId: 'cls1', startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't5', resultType: 'Team', bibNumber: 5, name: 'Team 5', classId: 'cls1', startTime: '2026-03-21T08:05:00.000Z' },
+    { id: 't1l1', resultType: 'Individual', parentId: 't1', bibNumber: 1, leg: 1, classId: 'cls1', name: 'R1', status: 'Ok', time: 300, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't2l1', resultType: 'Individual', parentId: 't2', bibNumber: 2, leg: 1, classId: 'cls1', name: 'R2', status: 'Ok', time: 300, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't3l1', resultType: 'Individual', parentId: 't3', bibNumber: 3, leg: 1, classId: 'cls1', name: 'R3', status: 'Ok', time: 300, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't4l1', resultType: 'Individual', parentId: 't4', bibNumber: 4, leg: 1, classId: 'cls1', name: 'R4', status: 'Ok', time: 300, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 't5l1', resultType: 'Individual', parentId: 't5', bibNumber: 5, leg: 1, classId: 'cls1', name: 'R5 Late', status: 'Ok', time: 300, startTime: '2026-03-21T08:05:00.000Z' },
+  ],
+};
+const massWarns = P.massStartWarnings(massDevEvent);
+assert('mass-dev: one runner deviates from mass start', massWarns.length === 1, JSON.stringify(massWarns));
+assert('mass-dev: reason is massStartDeviation', massWarns[0].reason === 'massStartDeviation', JSON.stringify(massWarns));
+assert('mass-dev: deviation is 5 minutes', massWarns[0].deltaSec === 300, String(massWarns[0].deltaSec));
+assert('mass-dev: label includes clock and delta', P.warnLabel(massWarns[0]).includes('08:05') && P.warnLabel(massWarns[0]).includes('5:00'), P.warnLabel(massWarns[0]));
+assert('mass-dev: no warnings when all start same minute', P.massStartWarnings(relayGroupedEvent).length === 0);
+assert('mass-dev: skipped for individual events', P.massStartWarnings(indEvent).length === 0);
+assert('mass-dev: fewer than 3 runners → no warning', P.massStartWarnings({ ...massDevEvent, results: massDevEvent.results.slice(0, 5) }).length === 0);
 assert('initials: multi-part name → first letters', P.initials('Sikström Jack') === 'SJ' && P.initials('vanhanen') === 'V' && P.initials(null) === '');
 
 // ── relay markers (mass start + first exchange) ──
@@ -552,6 +638,67 @@ assert('tap-zoom: canvas CSS uses touch-action manipulation', /touch-action:\s*m
 assert('tap-zoom: touchstart is non-passive so preventDefault works', code.indexOf("passive: false") !== -1);
 assert('tap-zoom: touchstart cancels via guard before zoom can arm', /isDoubleTapSecond\(e\.touches, lastTapMs\)[\s\S]{0,80}preventDefault/.test(code));
 
+// ── parseClassName ──
+assert('parseClass: H10 → M,10', P.parseClassName('H10').gender === 'M' && P.parseClassName('H10').num === 10);
+assert('parseClass: D85 → N,85', P.parseClassName('D85').gender === 'N' && P.parseClassName('D85').num === 85);
+assert('parseClass: H16E → M,16,suffix E', P.parseClassName('H16E').gender === 'M' && P.parseClassName('H16E').num === 16 && P.parseClassName('H16E').suffix === 'E');
+assert('parseClass: Kilpasarja → null,null', P.parseClassName('Kilpasarja').gender === null && P.parseClassName('Kilpasarja').num === null);
+assert('parseClass: empty → null,null', P.parseClassName('').gender === null);
+assert('parseClass: h21 lowercase → M,21', P.parseClassName('h21').gender === 'M' && P.parseClassName('h21').num === 21);
+assert('parseClass: D-10 → N,10', P.parseClassName('D-10').gender === 'N' && P.parseClassName('D-10').num === 10);
+assert('parseClass: Avoin → null,null', P.parseClassName('Avoin').gender === null && P.parseClassName('Avoin').num === null);
+
+// ── compareClassNames (interleaved H/D by age) ──
+assert('compare: H10 < D10', P.compareClassNames('H10', 'D10') < 0);
+assert('compare: D10 < H12', P.compareClassNames('D10', 'H12') < 0);
+assert('compare: H12 < D12', P.compareClassNames('H12', 'D12') < 0);
+assert('compare: D85 < H85 is false', P.compareClassNames('D85', 'H85') > 0);
+assert('compare: H10 before Kilpasarja', P.compareClassNames('H10', 'Kilpasarja') < 0);
+assert('compare: Kilpasarja after H85', P.compareClassNames('Kilpasarja', 'H85') > 0);
+assert('compare: Avoin after D85', P.compareClassNames('Avoin', 'D85') > 0);
+
+// ── sorting array of class names ──
+const classNames = ['Kilpasarja', 'H85', 'D85', 'H10', 'D10', 'H12', 'D12', 'Avoin'];
+const sorted = classNames.slice().sort((a, b) => P.compareClassNames(a, b));
+assert('sort: order is H10,D10,H12,D12,H85,D85,Avoin,Kilpasarja',
+  sorted.join(',') === 'H10,D10,H12,D12,H85,D85,Avoin,Kilpasarja',
+  sorted.join(','));
+
+// ── autoDetectGroups ──
+const autoGroups = P.autoDetectGroups(multiClassEvent);
+assert('autoGroup: detects 3 groups', autoGroups.length === 3, String(autoGroups.length));
+assert('autoGroup: first group has H10+D10', autoGroups[0].length === 2 && autoGroups[0].includes('cH10') && autoGroups[0].includes('cD10'),
+  JSON.stringify(autoGroups[0]));
+assert('autoGroup: second group has H12+D12', autoGroups[1].length === 2 && autoGroups[1].includes('cH12') && autoGroups[1].includes('cD12'),
+  JSON.stringify(autoGroups[1]));
+assert('autoGroup: third group has H85+D85', autoGroups[2].length === 2 && autoGroups[2].includes('cH85') && autoGroups[2].includes('cD85'),
+  JSON.stringify(autoGroups[2]));
+
+// ── scheduleData with grouping ──
+const sdNoGrp = P.scheduleData(multiClassEvent, null);
+assert('sched: no grouping → 6 classes', sdNoGrp.classes.length === 6, String(sdNoGrp.classes.length));
+const sdGrp = P.scheduleData(multiClassEvent, autoGroups);
+assert('sched: with grouping → 3 rows', sdGrp.classes.length === 3, String(sdGrp.classes.length));
+assert('sched: grouped label H10/D10', sdGrp.classes.some(c => c.className === 'H10/D10'),
+  sdGrp.classes.map(c => c.className).join(', '));
+assert('sched: grouped label H12/D12', sdGrp.classes.some(c => c.className === 'H12/D12'),
+  sdGrp.classes.map(c => c.className).join(', '));
+assert('sched: grouped label H85/D85', sdGrp.classes.some(c => c.className === 'H85/D85'),
+  sdGrp.classes.map(c => c.className).join(', '));
+assert('sched: grouped classes have memberIds', sdGrp.classes.every(c => c.memberIds && c.memberIds.length === 2));
+assert('sched: sorting interleaved', sdGrp.classes.map(c => c.className).join(',') === 'H10/D10,H12/D12,H85/D85',
+  sdGrp.classes.map(c => c.className).join(','));
+
+// ── language: secSchedule renamed ──
+assert('lang: secSchedule fi = Lähtökaistat', P.T('secSchedule') === 'Lähtökaistat');
+P.setLang('en');
+assert('lang: secSchedule en = Start lanes', P.T('secSchedule') === 'Start lanes');
+P.setLang('fi');
+assert('lang: schGroup fi exists', P.T('schGroup') === 'Ryhmittely');
+P.setLang('en');
+assert('lang: schGroup en exists', P.T('schGroup') === 'Grouping');
+P.setLang('fi');
+
 // ── fetch flow: slug → tRPC → REST → render ──
 (async () => {
   await P.analyze('hyvinkaan-talvirastit-2026');
@@ -562,7 +709,7 @@ assert('tap-zoom: touchstart cancels via guard before zoom can arm', /isDoubleTa
   assert('flow: into forest card', out.includes('Kaikki metsässä'));
   assert('flow: peak card before flow', out.includes('Maaliruuhkan huippu'));
   assert('flow: combine button present', out.includes('Yhdistä valitut'));
-  assert('flow: single flow canvas only', (out.match(/<canvas/g) || []).length === 2, String((out.match(/<canvas/g) || []).length));
+  assert('flow: flow+pace+schedule canvases present', (out.match(/<canvas/g) || []).length === 3, String((out.match(/<canvas/g) || []).length));
   assert('flow: individual pace section present', out.includes('Keskivauhti sarjoittain'));
   assert('flow: no distribution histograms', !out.includes('Lähtöjen jakauma') && !out.includes('Maalien jakauma'));
   assert('flow: per-class colors in legend', out.includes('background:#4e79a7') && out.includes('background:#f28e2c'));
@@ -604,7 +751,7 @@ assert('tap-zoom: touchstart cancels via guard before zoom can arm', /isDoubleTa
   assert('flow: multistage stage load', S.stageEvents().length === 2, String(S.stageEvents().length));
   const mOut = document.getElementById('output').innerHTML;
   assert('flow: multistage rendered', mOut.includes('Päivä 1') && mOut.includes('Päivä 2'));
-  assert('flow: multistage flow+pace canvas per stage', (mOut.match(/<canvas/g) || []).length === 4, String((mOut.match(/<canvas/g) || []).length));
+  assert('flow: multistage flow+pace+schedule canvas per stage', (mOut.match(/<canvas/g) || []).length === 6, String((mOut.match(/<canvas/g) || []).length));
 
   console.log('passed ' + pass + ' failed ' + fail);
   if (fail) process.exit(1);

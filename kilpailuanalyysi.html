@@ -193,6 +193,10 @@
   .stagehead h3 { font-size: 15px; color: var(--primary); }
 
   .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .schsummary { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .schcontrols { display: flex; gap: 6px; margin-bottom: 8px; }
+  .schbtn { font-size: 11px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); color: var(--text); cursor: pointer; }
+  .schbtn:hover { background: var(--hover); }
 
   .warnbox {
     background: #fdf3e7;
@@ -308,6 +312,19 @@ const LANGS = {
     hPace: 'min/km',
     hRunners: 'Juoksijat',
     lFastest: 'Nopein',
+    secSchedule: 'Lähtökaistat',
+    schMax: 'Enintään',
+    schLanes: 'lähtökaistaa',
+    schLaneTrack: 'Lähtökaistat ajan mukaan',
+    schLane: 'Kaista',
+    schTooltip: 'Sarja',
+    schWave: 'Lähtöaalto',
+    schStarts: 'Lähdöt',
+    schInterval: 'Väli',
+    schGroup: 'Ryhmittely',
+    schGroupHint: 'Valitse sarjat jotka lähtevät samaan aikaan',
+    schGroupAuto: 'Auto-ryhmittely',
+    schGroupClear: 'Tyhjennä ryhmät',
     secStage: 'Osuus',
     noStages: 'Kilpailun osuuksia ei löytynyt',
     noTimeline: 'Aikaleimoja ei ole saatavilla tästä kisasta',
@@ -321,6 +338,8 @@ const LANGS = {
     ocTitle: 'Vielä radalla',
     ocIntro: 'Kisa on päättynyt, mutta nämä osallistujat eivät ole maalissa:',
     ocStatus: 'vielä radalla kisan päättymisen jälkeen',
+    wOrphan: 'orpo tuloks (ei joukkuetta)',
+    wMassDev: 'poikkeaa yhteislähdöstä',
   },
   en: {
     inputPlaceholder: 'Navisport event URL or slug (e.g. navisport.com/events/hyvinkaan-talvirastit-2026)',
@@ -372,6 +391,19 @@ const LANGS = {
     hPace: 'min/km',
     hRunners: 'Runners',
     lFastest: 'Fastest',
+    secSchedule: 'Start lanes',
+    schMax: 'Max',
+    schLanes: 'lanes',
+    schLaneTrack: 'Start lanes over time',
+    schLane: 'Lane',
+    schTooltip: 'Class',
+    schWave: 'Start wave',
+    schStarts: 'Starts',
+    schInterval: 'Interval',
+    schGroup: 'Grouping',
+    schGroupHint: 'Select classes that start at the same time',
+    schGroupAuto: 'Auto-group',
+    schGroupClear: 'Clear groups',
     secStage: 'Stage',
     noStages: 'No stages found for this event',
     noTimeline: 'No timestamps available for this event',
@@ -385,6 +417,8 @@ const LANGS = {
     ocTitle: 'Still on course',
     ocIntro: 'The event has ended but these runners have not finished:',
     ocStatus: 'still on course after the event ended',
+    wOrphan: 'orphaned result (no team)',
+    wMassDev: 'deviates from mass start',
   },
 };
 
@@ -667,9 +701,101 @@ function onCourseWarnings(event) {
   return out;
 }
 
-// All warnings (dropped rows + still-on-course), kept for the CSV export.
+// Warnings for orphaned Individual results that have no parentId in a
+// parent/child relay. These are draft/incomplete entries that were never
+// linked to a Team row (e.g. bib 8 orphans from Navisport).
+function orphanWarnings(event) {
+  if (event.raceType !== 'Relay') return [];
+  const results = event.results || [];
+  const teams = results.filter(r => r.resultType === 'Team');
+  if (!teams.length) return [];
+  const teamById = {};
+  teams.forEach(t => { teamById[t.id] = t; });
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const out = [];
+  results.filter(r => r.resultType !== 'Team').forEach(r => {
+    if (r.parentId && teamById[r.parentId]) return;
+    out.push({
+      reason: 'orphan',
+      name: initials(r.name),
+      className: cc[r.classId] || '',
+      status: '',
+      clock: null,
+      deltaSec: null,
+      count: 1,
+    });
+  });
+  return out;
+}
+
+// Per-class mass start consistency check for relay events. Detects first-leg
+// runners whose start time doesn't belong to any recognized mass start group
+// (≥3 runners sharing the same start minute) within their class. Flags data
+// quality issues where runners missed the mass start or were manually re-timed.
+function massStartWarnings(event) {
+  if (event.raceType !== 'Relay') return [];
+  const results = event.results || [];
+  const legs = results.filter(r => r.resultType !== 'Team');
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+
+  // Group leg-1 starts by class
+  const classStarts = {};
+  legs.filter(r => (r.leg || 0) === 1).forEach(r => {
+    const start = parseTS(r.startTime);
+    if (start == null || !tsInWindow(event, start)) return;
+    const cid = r.classId || '';
+    (classStarts[cid] = classStarts[cid] || []).push({ start, r });
+  });
+
+  const MIN_GROUP = 3;
+  const GAP_MIN = 2;
+  const out = [];
+  Object.entries(classStarts).forEach(([cid, entries]) => {
+    if (entries.length < MIN_GROUP) return;
+    // Find all mass start groups: buckets with ≥ MIN_GROUP runners
+    const buckets = {};
+    entries.forEach(e => {
+      const b = Math.floor(e.start / 60000) * 60000;
+      (buckets[b] = buckets[b] || []).push(e);
+    });
+    const groupMinutes = new Set();
+    Object.values(buckets).forEach(arr => {
+      if (arr.length >= MIN_GROUP) groupMinutes.add(Number(arr[0].start / 60000) * 60000);
+    });
+    if (!groupMinutes.size) return;
+    // Flag runners not in any mass start group, deviating ≥2 min
+    entries.forEach(e => {
+      const minute = Math.floor(e.start / 60000) * 60000;
+      if (groupMinutes.has(minute)) return;
+      // Find nearest group to compute delta
+      let nearest = null;
+      let nearestMin = null;
+      groupMinutes.forEach(gm => {
+        const d = Math.abs(e.start - gm);
+        if (nearest == null || d < nearest) { nearest = d; nearestMin = gm; }
+      });
+      if (nearest == null || nearest / 60000 < GAP_MIN) return;
+      out.push({
+        reason: 'massStartDeviation',
+        name: initials(e.r.name),
+        className: cc[cid] || '',
+        status: '',
+        clock: fmtClock(e.start),
+        deltaSec: Math.round((e.start - nearestMin) / 1000),
+        count: 1,
+      });
+    });
+  });
+  return out;
+}
+
+// All warnings (dropped rows + still-on-course + orphans + mass start), kept
+// for the CSV export.
 function flowWarnings(event) {
-  return droppedWarnings(event).concat(onCourseWarnings(event));
+  return droppedWarnings(event).concat(onCourseWarnings(event))
+    .concat(orphanWarnings(event)).concat(massStartWarnings(event));
 }
 
 // One-line, name-free description of a result warning (for UI and CSV).
@@ -677,6 +803,10 @@ function warnLabel(w) {
   const parts = [w.name, w.className, w.status];
   if (w.reason === 'stillOnCourse') {
     parts.push(T('ocStatus'));
+  } else if (w.reason === 'orphan') {
+    parts.push(T('wOrphan'));
+  } else if (w.reason === 'massStartDeviation') {
+    parts.push(T('wMassDev') + ' ' + w.clock + ' (' + fmtTime(w.deltaSec) + ')');
   } else {
     const what = w.reason === 'startAfterEnd' ? T('wStart') : T('wFinish');
     const when = w.reason === 'finishBeforeBegin' ? T('wBeforeStart') : T('wAfterEnd');
@@ -821,6 +951,43 @@ function eventFlow(event) {
 // distinct hues). Cycles via index % length for events with many classes.
 const CLASS_PALETTE = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
 
+// Parse orienteering class name into components for sorting.
+// Returns { gender: 'M'|'N'|null, num: number|null, suffix: string, raw: string }
+// Examples: "H10" → { gender:'M', num:10, suffix:'', raw:'H10' }
+//           "D85" → { gender:'N', num:85, suffix:'', raw:'D85' }
+//           "H16E" → { gender:'M', num:16, suffix:'E', raw:'H16E' }
+//           "Kilpasarja" → { gender:null, num:null, suffix:'', raw:'Kilpasarja' }
+function parseClassName(name) {
+  const s = String(name || '').trim();
+  const m = /^([HD])\s*-?\s*(\d+)(.*)$/i.exec(s);
+  if (!m) return { gender: null, num: null, suffix: s, raw: s };
+  return {
+    gender: m[1].toUpperCase() === 'H' ? 'M' : 'N',
+    num: parseInt(m[2], 10),
+    suffix: m[3],
+    raw: s,
+  };
+}
+
+// Sort key for interleaving H/D classes by age number.
+// H10→0, D10→1, H12→2, D12→3, ... non-H/D classes get high values.
+function classSortKey(name) {
+  const p = parseClassName(name);
+  if (p.gender == null || p.num == null) return { group: 1, age: 999, gender: 2 };
+  return { group: 0, age: p.num, gender: p.gender === 'M' ? 0 : 1 };
+}
+
+// Compare function for sorting class names intuitively: interleaved H/D by age,
+// non-H/D classes after.
+function compareClassNames(a, b) {
+  const ka = classSortKey(a);
+  const kb = classSortKey(b);
+  if (ka.group !== kb.group) return ka.group - kb.group;
+  if (ka.age !== kb.age) return ka.age - kb.age;
+  if (ka.gender !== kb.gender) return ka.gender - kb.gender;
+  return a.localeCompare(b, 'fi');
+}
+
 // Fixed elite-pace benchmarks shown as reference lines on the class-pace
 // chart, so a class's average pace can be eyeballed against known results.
 const PACE_REFS = [
@@ -886,6 +1053,162 @@ function classPaces(event) {
     fastestSec: Math.round(Math.min(...paces)),
     runners: paces.length,
   })).sort((a, b) => a.paceSec - b.paceSec);
+}
+
+// Per-class start windows derived from actual start timestamps. Detects
+// multiple start waves, packs classes into a small number of display rows
+// (lanes) per wave, and counts concurrent-start lanes per timepoint.
+// Optional groups parameter: array of arrays of classIds that should be
+// merged into a single display row (e.g. [['ca','cb']] groups H10+D10).
+function scheduleData(event, groups) {
+  const results = event.results || [];
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  let startResults;
+  if (event.raceType === 'Relay') {
+    const teams = results.filter(r => r.resultType === 'Team');
+    startResults = teams.length && teams.some(t => t.startTime)
+      ? teams
+      : results.filter(r => r.resultType !== 'Team' && r.leg === 1);
+  } else {
+    startResults = results.filter(r => r.resultType !== 'Team');
+  }
+  const entries = [];
+  startResults.forEach(r => {
+    const start = parseTS(r.startTime);
+    if (start == null) return;
+    entries.push({ start, classId: r.classId || '', courseId: r.courseId, time: r.time });
+  });
+  if (!entries.length) return null;
+  entries.sort((a, b) => a.start - b.start);
+
+  const WAVE_GAP = 20 * 60000;
+  const waveBounds = [0];
+  for (let i = 1; i < entries.length; i++) {
+    if (entries[i].start - entries[i - 1].start > WAVE_GAP) waveBounds.push(i);
+  }
+  waveBounds.push(entries.length);
+  const waveCount = waveBounds.length - 1;
+
+  const classes = [];
+  const allStarts = [];
+  const LANE_OCCUPY = 60000;
+
+  for (let wi = 0; wi < waveCount; wi++) {
+    const slice = entries.slice(waveBounds[wi], waveBounds[wi + 1]);
+    const byClass = {};
+    slice.forEach(r => {
+      if (!byClass[r.classId]) byClass[r.classId] = { starts: [], courseIds: new Set(), durations: [] };
+      byClass[r.classId].starts.push(r.start);
+      if (r.courseId != null) byClass[r.classId].courseIds.add(r.courseId);
+      if (r.time != null && r.time > 0) byClass[r.classId].durations.push(r.time * 1000);
+    });
+
+    // Apply grouping: merge classIds that belong to the same group
+    const groupMap = {};
+    const classToGroup = {};
+    (groups || []).forEach((g, gi) => {
+      const key = '_grp' + wi + '_' + gi;
+      g.forEach(cid => { classToGroup[cid] = key; });
+      groupMap[key] = g;
+    });
+
+    // Build merged class entries
+    const merged = {};
+    Object.entries(byClass).forEach(([cid, d]) => {
+      const grp = classToGroup[cid];
+      if (grp) {
+        if (!merged[grp]) merged[grp] = { ids: [], starts: [], courseIds: new Set(), durations: [] };
+        merged[grp].ids.push(cid);
+        d.starts.forEach(t => merged[grp].starts.push(t));
+        d.courseIds.forEach(id => merged[grp].courseIds.add(id));
+        d.durations.forEach(t => merged[grp].durations.push(t));
+      } else {
+        merged[cid] = { ids: [cid], starts: d.starts, courseIds: d.courseIds, durations: d.durations };
+      }
+    });
+
+    Object.entries(merged).forEach(([key, d]) => {
+      d.starts.sort((a, b) => a - b);
+      const courseId = d.courseIds.size === 1 ? [...d.courseIds][0] : null;
+      let interval = null;
+      if (d.starts.length >= 2) {
+        const gaps = [];
+        for (let i = 1; i < d.starts.length; i++) gaps.push(d.starts[i] - d.starts[i - 1]);
+        gaps.sort((a, b) => a - b);
+        interval = gaps[Math.floor(gaps.length / 2)];
+      }
+      const avgDuration = d.durations.length
+        ? d.durations.reduce((a, b) => a + b, 0) / d.durations.length
+        : null;
+      // Build display name from grouped class names
+      const names = d.ids.map(id => cc[id] || id);
+      let label;
+      if (d.ids.length > 1) {
+        label = names.sort((a, b) => compareClassNames(a, b)).join('/');
+      } else {
+        label = names[0];
+      }
+      if (waveCount > 1) label += ' (' + (wi + 1) + ')';
+      const classId = d.ids.length === 1 ? d.ids[0] : key;
+      classes.push({
+        classId, className: label, rawName: d.ids.length > 1 ? names.join('/') : (cc[d.ids[0]] || d.ids[0]),
+        wave: wi, firstStart: d.starts[0], lastStart: d.starts[d.starts.length - 1],
+        count: d.starts.length, courseId, interval, avgDuration,
+        memberIds: d.ids.length > 1 ? d.ids : null,
+      });
+      d.starts.forEach(t => {
+        allStarts.push({ t, end: t + LANE_OCCUPY, wave: wi, classId, className: label, courseId });
+      });
+    });
+  }
+  // Sort by wave first, then intuitive class name order within each wave
+  classes.sort((a, b) => a.wave - b.wave || compareClassNames(a.rawName, b.rawName));
+  if (!classes.length) return null;
+
+  // Pack overlapping classes into a small number of rows (lanes) per wave,
+  // greedily reusing a lane as soon as its previous class has finished.
+  let rowCount = 0;
+  for (let wi = 0; wi < waveCount; wi++) {
+    const waveClasses = classes.filter(c => c.wave === wi);
+    const laneEnds = [];
+    const waveRowStart = rowCount;
+    waveClasses.forEach(c => {
+      let lane = laneEnds.findIndex(end => end <= c.firstStart);
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+      laneEnds[lane] = c.lastStart;
+      c.lane = lane;
+      c.row = rowCount + lane;
+      c.waveRowStart = waveRowStart;
+    });
+    rowCount += laneEnds.length;
+  }
+
+  const tMin = Math.min(...allStarts.map(s => s.t));
+  const tMax = Math.max(...allStarts.map(s => s.t));
+  const laneTimeline = [];
+  for (let t = tMin; t <= tMax; t += 60000) {
+    let lanes = 0;
+    for (let i = 0; i < allStarts.length; i++) {
+      if (allStarts[i].t <= t && allStarts[i].end > t) lanes++;
+    }
+    laneTimeline.push({ t, lanes });
+  }
+  const maxLanes = laneTimeline.length ? Math.max(...laneTimeline.map(l => l.lanes)) : 0;
+
+  // Assign each individual start to a concrete physical lane (earliest lane
+  // whose previous occupant has already cleared), so the lane chart can show
+  // which classes actually share each lane instead of just a count over time.
+  const sortedStarts = allStarts.slice().sort((a, b) => a.t - b.t);
+  const laneFree = [];
+  sortedStarts.forEach(s => {
+    let lane = laneFree.findIndex(end => end <= s.t);
+    if (lane === -1) { lane = laneFree.length; laneFree.push(0); }
+    laneFree[lane] = s.end;
+    s.lane = lane;
+  });
+
+  return { classes, maxLanes, base: tMin, waveCount, rowCount, starts: sortedStarts };
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1268,6 +1591,198 @@ function drawPaceRefs(ctx, w, padL, padR, padT, bottomY, refs, X) {
   ctx.restore();
 }
 
+// Schedule Gantt chart: horizontal bars per class on a clock-time axis,
+// packed into as few lanes as overlap allows (classes with disjoint start
+// windows share a row), with a lane-count area chart below.
+function paintSchedule(ctx, w, h, cfg) {
+  ctx.clearRect(0, 0, w, h);
+  const classes = cfg.classes || [];
+  const maxLanes = cfg.maxLanes || 0;
+  const waveCount = cfg.waveCount || 1;
+  const rowCount = cfg.rowCount || classes.length;
+
+  const starts = cfg.starts || [];
+  const padL = 42, padR = 12, padT = 6, padB = 24;
+  const barH = 20, barGap = 4;
+  const laneRowH = 15, laneRowGap = 3;
+  const laneChartH = maxLanes > 0 ? maxLanes * (laneRowH + laneRowGap) : 0;
+  const gap = 22;
+  const barsTop = padT;
+  const laneTop = barsTop + rowCount * (barH + barGap) + gap;
+
+  const tMin = Math.min(...classes.map(c => c.firstStart));
+  const tMax = Math.max(...classes.map(c => c.lastStart));
+  const spanMs = (tMax - tMin) || 1;
+  const pw = w - padL - padR;
+  const X = t => padL + ((t - tMin) / spanMs) * pw;
+
+  const courseIds = [...new Set(classes.map(c => c.courseId).filter(id => id != null))];
+  const courseColor = {};
+  courseIds.forEach((id, i) => { courseColor[id] = CLASS_PALETTE[i % CLASS_PALETTE.length]; });
+
+  if (waveCount > 1) {
+    let prevWave = -1;
+    classes.forEach(c => {
+      if (prevWave >= 0 && c.wave !== prevWave) {
+        const y = barsTop + c.waveRowStart * (barH + barGap) - barGap / 2;
+        ctx.strokeStyle = '#c0cad8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(w - padR, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      prevWave = c.wave;
+    });
+  }
+
+  classes.forEach(c => {
+    const y = barsTop + c.row * (barH + barGap);
+    const x0 = X(c.firstStart);
+    const x1 = X(c.lastStart);
+    const color = c.courseId != null ? (courseColor[c.courseId] || '#999') : '#bbb';
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.82;
+    const bw = Math.max(x1 - x0, 3);
+    if (bw > 6) {
+      const r = Math.min(3, bw / 4);
+      ctx.beginPath();
+      ctx.moveTo(x0 + r, y);
+      ctx.lineTo(x0 + bw - r, y);
+      ctx.arcTo(x0 + bw, y, x0 + bw, y + r, r);
+      ctx.lineTo(x0 + bw, y + barH - r);
+      ctx.arcTo(x0 + bw, y + barH, x0 + bw - r, y + barH, r);
+      ctx.lineTo(x0 + r, y + barH);
+      ctx.arcTo(x0, y + barH, x0, y + barH - r, r);
+      ctx.lineTo(x0, y + r);
+      ctx.arcTo(x0, y, x0 + r, y, r);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x0, y, bw, barH);
+    }
+    ctx.globalAlpha = 1;
+
+    const label = c.className + ' (' + c.count + ')';
+    ctx.font = '10px sans-serif';
+    ctx.textBaseline = 'middle';
+    const labelW = ctx.measureText(label).width;
+    if (bw > labelW + 8) {
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, (x0 + x0 + bw) / 2, y + barH / 2);
+    } else {
+      ctx.fillStyle = '#1b2330';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, x0 + bw + 4, y + barH / 2);
+    }
+  });
+
+  const hitMap = [];
+  if (maxLanes > 0) {
+    ctx.fillStyle = '#8a97a6';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(T('schLaneTrack'), padL, laneTop - 8);
+
+    for (let n = 0; n < maxLanes; n++) {
+      const y = laneTop + n * (laneRowH + laneRowGap);
+      ctx.fillStyle = n % 2 === 0 ? 'rgba(31,58,95,0.045)' : 'rgba(31,58,95,0.0)';
+      ctx.fillRect(padL, y, w - padL - padR, laneRowH);
+      ctx.strokeStyle = '#e4e9f0';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(padL, y + 0.5, w - padL - padR, laneRowH);
+      ctx.fillStyle = '#8a97a6';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(n + 1), padL - 6, y + laneRowH / 2);
+    }
+
+    starts.forEach(s => {
+      const x = X(s.t);
+      const y = laneTop + s.lane * (laneRowH + laneRowGap) + laneRowH / 2;
+      const color = s.courseId != null ? (courseColor[s.courseId] || '#999') : '#999';
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      hitMap.push({ x, y, className: s.className, t: s.t, lane: s.lane + 1 });
+    });
+  }
+  cfg._laneMap = { hitMap, padL, padR };
+
+  const spanMin = spanMs / 60000;
+  const step = niceStep(spanMin);
+  ctx.fillStyle = '#5b6b7c';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const axisY = laneTop + laneChartH + 6;
+  for (let m = 0; m <= spanMin + 0.01; m += step) {
+    const t = tMin + m * 60000;
+    const x = X(t);
+    if (x < padL - 1 || x > w - padR + 1) continue;
+    ctx.strokeStyle = '#eef2f6';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, laneTop + laneChartH);
+    ctx.stroke();
+    ctx.fillText(fmtClock(t), x, axisY);
+  }
+
+  ctx.strokeStyle = '#dde3ea';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, laneTop + laneChartH);
+  ctx.lineTo(w - padR, laneTop + laneChartH);
+  ctx.stroke();
+}
+
+// Hit-tests hover/tap position against each start's dot in the lane track
+// and shows which class/time occupies that lane in the shared tooltip.
+function attachScheduleTip(c) {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
+  if (!tip) return;
+  const cfgOf = () => chartStore[c.dataset.chartId];
+  const show = (clientX, clientY) => {
+    const cfg = cfgOf();
+    const map = cfg && cfg._laneMap;
+    if (!map || !map.hitMap.length) { tip.hidden = true; return; }
+    const rect = c.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    let best = null, bestD = 36;
+    map.hitMap.forEach(p => {
+      const d = (p.x - px) * (p.x - px) + (p.y - py) * (p.y - py);
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    if (!best) { tip.hidden = true; return; }
+    tip.innerHTML = '<b>' + esc(best.className) + '</b><br>' +
+      esc(fmtClock(best.t)) + ' · ' + esc(T('schLane')) + ' ' + best.lane;
+    tip.hidden = false;
+    const wrap = c.parentElement;
+    const wr = wrap.getBoundingClientRect();
+    const ww = wrap.clientWidth || rect.width;
+    tip.style.left = Math.max(0, Math.min(clientX - wr.left + 14, ww - 220)) + 'px';
+    let ty = clientY - wr.top - (tip.offsetHeight || 0) - 10;
+    if (ty < 2) ty = clientY - wr.top + 16;
+    tip.style.top = ty + 'px';
+  };
+  c.addEventListener('mousemove', (e) => show(e.clientX, e.clientY));
+  c.addEventListener('mouseleave', () => { tip.hidden = true; });
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) show(t.clientX, t.clientY);
+  }, { passive: true });
+  c.addEventListener('touchend', () => { tip.hidden = true; }, { passive: true });
+  c.addEventListener('touchcancel', () => { tip.hidden = true; }, { passive: true });
+}
+
 function tipHtmlFor(cfg, m) {
   const binW = 5;
   const from = Math.floor(m / binW) * binW;
@@ -1461,6 +1976,52 @@ function setupChartInteractions() {
   });
 }
 
+function setupScheduleInteractions() {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    const autoBtn = t && t.closest ? t.closest('button[data-sch-auto]') : null;
+    const clearBtn = t && t.closest ? t.closest('button[data-sch-clear]') : null;
+    const btn = autoBtn || clearBtn;
+    if (!btn) return;
+    const id = autoBtn ? btn.dataset.schAuto : btn.dataset.schClear;
+    const cfg = chartStore[id];
+    if (!cfg || cfg.type !== 'schedule') return;
+    if (autoBtn) {
+      cfg.groups = autoDetectGroups(cfg.event);
+    } else {
+      cfg.groups = [];
+    }
+    // Recompute schedule data with new groups
+    const sd = scheduleData(cfg.event, cfg.groups.length ? cfg.groups : null);
+    if (!sd) return;
+    cfg.classes = sd.classes;
+    cfg.maxLanes = sd.maxLanes;
+    cfg.base = sd.base;
+    cfg.waveCount = sd.waveCount;
+    cfg.rowCount = sd.rowCount;
+    cfg.starts = sd.starts;
+    // Resize canvas and repaint
+    const canvas = document.querySelector('[data-chart-id="' + id + '"]');
+    if (canvas) {
+      const h = scheduleChartHeight(cfg);
+      canvas.style.height = h + 'px';
+      const wrap = canvas.parentElement;
+      if (wrap) {
+        const dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+        const w = wrap.clientWidth || canvas.clientWidth;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const ctx = canvas.getContext && canvas.getContext('2d');
+        if (ctx) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          paintSchedule(ctx, w, h, cfg);
+        }
+      }
+    }
+  });
+}
+
 // Double-tap-to-zoom guard: a second tap landing within this many
 // milliseconds of the previous tap is part of a double-tap. The chart cancels
 // such a tap so a mobile browser can never zoom the page while the organizer
@@ -1569,6 +2130,8 @@ function paintCharts() {
     const w = Math.max(200, parentW - 36);
     const h = cfg.type === 'pace'
       ? Math.max(120, 18 * (cfg.paces || []).length + 40)
+      : cfg.type === 'schedule'
+      ? scheduleChartHeight(cfg)
       : 280;
     c.width = Math.round(w * dpr);
     c.height = Math.round(h * dpr);
@@ -1583,6 +2146,12 @@ function paintCharts() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       paintPace(ctx, w, h, cfg);
       attachPaceTip(c);
+    } else if (cfg.type === 'schedule') {
+      cfg._el = c; cfg._w = w; cfg._h = h; cfg._dpr = dpr;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintSchedule(ctx, w, h, cfg);
+      attachScheduleTip(c);
     }
   }
 }
@@ -1693,10 +2262,11 @@ function flowCards(flow, onCourseCount) {
 // instead of right after the summary cards.
 function excludedBoxHtml(event, onCourse) {
   const excluded = droppedWarnings(event);
-  if (excluded.length) {
-    // Still-on-course entries are tacked onto the end of this same box
-    // rather than shown as a separate box below it.
-    return warnBoxHtml(T('warnTitle'), T('warnIntro'), excluded,
+  const orphans = orphanWarnings(event);
+  const massDev = massStartWarnings(event);
+  const dataWarnings = excluded.concat(orphans).concat(massDev);
+  if (dataWarnings.length) {
+    return warnBoxHtml(T('warnTitle'), T('warnIntro'), dataWarnings,
       onCourse.length ? { title: T('ocTitle'), intro: T('ocIntro'), warnings: onCourse } : null);
   } else if (onCourse.length) {
     return warnBoxHtml(T('ocTitle'), T('ocIntro'), onCourse);
@@ -1739,7 +2309,7 @@ function flowSection(event) {
 
 function renderIndividual(event) {
   const flow = flowSection(event);
-  return renderHeader(event) + '\n' + flow.html + '\n' + paceSection(event) + '\n' + flow.warnBox;
+  return renderHeader(event) + '\n' + flow.html + '\n' + paceSection(event) + '\n' + scheduleSection(event) + '\n' + flow.warnBox;
 }
 
 function paceRefsLegend(refs) {
@@ -1758,9 +2328,73 @@ function paceSection(event) {
     paceRefsLegend(PACE_REFS));
 }
 
+// Total canvas height for the schedule chart: class bars (rowCount rows) plus
+// the per-lane track below (maxLanes rows), plus fixed padding for axes/title.
+function scheduleChartHeight(cfg) {
+  const rowCount = cfg.rowCount || (cfg.classes || []).length;
+  const maxLanes = cfg.maxLanes || 0;
+  return Math.max(120, rowCount * 24 + maxLanes * 18 + 80);
+}
+
+// Auto-detect classes that start at exactly the same time and suggest grouping.
+// Returns array of arrays of classIds.
+function autoDetectGroups(event) {
+  const results = event.results || [];
+  let startResults;
+  if (event.raceType === 'Relay') {
+    const teams = results.filter(r => r.resultType === 'Team');
+    startResults = teams.length && teams.some(t => t.startTime)
+      ? teams
+      : results.filter(r => r.resultType !== 'Team' && r.leg === 1);
+  } else {
+    startResults = results.filter(r => r.resultType !== 'Team');
+  }
+  // Collect first start time per class
+  const firstByClass = {};
+  startResults.forEach(r => {
+    const start = parseTS(r.startTime);
+    if (start == null) return;
+    const cid = r.classId || '';
+    if (firstByClass[cid] == null || start < firstByClass[cid]) firstByClass[cid] = start;
+  });
+  // Group classes with same first start time
+  const timeToClasses = {};
+  Object.entries(firstByClass).forEach(([cid, t]) => {
+    if (!timeToClasses[t]) timeToClasses[t] = [];
+    timeToClasses[t].push(cid);
+  });
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  return Object.values(timeToClasses)
+    .filter(ids => ids.length >= 2)
+    .map(ids => ids.sort((a, b) => compareClassNames(cc[a] || a, cc[b] || b)));
+}
+
+function scheduleSection(event) {
+  const sd = scheduleData(event);
+  if (!sd) return '';
+  const id = 'ch' + (++chartSeq);
+  const cfg = {
+    type: 'schedule', id, classes: sd.classes, maxLanes: sd.maxLanes,
+    base: sd.base, waveCount: sd.waveCount, rowCount: sd.rowCount, starts: sd.starts,
+    groups: [], event,
+  };
+  const h = scheduleChartHeight(cfg);
+  chartStore[id] = cfg;
+  const summary = '<p class="schsummary">' + esc(T('schMax')) + ' ' + sd.maxLanes + ' ' + esc(T('schLanes')) + '</p>';
+  const controls = '<div class="schcontrols">' +
+    '<button data-sch-auto="' + id + '" class="schbtn">' + esc(T('schGroupAuto')) + '</button>' +
+    '<button data-sch-clear="' + id + '" class="schbtn">' + esc(T('schGroupClear')) + '</button>' +
+    '</div>';
+  return sectionHtml(T('secSchedule'),
+    summary + controls +
+    '<div class="chartwrap"><canvas data-chart-id="' + id + '" class="chart" style="height:' + h + 'px"></canvas>' +
+    '<div class="charttip" data-tip-for="' + id + '" hidden></div></div>');
+}
+
 function renderRelay(event) {
   const flow = flowSection(event);
-  const parts = [renderHeader(event), flow.html, paceSection(event), flow.warnBox];
+  const parts = [renderHeader(event), flow.html, paceSection(event), scheduleSection(event), flow.warnBox];
   return parts.join('\n');
 }
 
@@ -1777,6 +2411,7 @@ function renderMultistage() {
     const flow = flowSection(s);
     out.push(flow.html);
     out.push(paceSection(s));
+    out.push(scheduleSection(s));
     out.push(flow.warnBox);
   });
   return out.join('\n');
@@ -1975,6 +2610,7 @@ function wireUI() {
     window.addEventListener('resize', () => { if (state.event) paintCharts(); });
   }
   setupChartInteractions();
+  setupScheduleInteractions();
   const fromHash = slugFromHash();
   if (fromHash) {
     if (slug) slug.value = fromHash;
