@@ -21,6 +21,7 @@ install, no server, no account: download the file (or just open it) and go.
 | Build balanced Halikko-viesti teams | [Halikko-viesti Team Planner](#halikko-viesti-team-planner) |
 | Build SM-viesti teams (age classes + veteran age-sum rules) | [SM-viesti Team Planner](#sm-viesti-team-planner) |
 | Get an up-to-date list of Finnish orienteering clubs | [IRMA Club Registry Fetcher](#irma-club-registry-fetcher) |
+| Map relay hajonta (route assignments) to teams for map packing | [Relay Hajontakaavio](#relay-hajontakaavio) |
 | ...with district/area info attached | [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts) |
 | Convert Purple Pen course files to IOF XML | [Purple Pen → IOF Converter](#purple-pen--iof-converter) |
 | Lay out kids' maps on A4 sheets for printing | [Map Merger](#map-merger) |
@@ -192,6 +193,33 @@ adjustment, sick-runner auto-replacement (respecting the destination team's
 age-sum requirement), per-runner team wishes, [Navisport](#navisport)
 start-list CSV export, JSON save/load with `localStorage` autosave, and a
 built-in example pool covering both class types.
+
+</details>
+
+### Relay Hajontakaavio
+
+File: [`viestin_hajontakaavio.html`](viestin_hajontakaavio.html)
+
+Need to see which teams run which hajonta (route assignments) — for map
+packing or hand-off personnel? Pull the start list from Navisport, drop in
+the hajontakaavio CSV from the race organiser, and get a filterable,
+sortable view with CSV and print/PDF export.
+
+<details>
+<summary>Details</summary>
+
+Relay hajontakaavio viewer for map packing and exchange personnel. Loads the
+team/start list from [Navisport](#navisport) (supports relay, multistage, and
+individual events via slug or UUID) and merges it with a hajontakaavio CSV
+(typically exported by the race's results service / tulospalvelu). The
+result is a filterable, sortable table showing each team's route assignments
+per leg.
+
+Features: filter by club and class, text search, click-to-sort on every
+column, toggle runner name columns on/off (J1/J2/J3 checkboxes), CSV export,
+and print-friendly PDF output via the browser's print dialog. URL parameter
+`?slug=...` pre-fills the Navisport field. Works entirely in the browser —
+no server needed.
 
 </details>
 

@@ -18,6 +18,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 | Tasavahvat Halikko-viesti -joukkueet | [Halikko-viesti -joukkuesuunnittelu](#halikko-viesti--joukkuesuunnittelu) |
 | SM-viesti-joukkueet (ikäsarjat + veteraanien ikäsummasäännöt) | [SM-viesti -joukkuesuunnittelu](#sm-viesti--joukkuesuunnittelu) |
 | Ajantasaisen listan Suomen suunnistusseuroista | [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija) |
+| Karttojen pussitukseen viestin hajonta joukkueittain | [Viestin hajontakaavio](#viestin-hajontakaavio) |
 | ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
 | Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
 | Lasten kartat A4-arkeiksi painoon | [Map Merger](#map-merger) |
@@ -196,6 +197,34 @@ juoksijan automaattinen korvaus (kohdejoukkueen ikäsummavaatimusta
 kunnioittaen), juoksijakohtaiset joukkuetoiveet, [Navisport](#navisport)-alkulista-CSV-vienti,
 JSON-tallennus/lataus `localStorage`-autotallennuksella sekä sisäänrakennettu
 esimerkkipooli, joka kattaa molemmat sarjatyypit.
+
+</details>
+
+### Viestin hajontakaavio
+
+Tiedosto: [`viestin_hajontakaavio.html`](viestin_hajontakaavio.html)
+
+Tarvitsetko nähdä, mitkä joukkueet juoksevat mitkin hajonnan — karttojen
+pussitukseen vai vaihtohenkilökunnalle? Hae alkulista Navisportista, pudota
+kilpailun tulospalvelun antama hajontakaavio CSV sisään ja saat suodatettavan,
+lajiteltavan näkymän CSV- ja tulostus/PDF-viennillä.
+
+<details>
+<summary>Lisätiedot</summary>
+
+Viestin hajontakaavion katselu työkalu karttojen pussitukseen ja
+vaihtohenkilökunnalle. Hakee joukkuettelun [Navisport](#navisport)-API:sta
+(tukee viesti-, moniosa- ja yksilötapahtumia slug:lla tai UUID:lla) ja
+yhdistää sen kilpailun tulospalvelun tuottamaan hajontakaavio-CSV:een.
+Tuloksena on suodatettava ja lajiteltava taulukko, jossa näkyy kunkin
+joukkueen hajonnan osuudet.
+
+Ominaisuudet: suodata seuran ja sarjan mukaan, tekstihaku, lajittele
+klikkaamalla sarakkeen otsikkoa, piilota/näytä juoksijasarakkeet
+(J1/J2/J3 -ruudut), CSV-vienti ja tulostusystävällinen PDF-näkymä
+selaimen tulostusikkunan kautta. URL-parametri `?slug=...` täyttää
+Navisport-kentän automaattisesti. Toimii kokonaan selaimessa —
+ei palvelinta tarvita.
 
 </details>
 
