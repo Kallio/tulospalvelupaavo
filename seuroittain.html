@@ -122,6 +122,7 @@
   <input type="text" id="search" data-loc="phSearch" placeholder="nimi, nro, chip, luokka..." oninput="render()">
   <button class="btn btn-outline" onclick="selectedClass=null; updateClassLinkState(); render()" data-loc="btnAllClasses">Näytä kaikki sarjat</button>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="colorsCheck" checked onchange="toggleColors(this.checked)"><span data-loc="btnColors">Värit</span></label>
+  <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="abbrCheck" onchange="toggleAbbr(this.checked)"><span data-loc="btnAbbr">Lyhenne</span></label>
   <span id="countInfo" class="summary" style="margin-left:auto;padding:0"></span>
 </div>
 
@@ -144,7 +145,7 @@
 // ════════════════════════════════════════════════════════════════════
 const LANGS = {
   fi: {
-    btnLang: 'EN', btnShare: 'Jaa linkki', btnCsv: 'CSV', btnPrint: 'Tulosta / PDF', btnColors: 'Värit',
+    btnLang: 'EN', btnShare: 'Jaa linkki', btnCsv: 'CSV', btnPrint: 'Tulosta / PDF', btnColors: 'Värit', btnAbbr: 'Lyhenne',
     pdfN: '{a} riviä',
     shareCopied: 'Linkki kopioitu', shareFailed: 'Linkin kopiointi epäonnistui',
     appTitle: 'Startlist Viewer',
@@ -176,7 +177,7 @@ const LANGS = {
     popupBlocked: 'Salli popup-ikkuna tälle sivulle',
   },
   en: {
-    btnLang: 'FI', btnShare: 'Share link', btnCsv: 'CSV', btnPrint: 'Print / PDF', btnColors: 'Colors',
+    btnLang: 'FI', btnShare: 'Share link', btnCsv: 'CSV', btnPrint: 'Print / PDF', btnColors: 'Colors', btnAbbr: 'Abbrev',
     pdfN: '{a} rows',
     shareCopied: 'Link copied', shareFailed: 'Failed to copy link',
     appTitle: 'Startlist Viewer',
@@ -303,6 +304,7 @@ let stageCount = 1;
 let selectedClass = null;
 let eventState = null;
 let showColors = true;
+let showAbbr = false;
 
 const START_PALETTE = [
   { bg: '#ffe9c7', fg: '#4a3000' },
@@ -330,6 +332,10 @@ function startColor(startText) {
 }
 function toggleColors(checked) {
   showColors = checked;
+  render();
+}
+function toggleAbbr(checked) {
+  showAbbr = checked;
   render();
 }
 
@@ -504,22 +510,57 @@ function clubsList() {
 //  Clubs mapping
 // ════════════════════════════════════════════════════════════════════
 let clubsCache = null;
+let clubAbbrMap = null;
 async function loadClubs() {
   if (clubsCache) return clubsCache;
   try {
-    const response = await fetch('clubs_with_districts.json');
-    if (!response.ok) throw new Error('Clubs JSON not found');
-    const json = await response.json();
+    const [abbrResp, distResp] = await Promise.all([
+      fetch('clubs.json'),
+      fetch('clubs_with_districts.json'),
+    ]);
+    if (!abbrResp.ok && !distResp.ok) throw new Error('Clubs JSON not found');
+    const abbrJson = abbrResp.ok ? await abbrResp.json() : null;
+    const distJson = distResp.ok ? await distResp.json() : null;
+
     const areas = {};
-    (json.areas || []).forEach(a => { areas[String(a.id)] = a.name; });
-    clubsCache = Object.entries(json.clubMap || {}).map(([name, meta]) => ({
-      name,
-      normalized: normalize(name),
-      areaId: meta && meta.areaId,
-      areaName: (meta && meta.areaName) || (meta && areas[String(meta.areaId)]) || '',
-    }));
+    (distJson && distJson.areas || []).forEach(a => { areas[String(a.id)] = a.name; });
+    const distByName = new Map();
+    Object.entries((distJson && distJson.clubMap) || {}).forEach(([name, meta]) => {
+      const dm = meta || {};
+      distByName.set(name.toLowerCase(), {
+        name,
+        areaId: dm.areaId,
+        areaName: dm.areaName || areas[String(dm.areaId)] || '',
+      });
+    });
+
+    const clubMap = new Map();
+    (abbrJson || []).forEach(c => {
+      if (!c || !c.name) return;
+      const key = c.name.toLowerCase();
+      const d = distByName.get(key) || {};
+      clubMap.set(key, {
+        name: c.name,
+        abbreviation: c.abbreviation || '',
+        areaId: d.areaId || null,
+        areaName: d.areaName || '',
+      });
+    });
+    distByName.forEach((d, key) => {
+      if (!clubMap.has(key)) {
+        clubMap.set(key, { name: d.name, abbreviation: '', areaId: d.areaId, areaName: d.areaName });
+      }
+    });
+
+    clubsCache = [];
+    const abbrMap = new Map();
+    clubMap.forEach(club => {
+      clubsCache.push({ ...club, normalized: normalize(club.name) });
+      if (club.abbreviation) abbrMap.set(normalize(club.abbreviation), club);
+    });
+    clubAbbrMap = abbrMap;
   } catch (error) {
-    console.warn('Could not load clubs_with_districts.json, proceeding without club mapping:', error);
+    console.warn('Could not load club data, proceeding without club mapping:', error);
     const link = document.createElement('a');
     link.href = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs_with_districts.py';
     link.textContent = T('clubsTool');
@@ -537,6 +578,7 @@ function matchClub(name) {
   const clubs = clubsCache;
   if (!clubs || !clubs.length || !name) return null;
   const target = normalize(name);
+  if (clubAbbrMap && clubAbbrMap.has(target)) return clubAbbrMap.get(target);
   let best = null;
   let bestDist = Infinity;
   for (const c of clubs) {
@@ -548,17 +590,33 @@ function matchClub(name) {
   return best;
 }
 
+function generateShortName(name) {
+  if (!name) return name || '';
+  const STOP = /^(ok|rv|ik|sk|kisa|kisas?|urheilijat|suunnistajat|suunnistus|rasti|viest[it]?|seura|kers?|team|sport|idrott|idrottsf|cil|club|cf|ss)$/i;
+  const words = String(name).trim().split(/\s+/).filter(w => w && !STOP.test(w.replace(/[.·]/g, '')));
+  if (!words.length) words.push('' + name);
+  const first = words[0].replace(/[^a-zA-ZåäöÅÄÖ]/g, '');
+  const head = first.slice(0, Math.min(first.length, words.length > 1 ? 3 : 4));
+  const tail = words.slice(1).map(w => {
+    const c = w.replace(/[^a-zA-ZåäöÅÄÖ]/g, '');
+    return c ? c[0].toUpperCase() : '';
+  }).join('');
+  const out = head + tail;
+  return out || String(name).trim();
+}
+
 async function mapResultsWithClubs(results) {
   await loadClubs();
   return results.map(result => {
     if (!clubsCache.length || !result.club) return result;
     const m = matchClub(result.club);
     const canonical = m ? m.name : result.club;
+    const abbrev = m ? (m.abbreviation || '') : (result.abbreviation || '');
     return {
       ...result,
       club: canonical,
       areaName: m ? m.areaName : '',
-      abbreviation: m ? m.name : result.abbreviation,
+      abbreviation: abbrev || generateShortName(canonical),
     };
   });
 }
@@ -745,6 +803,7 @@ function prepareRows(json, mainCourseClasses) {
       status,
       club: r.club || '',
       abbreviation: r.abbreviation || '',
+      abbr: r.abbreviation || '',
       resultRankClass: '',
     };
   });
@@ -806,6 +865,8 @@ function prepareRowsMultistage(allResults, mainCourseClasses) {
           resultRank: '',
           status: '',
           club: r.club || '',
+          abbreviation: r.abbreviation || '',
+          abbr: r.abbreviation || '',
         };
       }
       const item = tempMap[key];
@@ -819,6 +880,7 @@ function prepareRowsMultistage(allResults, mainCourseClasses) {
       item.stageRanks[idx] = r.rank || r.resultRank || (r.result && r.result.rank) || item.stageRanks[idx];
       item.stageStatuses[idx] = r.status || r.resultStatus || item.stageStatuses[idx];
       if (r.club) item.club = r.club;
+      if (r.abbreviation) { item.abbreviation = r.abbreviation; item.abbr = r.abbreviation; }
     }
   }
 
@@ -1021,7 +1083,7 @@ function render() {
         html += `<td>${esc(showValue(r.stageStatuses[i]))}</td>`;
       }
     }
-    html += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(r.club || '')}</td>`;
+    html += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
     if (stageCount > 1) {
       html += `<td>${esc(r.totalTime || '')}</td><td${totalRankClass}>${showValue(r.resultRank)}</td>`;
     }
@@ -1107,7 +1169,7 @@ function rowsToCsv(data) {
   return data.map(r => {
     const row = [r.className || ''];
     for (let i = 0; i < stageCount; i++) row.push(r.startTimes[i] || '', r.stageTimes[i] || '', r.stageRanks[i] || '', r.stageStatuses[i] || '');
-    row.push(r.bibNumber || '', r.chip || '', r.surname || '', r.givenName || '', r.club || '', r.totalTime || '', r.resultRank || '', r.status || '');
+    row.push(r.bibNumber || '', r.chip || '', r.surname || '', r.givenName || '', showAbbr ? (r.abbr || r.club || '') : (r.club || ''), r.totalTime || '', r.resultRank || '', r.status || '');
     return row;
   })
   .map(row => row.map(v => { const s = String(v).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; }).join(','))
@@ -1151,7 +1213,7 @@ function downloadPDF() {
       if (eventState !== 'Complete') tr += `<td>${showValue(r.startTimes[i])}</td>`;
       tr += `<td>${showValue(r.stageTimes[i])}</td><td>${showValue(r.stageRanks[i])}</td><td>${esc(showValue(r.stageStatuses[i]))}</td>`;
     }
-    tr += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(r.club || '')}</td>`;
+    tr += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
     if (stageCount > 1) tr += `<td>${esc(r.totalTime || '')}</td><td>${showValue(r.resultRank)}</td>`;
     return tr + '</tr>';
   }).join('');
