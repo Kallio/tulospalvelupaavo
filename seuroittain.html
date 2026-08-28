@@ -1,520 +1,785 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fi">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Startlist Viewer — seurakohtainen</title>
-<style>:root{--bg-body:#f7f9fb;--txt-body:#111;--bg-table:#fff;--border-table:#eef2f7;--bg-select:#fff;--border-select:#cbd5e1;--bg-link:#e2e8f0;--txt-link:#111;--bg-link-hover:#cbd5e1;--row-hover:#c1d6ea;--hint:#6b7280;--sorted:#ff0000;--rank1-txt:#111;
-}@media (prefers-color-scheme:dark){:root{--bg-body:#121212;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
-}@media (prefers-color-scheme:dark){:root{--bg-body:#000000;--txt-body:#e0e0e0;--bg-table:#1e1e1e;--border-table:#333;--bg-select:#2b2b2b;--border-select:#555;--bg-link:#2d3748;--txt-link:#e0e0e0;--bg-link-hover:#4a5568;--row-hover:#2c3e50;--hint:#a0aec0;--sorted:#00ff00;--rank2-txt:#000;--rank1-txt:#000}}body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:18px;background:var(--bg-body);color:var(--txt-body)}header{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}select,input{padding:6px 8px;border-radius:6px;border:1px solid var(--border-select);background:var(--bg-select);color:var(--txt-body)}table{border-collapse:collapse;width:100%;background:var(--bg-table);border-radius:8px;overflow:hidden}th,td{padding:8px 8px;text-align:left;border-bottom:1px solid var(--border-table)}th{cursor:pointer;user-select:none;position:relative}th .hint{font-size:12px;color:var(--hint);margin-left:6px}th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px;color:var(--sorted)}tbody tr:hover{background:var(--row-hover)}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.small{font-size:12px;color:#64748b}.rank-1{background-color:gold;color:var(--rank1-txt)}.rank-2{background-color:silver;color:var(--rank2-txt)}.rank-3{background-color:#cd7f32}#classLinks{margin:12px 0;display:flex;flex-wrap:wrap;gap:6px}#classLinks a{padding:4px 8px;background:var(--bg-link);border-radius:6px;text-decoration:none;color:var(--txt-link);font-size:14px}#classLinks a:hover{color:#ff9f4b;background:var(--bg-link-hover)}  a:visited {  color:#ffb86c;
-}
-.clock.hint::before {
-  content: "(";
-}
+<style>
+  :root {
+    --bg: #f4f6f9; --fg: #1b2330; --muted: #5b6b7c;
+    --primary: #1f3a5f; --primary-light: #2e5a8a; --primary-dark: #16283f;
+    --accent: #e67e22; --accent-hover: #d06e15;
+    --card: #fff; --border: #dde3ea;
+    --ok: #1e8e3e; --err: #c0392b;
+    --radius: 8px; --shadow: 0 1px 3px rgba(23,35,55,.08), 0 2px 8px rgba(23,35,55,.06);
+    --row-hover: #e8f0fa; --sorted: #e67e22;
+    --rank1-txt: #333; --rank2-txt: #333;
+  }
+  @media(prefers-color-scheme:dark){:root{
+    --bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;
+    --primary:#21262d;--primary-light:#30363d;--primary-dark:#161b22;
+    --accent:#f0883e;--accent-hover:#d29922;
+    --card:#161b22;--border:#30363d;
+    --ok:#3fb950;--err:#f85149;
+    --row-hover:#1c2128;--sorted:#f0883e;
+    --rank1-txt:#000; --rank2-txt:#000;
+  }}
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;line-height:1.5}
 
-.clock.hint::after {
-  content: ")";
-}
+  .topbar{background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px}
+  .mark{width:38px;height:38px;background:var(--accent);border-radius:9px;display:grid;place-items:center;font-size:17px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(230,126,34,.35)}
+  .brand h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
+  .brand p{font-size:12px;color:#9db4cc;font-weight:400}
+  .topbar .acts{margin-left:auto;display:flex;gap:7px}
+
+  .input-bar{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
+  .input-bar label{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+  .input-bar input[type=text]{flex:1;min-width:200px;padding:9px 13px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:Consolas,Menlo,monospace;font-size:12.5px;background:var(--bg);color:var(--fg);outline:none;transition:border-color .2s,box-shadow .2s}
+  .input-bar input:focus{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(46,90,138,.12)}
+  .input-bar input::placeholder{color:var(--muted);font-family:'Segoe UI',Arial,sans-serif;font-size:12.5px}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-family:inherit;font-size:12.5px;font-weight:600;border:none;cursor:pointer;transition:all .12s;white-space:nowrap}
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-light)}
+  .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+  .btn-accent{background:var(--accent);color:#fff}.btn-accent:hover{background:var(--accent-hover)}
+  .btn-outline{background:transparent;color:var(--primary);border:1.5px solid var(--border)}.btn-outline:hover{background:var(--bg);border-color:var(--primary-light)}
+
+  .status{padding:8px 24px;font-size:13px;min-height:34px;display:flex;align-items:center;gap:8px}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.info{color:var(--muted)}
+  .status code{background:var(--border);padding:0 4px;border-radius:4px;font-size:12px}
+
+  .filters{padding:8px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--border)}
+  .filters select,.filters input{padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12.5px;background:var(--bg);color:var(--fg)}
+  .filters label{font-size:12px;color:var(--muted);font-weight:600}
+  .filters input:focus{outline:none;border-color:var(--primary-light)}
+
+  .class-links{padding:8px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .class-links .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--fg);text-decoration:none;cursor:pointer;transition:all .12s}
+  .class-links .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .class-links .chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  .table-wrap{overflow-x:auto;padding:0 24px 24px}
+  table{border-collapse:collapse;width:100%;background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-top:16px}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+  th{background:var(--primary);color:#fff;cursor:pointer;user-select:none;position:relative;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+  th:hover{background:var(--primary-light)}
+  th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px}
+  tbody tr:hover{background:var(--row-hover)}
+  tbody tr:nth-child(even){background:rgba(0,0,0,.02)}
+  @media(prefers-color-scheme:dark){tbody tr:nth-child(even){background:rgba(255,255,255,.02)}}
+  td.rank-1{background-color:gold;color:var(--rank1-txt)}
+  td.rank-2{background-color:silver;color:var(--rank2-txt)}
+  td.rank-3{background-color:#cd7f32;color:#fff}
+
+  .summary{padding:4px 24px 12px;font-size:13px;color:var(--muted)}
+  .summary b{color:var(--fg)}
+
+  .official-link{color:var(--accent);text-decoration:none;font-size:13px}
+  .official-link:hover{text-decoration:underline}
 </style>
-
 </head>
 <body>
-<header>
-  <h2>Startlist Viewer</h2>
-  <div class="controls">
-    <label class="small">Seura:</label>
-    <select id="clubSelect"><option>Kaikki seurat</option></select>
-    <label class="small">Haku:</label>
-    <input id="search" placeholder="nimi, nro, chip, luokka..." />
-    <div class="controls" style="margin-top:12px;">
-      <button id="exportCsv">Lataa näkymä CSV‑tiedona</button>
-      <button onclick="selectedClass=null; render();">Näytä kaikki sarjat</button>
 
-    </div>
+<div class="topbar">
+  <div class="mark">🏆</div>
+  <div class="brand">
+    <h1 id="eventTitle">Startlist Viewer</h1>
+    <p id="eventRange"></p>
   </div>
-  <div id="countInfo" >_</div>
+  <div class="acts">
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="toggleLang()" id="btnLang">EN</button>
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="shareLink()" id="btnShare" disabled>Jaa linkki</button>
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="downloadPDF()" id="btnPrint" disabled data-loc="btnPrint">Tulosta / PDF</button>
+    <button class="btn btn-accent" onclick="exportCsvHandler()" id="btnCsv" disabled>CSV</button>
+  </div>
+</div>
 
-</header>
+<div class="input-bar">
+  <label data-loc="lblNavisport">Navisport:</label>
+  <input type="text" id="navUrl" placeholder="navisport.com/events/slug tai UUID">
+  <button class="btn btn-primary" id="btnLoad" onclick="loadBySlugOrUuid()" data-loc="btnFetch">Hae</button>
+</div>
 
-<div id="classLinks"></div>
+<div class="status info" id="statusMsg">Ladataan tapahtumaa...</div>
 
-<main>
+<div class="filters" id="filtersBar">
+  <label data-loc="fClub">Seura:</label>
+  <select id="clubSelect" onchange="onClubChange()"><option data-loc="allClubs" value="">Kaikki seurat</option></select>
+  <label data-loc="fSearch">Haku:</label>
+  <input type="text" id="search" data-loc="phSearch" placeholder="nimi, nro, chip, luokka..." oninput="render()">
+  <button class="btn btn-outline" onclick="selectedClass=null; updateClassLinkState(); render()" data-loc="btnAllClasses">Näytä kaikki sarjat</button>
+  <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="colorsCheck" checked onchange="toggleColors(this.checked)"><span data-loc="btnColors">Värit</span></label>
+  <span id="countInfo" class="summary" style="margin-left:auto;padding:0"></span>
+</div>
+
+<div class="class-links" id="classLinks"></div>
+
+<div class="summary" id="summaryInfo"></div>
+
+<div class="table-wrap">
   <table id="results">
     <thead id="tableHead"></thead>
     <tbody></tbody>
   </table>
-</main>
+</div>
 
 <script>
-  // --- URL-lajittelun ja Top-N -logiikan tilamuuttujat ---
-  let multiSortKeys = [];      // esim. ['className','stageRank1']
-  let multiSortOrder = [];     // esim. ['asc','desc']
-  let filterTop = null;        // esim. { n: 3, by: 'stageRank1' }
+// ════════════════════════════════════════════════════════════════════
+//  Localization (fi/en) — same architecture as viestin_hajontakaavio.html
+// ════════════════════════════════════════════════════════════════════
+const LANGS = {
+  fi: {
+    btnLang: 'EN', btnShare: 'Jaa linkki', btnCsv: 'CSV', btnPrint: 'Tulosta / PDF', btnColors: 'Värit',
+    pdfN: '{a} riviä',
+    shareCopied: 'Linkki kopioitu', shareFailed: 'Linkin kopiointi epäonnistui',
+    appTitle: 'Startlist Viewer',
+    viewByClub: 'Startlist Viewer — seurakohtainen',
+    lblNavisport: 'Navisport:', btnFetch: 'Hae',
+    phNavUrl: 'navisport.com/events/slug tai UUID',
+    emptySlug: 'Syötä NaviSport-tapahtuman URL/slug tai UUID',
+    statusLoading: 'Ladataan tapahtumaa...',
+    statusDone: 'Valmis',
+    errLoad: 'Virhe ladattaessa dataa',
+    loadingStage: 'Ladataan vaihe',
+    fClub: 'Seura:', fSearch: 'Haku:',
+    allClubs: 'Kaikki seurat', allOption: 'Kaikki',
+    phSearch: 'nimi, nro, chip, luokka...',
+    btnAllClasses: 'Näytä kaikki sarjat',
+    empty: 'Ei tuloksia',
+    missingEventTitle: 'Tapahtuma puuttuu: URL-parametri eventid ei ole määritelty.',
+    missingEventHow: 'Löydät tapahtuman UUID:n Navisport-sivulta: avaa tapahtuman sivu, kopioi UUID URL-osoitteesta ja liitä se tämän sivun ?eventid=-parametriin.',
+    officialResults: 'Virallinen tulospalvelusivu',
+    clubsMissing: '⚠️ clubs.json-tiedostoa ei löytynyt, hae IRMAsta tiedosto esimerkiksi tällä',
+    clubsTool: 'työkalulla.',
+    colClass: 'Sarja', colBib: 'Nro', colChip: 'Emit',
+    colSurname: 'Sukunimi', colGivenName: 'Etunimi', colClub: 'Seura',
+    colTotalTime: 'Yhteisaika', colTotalRank: 'Yhteissija', colStatus: 'Tila',
+    stageLabel: 'Vaihe', stageSub: 'Osuus',
+    colStart: 'Lähtö', colTime: 'Aika', colRank: 'Sija', colTimestatus: 'Tila',
+    sortHint: '(sorttaa)',
+    cntSel: 'valinta {a} osallistujaa',
+    sumClubs: '{a} seuraa', sumClasses: '{a} sarjaa', sumTotal: '{a} osallistujaa',
+    popupBlocked: 'Salli popup-ikkuna tälle sivulle',
+  },
+  en: {
+    btnLang: 'FI', btnShare: 'Share link', btnCsv: 'CSV', btnPrint: 'Print / PDF', btnColors: 'Colors',
+    pdfN: '{a} rows',
+    shareCopied: 'Link copied', shareFailed: 'Failed to copy link',
+    appTitle: 'Startlist Viewer',
+    viewByClub: 'Startlist Viewer — by club',
+    lblNavisport: 'Navisport:', btnFetch: 'Fetch',
+    phNavUrl: 'navisport.com/events/slug or UUID',
+    emptySlug: 'Enter a Navisport event URL/slug or UUID',
+    statusLoading: 'Loading event...',
+    statusDone: 'Done',
+    errLoad: 'Error loading data',
+    loadingStage: 'Loading stage',
+    fClub: 'Club:', fSearch: 'Search:',
+    allClubs: 'All clubs', allOption: 'All',
+    phSearch: 'name, no, chip, class...',
+    btnAllClasses: 'Show all classes',
+    empty: 'No results',
+    missingEventTitle: 'Event missing: the eventid URL parameter is not set.',
+    missingEventHow: 'Find the event UUID on the Navisport page: open the event page, copy the UUID from the URL and add it to this page\'s ?eventid= parameter.',
+    officialResults: 'Official results service',
+    clubsMissing: '⚠️ clubs.json not found, fetch it from IRMA e.g. with this',
+    clubsTool: 'tool.',
+    colClass: 'Class', colBib: 'No', colChip: 'Emit',
+    colSurname: 'Surname', colGivenName: 'Given name', colClub: 'Club',
+    colTotalTime: 'Total time', colTotalRank: 'Total rank', colStatus: 'Status',
+    stageLabel: 'Stage', stageSub: 'Leg',
+    colStart: 'Start', colTime: 'Time', colRank: 'Rank', colTimestatus: 'Status',
+    sortHint: '(sort)',
+    cntSel: 'selection {a} participants',
+    sumClubs: '{a} clubs', sumClasses: '{a} classes', sumTotal: '{a} participants',
+    popupBlocked: 'Allow popups for this page',
+  },
+};
 
-  function makeKey(r) {
-  const name = (r.name || (r.surname + ' ' + r.givenName) || '').trim().toLowerCase();
-  return `${r.bibNumber||''}||${r.chip||''}||${name}`;
+let lang = 'fi';
+function initLang() {
+  lang = 'fi';
+  try {
+    const saved = localStorage.getItem('vh_lang');
+    if (saved === 'fi' || saved === 'en') { lang = saved; return; }
+    const nav = (navigator.language || 'fi').toLowerCase();
+    if (nav.indexOf('en') === 0) lang = 'en';
+  } catch (e) {}
 }
-// Luo banneri tarvittaessa
-function showEventIdWarning() {
-  const banner = document.createElement('div');
-  const baseUrl = window.location.origin + window.location.pathname;
-
-   banner.innerHTML = `
-    <strong>Tapahtuma puuttuu:</strong> URL-parametri <code>eventid</code> ei ole määritelty.<br>
-    <p>Löydät tapahtuman UUID:n Navisport-sivulta seuraavasti:</p>
-      <ol>
-        <li>Avaa tapahtuman sivu Navisportissa.</li>
-        <li>Kopioi URL-osoitteesta UUID (esim. <code>https://navisport.com/events/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>).</li>
-        <li>Liitä se tämän sivun URL-osoitteen <code>?eventid=</code>-parametriin, esim. <code>https://${baseUrl}?eventid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>.</li>
-  `;
-  document.body.prepend(banner);
+function T(key) {
+  const s = (LANGS[lang] || LANGS.fi)[key];
+  return s != null ? s : key;
+}
+function Tf(key, a) {
+  return T(key).replace('{a}', a);
+}
+function setLang(l) {
+  if (l !== 'fi' && l !== 'en') l = 'fi';
+  lang = l;
+  try { localStorage.setItem('vh_lang', l); } catch (e) {}
+  const elById = {
+    btnLang: T('btnLang'), btnShare: T('btnShare'), btnCsv: T('btnCsv'),
+    eventTitle: T('viewByClub'),
+  };
+  for (const [id, txt] of Object.entries(elById)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  }
+  document.getElementById('search').placeholder = T('phSearch');
+  document.getElementById('navUrl').placeholder = T('phNavUrl');
+  document.querySelectorAll('[data-loc]').forEach(el => {
+    let key = el.getAttribute('data-loc');
+    el.textContent = T(key);
+  });
+  refreshFiltersOptions();
+  render();
+}
+function toggleLang() { setLang(lang === 'fi' ? 'en' : 'fi'); }
+function refreshFiltersOptions() {
+  const sSel = document.getElementById('clubSelect');
+  const sCur = sSel.value;
+  sSel.innerHTML = `<option value="">${T('allClubs')}</option>` + (rawClubs && rawClubs.length
+    ? rawClubs.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')
+    : clubsList().map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join(''));
+  sSel.value = sCur;
+  populateClassLinks();
 }
 
-document.addEventListener('DOMContentLoaded', () => { initApp(); });
-
-const params = new URLSearchParams(window.location.search);
-const eventId = params.get('event') || params.get('eventid') || params.get('eventId');
-if (!eventId) {
-  showEventIdWarning();
+function setStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status ' + (type || 'info');
 }
-const DATA_URL = eventId ? `https://navisport.com/api/events/${eventId}` : 'startlist.json';
 
-let rawData = null;
-let rows = [];
+// ════════════════════════════════════════════════════════════════════
+//  Share / CSV
+// ════════════════════════════════════════════════════════════════════
+function shareLink() {
+  const p = new URLSearchParams(location.search);
+  const sel = document.getElementById('clubSelect').value;
+  if (sel) p.set('club', sel); else p.delete('club');
+  const q = document.getElementById('search').value.trim();
+  if (q) p.set('q', q); else p.delete('q');
+  if (selectedClass) p.set('class', selectedClass); else p.delete('class');
+  const url = location.origin + location.pathname + '?' + p.toString();
+  const done = () => setStatus(`✓ ${T('shareCopied')}: ${url}`, 'ok');
+  const fail = () => setStatus(`${T('shareFailed')}: ${url}`, 'err');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done, fail);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch { fail(); }
+    document.body.removeChild(ta);
+  }
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// ════════════════════════════════════════════════════════════════════
+//  State & URL config
+// ════════════════════════════════════════════════════════════════════
+let multiSortKeys = [];
+let multiSortOrder = [];
+let filterTop = null;
 let sortState = { key: null, asc: true };
+let rawData = null;
+let rawClubs = null;
+let rows = [];
 let stageCount = 1;
 let selectedClass = null;
 let eventState = null;
+let showColors = true;
 
-function updateUrlFromSort() {
-  const p = new URLSearchParams(location.search);
-  if (sortState.key) {
-    p.set('sort', sortState.key);
-    p.set('order', sortState.asc ? 'asc' : 'desc');
+const START_PALETTE = [
+  { bg: '#ffe9c7', fg: '#4a3000' },
+  { bg: '#d7f0e0', fg: '#123a24' },
+  { bg: '#dbe8ff', fg: '#142d5c' },
+  { bg: '#f3dcf5', fg: '#4a1e52' },
+  { bg: '#fde0e0', fg: '#571e1e' },
+  { bg: '#e4f5d5', fg: '#27410d' },
+  { bg: '#e7e2f8', fg: '#2c2452' },
+  { bg: '#fff2cc', fg: '#4a3a00' },
+];
+function startColor(startText) {
+  if (!showColors || !startText) return null;
+  const m = String(startText).match(/^(\d{1,2}):(\d{2})/);
+  let group = 0;
+  if (m) {
+    const totalMin = Number(m[1]) * 60 + Number(m[2]);
+    if (Number.isFinite(totalMin)) group = totalMin;
   } else {
-    p.delete('sort');
-    p.delete('order');
+    let h = 0;
+    for (let i = 0; i < startText.length; i++) h = (h * 31 + startText.charCodeAt(i)) >>> 0;
+    group = h;
   }
-  history.replaceState(null, '', location.pathname + '?' + p.toString());
+  return START_PALETTE[group % START_PALETTE.length];
+}
+function toggleColors(checked) {
+  showColors = checked;
+  render();
 }
 
-function applyUrlParamsAfterData() {
-  const p = new URLSearchParams(location.search);
+const params = new URLSearchParams(window.location.search);
+let eventId = params.get('event') || params.get('eventid') || params.get('eventId');
+let DATA_URL = eventId ? `https://navisport.com/api/events/${eventId}` : 'startlist.json';
+let loadedEventJson = null;
 
-  // Monikenttälajittelu: ?sort=className,stageRank1&order=asc,desc
+// ── NaviSport slug/UUID resolution (same as viestin_hajontakaavio.html) ──
+const NAV_ORIGIN = 'https://navisport.com';
+function extractSlug(raw) {
+  const m = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  if (m) return { type: 'slug', value: m[1] };
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw.trim()))
+    return { type: 'uuid', value: raw.trim() };
+  return { type: 'slug', value: raw.trim() };
+}
+
+async function resolveEventJson(slugOrUuid) {
+  if (slugOrUuid.type === 'uuid') return { uuid: slugOrUuid.value, json: null };
+  const input = encodeURIComponent(JSON.stringify({ '0': slugOrUuid.value }));
+  const url = `${NAV_ORIGIN}/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} for slug "${slugOrUuid.value}"`);
+  const batch = await r.json();
+  const data = batch?.[0]?.result?.data;
+  if (!data) throw new Error(T('emptySlug'));
+  return { uuid: data.id, json: data };
+}
+
+async function resolveJsonByUuid(uuid) {
+  const apiUrl = `${NAV_ORIGIN}/api/events/${uuid}`;
+  try {
+    const r = await fetch(apiUrl);
+    if (r.ok) return await r.json();
+  } catch (e) { /* fall through to tRPC */ }
+  const input = encodeURIComponent(JSON.stringify({ '0': uuid }));
+  const url = `${NAV_ORIGIN}/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} for uuid "${uuid}"`);
+  const batch = await r.json();
+  return batch?.[0]?.result?.data;
+}
+
+async function loadBySlugOrUuid() {
+  const raw = document.getElementById('navUrl').value.trim();
+  if (!raw) { setStatus(T('emptySlug'), 'err'); return; }
+  const btn = document.getElementById('btnLoad');
+  btn.disabled = true;
+  setStatus(T('statusLoading'), 'info');
+  try {
+    const { uuid, json } = await resolveEventJson(extractSlug(raw));
+    eventId = uuid;
+    const p = new URLSearchParams(location.search);
+    p.set('eventid', uuid);
+    history.replaceState(null, '', location.pathname + '?' + p.toString());
+    document.getElementById('navUrl').value = '';
+    if (json) {
+      loadedEventJson = json;
+      await loadData(json);
+    } else {
+      await loadData();
+    }
+  } catch (e) {
+    setStatus(`${T('errLoad')}: ${e.message}`, 'err');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function decodeParamsIntoUI() {
+  const p = new URLSearchParams(location.search);
   const sort = p.get('sort');
   const order = p.get('order');
   if (sort) {
     multiSortKeys = sort.split(',').map(s => s.trim()).filter(Boolean);
     multiSortOrder = (order ? order.split(',') : []).map(s => (s || '').trim().toLowerCase());
-
     sortState.key = multiSortKeys[0] || null;
     sortState.asc = (multiSortOrder[0] !== 'desc');
   }
-
-  // Top-N: ?top=3&by=stageRank1 tai ?top=3&by=resultRank
   const top = parseInt(p.get('top'), 10);
   const by = p.get('by');
-  if (by && Number.isFinite(top)) {
-    filterTop = { n: top, by: by.trim().toLowerCase() };
-  }
-
-  // Esivalinnat: ?class=..., ?club=..., ?q=...
+  if (by && Number.isFinite(top)) filterTop = { n: top, by: by.trim().toLowerCase() };
   const classParam = p.get('class');
   if (classParam) selectedClass = classParam;
-
   const clubParam = p.get('club');
-  if (clubParam) {
-    const sel = document.getElementById('clubSelect');
-    if (sel) sel.value = clubParam;
-  }
-
+  const sel = document.getElementById('clubSelect');
+  if (clubParam) sel.value = clubParam;
   const q = p.get('q');
-  if (q) {
-    const inp = document.getElementById('search');
-    if (inp) inp.value = q;
-  }
+  if (q) document.getElementById('search').value = q;
 }
 
-function initApp(){
-  document.addEventListener('click', e => {
-    const th = e.target.closest('th'); if(!th) return; const key = th.dataset.key; if(!key) return;
-    if(sortState.key===key){ sortState.asc=!sortState.asc; } else { sortState.key=key; sortState.asc=true; }
-
-    // Klikissä käytetään yksittäistä lajittelua ja päivitetään URL
-    multiSortKeys = [sortState.key];
-    multiSortOrder = [sortState.asc ? 'asc' : 'desc'];
-
-    updateUrlFromSort();
-    render();
-  });
-  document.getElementById('search').addEventListener('input', ()=>render());
-  document.getElementById('exportCsv').addEventListener('click', exportCsvHandler);
-  // Päivitä URL myös seura-/luokkavalinnoista (valinnainen, mutta kätevä)
-  document.getElementById('clubSelect').addEventListener('change', () => {
-    const p = new URLSearchParams(location.search);
-    const val = document.getElementById('clubSelect').value;
-    if (val && val !== 'Kaikki seurat') p.set('club', val); else p.delete('club');
-    history.replaceState(null, '', location.pathname + '?' + p.toString());
-    render();
-  });
-  loadData();
+function makeKey(r) {
+  const name = (r.name || (r.surname + ' ' + r.givenName) || '').trim().toLowerCase();
+  return `${r.bibNumber||''}||${r.chip||''}||${name}`;
 }
 
-function parseName(name){
-  if(!name) return {surname:'', givenName:''};
+function parseName(name) {
+  if (!name) return { surname: '', givenName: '' };
   const parts = name.trim().split(/\s+/);
-  if(parts.length===1) return {surname:parts[0], givenName:''};
-  return {surname:parts[0], givenName:parts.slice(1).join(' ')};
+  if (parts.length === 1) return { surname: parts[0], givenName: '' };
+  return { surname: parts[0], givenName: parts.slice(1).join(' ') };
 }
+
 function parseStartTime(text, eventBegin) {
   const match = text.match(/^(\d{1,2}).:$/);
   if (!match || !eventBegin) return null;
-
-  const [_, hh, mm] = match.map(Number);
+  const [, hh, mm] = match.map(Number);
   const base = new Date(eventBegin);
-
-  return new Date(
-    base.getFullYear(),
-    base.getMonth(),
-    base.getDate(),
-    hh,
-    mm
-  );
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm);
 }
 
-
-function formatTime(date){
-  return date ? new Date(date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
+function formatTime(date) {
+  return date ? new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 }
 
-function parseDurationToSeconds(str){
-  if(!str) return null;
-  if(typeof str === 'number') return isFinite(str) ? Number(str) : null;
+function parseDurationToSeconds(str) {
+  if (!str) return null;
+  if (typeof str === 'number') return isFinite(str) ? Number(str) : null;
   str = String(str).trim();
-  const parts = str.split(':').map(p=>p.trim());
-  if(parts.length===1){ const n=Number(parts[0]); return isFinite(n)?n:null; }
-  if(parts.length===2){ const mm=Number(parts[0]), ss=Number(parts[1]); if(isFinite(mm)&&isFinite(ss)) return mm*60+ss; }
-  if(parts.length===3){ const hh=Number(parts[0]), mm=Number(parts[1]), ss=Number(parts[2]); if(isFinite(hh)&&isFinite(mm)&&isFinite(ss)) return hh*3600+mm*60+ss; }
+  const parts = str.split(':').map(p => p.trim());
+  if (parts.length === 1) { const n = Number(parts[0]); return isFinite(n) ? n : null; }
+  if (parts.length === 2) { const mm = Number(parts[0]), ss = Number(parts[1]); if (isFinite(mm) && isFinite(ss)) return mm * 60 + ss; }
+  if (parts.length === 3) { const hh = Number(parts[0]), mm = Number(parts[1]), ss = Number(parts[2]); if (isFinite(hh) && isFinite(mm) && isFinite(ss)) return hh * 3600 + mm * 60 + ss; }
   return null;
 }
 
-function formatSeconds(sec){
-  if(sec==null || !isFinite(sec)) return '';
+function formatSeconds(sec) {
+  if (sec == null || !isFinite(sec)) return '';
   sec = Math.round(sec);
-  const hh = Math.floor(sec/3600);
-  const mm = Math.floor((sec%3600)/60);
-  const ss = sec%60;
-  if(hh>0) return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-  return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  if (hh > 0) return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
+function normalize(s) { return s.toLowerCase().replace(/[^a-zåäö0-9]/gi, ''); }
 
+function levDist(a = '', b = '') {
+  if (!a) return b.length;
+  if (!b) return a.length;
+  const matrix = Array(2).fill(null).map(() => Array(b.length + 1).fill(null));
+  for (let i = 0; i <= b.length; i++) matrix[0][i] = i;
+  for (let i = 1; i <= a.length; i++) {
+    matrix[1][0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const sub = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[1][j] = Math.min(matrix[0][j] + 1, matrix[1][j - 1] + 1, matrix[0][j - 1] + sub);
+    }
+    matrix[0] = matrix[1].slice();
+  }
+  return matrix[1][b.length];
+}
+
+function clubsList() {
+  if (!rawClubs || !rawClubs.length) return [];
+  const threshold = 2;
+  const clubs = [];
+  rows.forEach(r => {
+    if (!r.club) return;
+    const name = r.club.trim();
+    const match = clubs.find(c => levDist(normalize(r.club), normalize(c.name)) <= threshold);
+    if (match) match.aliases.push(name);
+    else clubs.push({ name, aliases: [name] });
+  });
+  clubs.sort((a, b) => a.name.localeCompare(b.name));
+  return clubs;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Clubs mapping
+// ════════════════════════════════════════════════════════════════════
 let clubsCache = null;
-
 async function loadClubs() {
-  if (clubsCache) return clubsCache; // palautetaan jo ladattu lista
+  if (clubsCache) return clubsCache;
   try {
-    const response = await fetch('clubs.json');
+    const response = await fetch('clubs_with_districts.json');
     if (!response.ok) throw new Error('Clubs JSON not found');
-    clubsCache = await response.json();
+    const json = await response.json();
+    const areas = {};
+    (json.areas || []).forEach(a => { areas[String(a.id)] = a.name; });
+    clubsCache = Object.entries(json.clubMap || {}).map(([name, meta]) => ({
+      name,
+      normalized: normalize(name),
+      areaId: meta && meta.areaId,
+      areaName: (meta && meta.areaName) || (meta && areas[String(meta.areaId)]) || '',
+    }));
   } catch (error) {
-    console.warn('Could not load clubs.json, proceeding without club mapping:', error);
-    const warning = document.createElement('div');
-    warning.append('⚠️ Huom: clubs.json-tiedostoa ei löytynyt, Hae IRMAsta tiedosto esimerkiksi tällä ');
-    warning.style.color = 'red';
-    warning.style.marginTop = '2rem';
+    console.warn('Could not load clubs_with_districts.json, proceeding without club mapping:', error);
     const link = document.createElement('a');
-    link.href = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs.bash';
-    link.textContent = 'työkalulla.';
-    link.style.color = 'red'; // halutessasi
-    warning.append(link);
-    document.body.appendChild(warning);
+    link.href = 'https://github.com/Kallio/tulospalvelupaavo/blob/main/fetch_irma_clubs_with_districts.py';
+    link.textContent = T('clubsTool');
+    link.style.color = 'var(--err)';
+    setStatus(`${T('clubsMissing')} `, 'err');
+    const msgEl = document.getElementById('statusMsg');
+    msgEl.appendChild(link);
     clubsCache = [];
   }
   return clubsCache;
 }
+
+const CLUB_MATCH_THRESHOLD = 2;
+function matchClub(name) {
+  const clubs = clubsCache;
+  if (!clubs || !clubs.length || !name) return null;
+  const target = normalize(name);
+  let best = null;
+  let bestDist = Infinity;
+  for (const c of clubs) {
+    if (c.normalized === target) { bestDist = 0; best = c; break; }
+    const d = levDist(target, c.normalized);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  if (!best || bestDist > CLUB_MATCH_THRESHOLD) return null;
+  return best;
+}
+
 async function mapResultsWithClubs(results) {
-  let clubs = await loadClubs();
-   console.warn('calling mapResultsWithClubs');
-  return results.map((result) => {
-    if (!clubs.length || !result.club) {
-      return result; // Ei muuteta, jos clubs.json ei saatavilla
-    }
-
-
-    const resultClub = result.club.trim().toLowerCase();
-
-    const mappedClub =
-      clubs.find(
-        ({ abbreviation, name }) =>
-          abbreviation.toLowerCase() === resultClub || name.toLowerCase() === resultClub
-      )?.name;
-
-
+  await loadClubs();
+  return results.map(result => {
+    if (!clubsCache.length || !result.club) return result;
+    const m = matchClub(result.club);
+    const canonical = m ? m.name : result.club;
     return {
       ...result,
-      club: mappedClub || result.club,// Säilytetään alkuperäinen, jos ei löytynyt
-      abbreviation: mappedClub ||result.abbreviation,
+      club: canonical,
+      areaName: m ? m.areaName : '',
+      abbreviation: m ? m.name : result.abbreviation,
     };
   });
 }
-const levenshteinDistance = (a = '', b = '') => {
-    if (!a) return b.length;
-    if (!b) return a.length;
 
-    const matrix = Array(2).fill(null).map(() => Array(b.length+1).fill(null));
-    for (let i = 0; i <= b.length; i++) matrix[0][i] = i;
-
-    for (let i = 1; i <= a.length; i++) {
-      matrix[1][0] = i;
-      for (let j = 1; j <= b.length; j++) {
-        const sub = a[i-1] === b[j-1] ? 0 : 1;
-        matrix[1][j] = Math.min(
-          matrix[0][j] + 1,
-          matrix[1][j-1] + 1,
-          matrix[0][j-1] + sub
-        );
-      }
-      matrix[0] = matrix[1].slice();
-    }
-
-    return matrix[1][b.length];
-  };
-
-async function loadData() {
+// ════════════════════════════════════════════════════════════════════
+//  Data loading
+// ════════════════════════════════════════════════════════════════════
+async function loadData(mainJsonOpt) {
   try {
-    const mainJson = await (await fetch(DATA_URL)).json();
+    if (!eventId) setStatus(`${T('missingEventTitle')} ${T('missingEventHow')}`, 'err');
+    else setStatus(T('statusLoading'), 'info');
+
+    let mainJson = mainJsonOpt || loadedEventJson;
+    if (mainJson) {
+      loadedEventJson = mainJson;
+    } else {
+      try {
+        const r = await fetch(DATA_URL);
+        if (r.ok) {
+          mainJson = await r.json();
+        } else {
+          throw new Error(`HTTP ${r.status}`);
+        }
+      } catch (e) {
+        if (eventId) mainJson = await resolveJsonByUuid(eventId);
+        else throw e;
+      }
+      if (!mainJson.results && eventId) {
+        try { mainJson = await resolveJsonByUuid(eventId); } catch (e) { /* keep */ }
+      }
+      loadedEventJson = mainJson;
+    }
     rawData = mainJson;
     eventState = mainJson.state || null;
     const events = mainJson.events || [];
     stageCount = events.length || 1;
-  //  const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
-   // document.querySelector('h2').textContent = eventName;
-const eventName = mainJson.name || (events[0]?.name) || 'Startlist Viewer';
-const h2 = document.querySelector('h2');
-h2.textContent = eventName;
 
-// Näytetään tapahtuman alku- ja loppuaika, jos saatavilla
-if (mainJson.begin) {
-  const beginDate = new Date(mainJson.begin);
-  const endDate = mainJson.ending ? new Date(mainJson.ending) : null;
-
-  const formattedBegin = beginDate.toLocaleString('fi-FI', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  let formattedRange = formattedBegin;
-  if (endDate) {
-    const sameDay = beginDate.toDateString() === endDate.toDateString();
-    if (sameDay) {
-      // Sama päivä: näytetään vain loppuaika
-      formattedRange += ` – ${endDate.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      // Eri päivä: näytetään myös loppupäivämäärä
-      formattedRange += ` – ${endDate.toLocaleString('fi-FI', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })}`;
-    }
-  }
-  if (formattedRange) {
-  document.title = `${eventName} | ${formattedRange}`;
-} else {
-  document.title = eventName;
-}
-
-  const p = document.createElement('p');
-  p.textContent = formattedRange;
-  p.style.marginTop = '4px'; // pieni väli otsikon ja ajan väliin
-  h2.insertAdjacentElement('afterend', p);
-}
-
+    const eventName = mainJson.name || (events[0]?.name) || T('appTitle');
+    document.getElementById('eventTitle').textContent = eventName;
+    document.getElementById('eventRange').textContent = formatEventRange(mainJson);
+    document.title = `${eventName} — ${T('viewByClub')}`;
 
     if (eventId) {
       const link = document.createElement('a');
       link.href = `https://navisport.com/events/${eventId}`;
-      link.target = "_blank";
-      link.textContent = 'Virallinen tulospalvelusivu';
-      link.style.display = 'block';
-      link.style.marginTop = '16px';
-      document.body.appendChild(link);
+      link.target = '_blank';
+      link.textContent = T('officialResults');
+      link.className = 'official-link';
+      const range = document.getElementById('eventRange');
+      range.appendChild(document.createTextNode(' · '));
+      range.appendChild(link);
     }
 
     const mainCourseClasses = {};
-    if (mainJson.courseClasses) {
-      mainJson.courseClasses.forEach(c => { mainCourseClasses[c.id] = c.name; });
-    }
+    if (mainJson.courseClasses) mainJson.courseClasses.forEach(c => { mainCourseClasses[c.id] = c.name; });
 
     const multistage = mainJson.eventKind === 'Multistage event' || (events.length > 1);
     if (multistage) {
       const allResults = [];
-      for (const ev of events) {
+      for (let i = 0; i < events.length; i++) {
+        const ev = events[i];
+        setStatus(`${T('loadingStage')} ${i + 1}/${events.length}...`, 'info');
         try {
           const stageJson = await (await fetch(`https://navisport.com/api/events/${ev.id}`)).json();
           const stageCourseClasses = {};
-          if (stageJson.courseClasses) {
-            stageJson.courseClasses.forEach(c => { stageCourseClasses[c.id] = c.name; });
-          }
-
-          // Mapataan klubit stage-tuloksille
+          if (stageJson.courseClasses) stageJson.courseClasses.forEach(c => { stageCourseClasses[c.id] = c.name; });
           const resultsWithClubs = await mapResultsWithClubs(stageJson.results || []);
-
           allResults.push({
-            stageNumber: ev.stageNumber || (events.indexOf(ev) + 1),
+            stageNumber: ev.stageNumber || (i + 1),
             results: resultsWithClubs,
-            stageCourseClasses
+            stageCourseClasses,
           });
         } catch (errStage) {
-          console.warn('Alatapahtuman lataus epäonnistui', ev.id, errStage);
+          console.warn('Sub-event load failed', ev.id, errStage);
         }
       }
       prepareRowsMultistage(allResults, mainCourseClasses);
     } else {
-      // Mapataan klubit yksivaiheisille tuloksille
       const rawResults = mainJson.results || [];
       const resultsWithClubs = await mapResultsWithClubs(rawResults);
-
       prepareRows({ ...mainJson, results: resultsWithClubs }, mainCourseClasses);
     }
 
-    createTableHeader();
-    populateClubSelect();
+    buildClubOptions();
     populateClassLinks();
     render();
+    document.getElementById('btnShare').disabled = false;
+    document.getElementById('btnCsv').disabled = false;
+    const btnPrint = document.getElementById('btnPrint');
+    if (btnPrint) btnPrint.disabled = false;
+    setStatus(`${T('statusDone')} — ${rows.length}`, 'ok');
   } catch (err) {
     console.error(err);
-    document.body.insertAdjacentHTML('afterbegin', `<div style="color:crimson">Virhe ladattaessa dataa: ${err.message}</div>`);
+    setStatus(`${T('errLoad')}: ${err.message}`, 'err');
   }
 }
 
-function createTableHeader(){
+function formatEventRange(mainJson) {
+  if (!mainJson.begin) return '';
+  const beginDate = new Date(mainJson.begin);
+  const endDate = mainJson.ending ? new Date(mainJson.ending) : null;
+  const fmt = d => d.toLocaleString('fi-FI', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  let range = fmt(beginDate);
+  if (endDate) {
+    if (beginDate.toDateString() === endDate.toDateString()) {
+      range += ` – ${endDate.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      range += ` – ${fmt(endDate)}`;
+    }
+  }
+  return range;
+}
+
+function buildClubOptions() {
+  rawClubs = clubsList();
+  refreshFiltersOptions();
+}
+
+function onClubChange() {
+  const p = new URLSearchParams(location.search);
+  const val = document.getElementById('clubSelect').value;
+  if (val) p.set('club', val); else p.delete('club');
+  history.replaceState(null, '', location.pathname + '?' + p.toString());
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Table header
+// ════════════════════════════════════════════════════════════════════
+function createTableHeader() {
   const head = document.getElementById('tableHead');
   head.innerHTML = '';
-  const tr1 = document.createElement('tr'); // otsikot
-  const tr2 = document.createElement('tr'); // alaotsikot (jos tarvitaan)
-  tr1.innerHTML = `<th rowspan="2" data-key="className">Sarja <span class="hint">(sorttaa)</span></th>`;
-  for(let i=0;i<stageCount;i++){
-    if(eventState === "Complete"){
-      if(stageCount > 1){
-    tr1.innerHTML += `<th colspan="3">Stage ${i+1}</th>`;}
-    else{tr1.innerHTML += `<th colspan="3"> </th>`;}
-    }else {
-    tr1.innerHTML += `<th colspan="4">Stage ${i+1}</th>`;}
+  if (!rawData) return;
+  const tr1 = document.createElement('tr');
+  const tr2 = document.createElement('tr');
+  tr1.innerHTML = `<th rowspan="2" data-key="className">${T('colClass')} <span class="hint">${T('sortHint')}</span></th>`;
+  for (let i = 0; i < stageCount; i++) {
+    const cols = eventState === 'Complete' ? 3 : 4;
+    const label = stageCount > 1 ? `${T('stageLabel')} ${i + 1}` : '';
+    tr1.innerHTML += `<th colspan="${cols}">${esc(label)}</th>`;
   }
-  tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">Nro</th><th rowspan="2" data-key="chip">Emit</th><th rowspan="2" data-key="surname">Sukunimi <span class="hint">(sorttaa)</span></th><th rowspan="2" data-key="givenName">Etunimi</th><th rowspan="2" data-key="club">Seura</th>`;
-  if(stageCount > 1){
-  tr1.innerHTML += `<th rowspan="2" data-key="totalTime">Yhteisaika</th><th rowspan="2" data-key="resultRank">Yhteissija</th>`;
+  tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">${T('colBib')}</th><th rowspan="2" data-key="chip">${T('colChip')}</th><th rowspan="2" data-key="surname">${T('colSurname')} <span class="hint">${T('sortHint')}</span></th><th rowspan="2" data-key="givenName">${T('colGivenName')}</th><th rowspan="2" data-key="club">${T('colClub')}</th>`;
+  if (stageCount > 1) {
+    tr1.innerHTML += `<th rowspan="2" data-key="totalTime">${T('colTotalTime')}</th><th rowspan="2" data-key="resultRank">${T('colTotalRank')}</th>`;
   }
-  // alimman rivin otsikot per stage
-  for(let i=0;i<stageCount;i++){
-    if(eventState === "Complete"){
-      tr2.innerHTML += `<th data-key="stageTime${i+1}">Aika ${i+1}</th><th data-key="stageRank${i+1}">Sija ${i+1}</th><th data-key="stageStatus${i+1}">Tila ${i+1}</th>`;
-    }else{
-    tr2.innerHTML += `<th data-key="startTime${i+1}">Lähtö ${i+1} <span class="hint">(sorttaa)</span></th><th data-key="stageTime${i+1}">Aika ${i+1}</th><th data-key="stageRank${i+1}">Sija ${i+1}</th><th data-key="stageStatus${i+1}">Tila ${i+1}</th>`;
+  for (let i = 0; i < stageCount; i++) {
+    const n = i + 1;
+    if (eventState === 'Complete') {
+      tr2.innerHTML += `<th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
+    } else {
+      tr2.innerHTML += `<th data-key="startTime${n}">${T('colStart')} ${n} <span class="hint">${T('sortHint')}</span></th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
     }
   }
   head.appendChild(tr1);
   head.appendChild(tr2);
 }
 
-function prepareRows(json, mainCourseClasses){
+// ════════════════════════════════════════════════════════════════════
+//  Rows preparation
+// ════════════════════════════════════════════════════════════════════
+function prepareRows(json, mainCourseClasses) {
   const list = json.results || [];
-  rows = list.map(r=>{
-    const {surname,givenName} = parseName(r.name||'');
+  rows = list.map(r => {
+    const { surname, givenName } = parseName(r.name || '');
     const className = r.className || mainCourseClasses[r.classId] || '';
     const rawTime = r.resultTime || r.time || (r.result && r.result.time) || r.totalTime || '';
     const totalSec = parseDurationToSeconds(rawTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-    const rank = (r.status === "Ok") 
-      ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) 
-      : '';
-
+    const rank = (r.status === 'Ok') ? (r.rank ?? r.resultRank ?? r.position ?? (r.result && (r.result.rank ?? r.result.position))) : '';
     const status = r.status || r.resultStatus || '';
-    
     return {
       id: r.id || null,
       bibNumber: r.bibNumber || '',
       chip: r.chip || '',
       surname, givenName,
       className,
-      startTimes: [ formatTime(r.startTime) ],
-      stageSeconds: [ totalSec ],
-      stageTimes: [ totalSec!=null ? formatSeconds(totalSec) : (rawTime||'') ],
-      stageRanks: [ rank ],
-      stageStatuses: [ status ],
+      startTimes: [formatTime(r.startTime)],
+      stageSeconds: [totalSec],
+      stageTimes: [totalSec != null ? formatSeconds(totalSec) : (rawTime || '')],
+      stageRanks: [rank],
+      stageStatuses: [status],
       totalSeconds: totalSec,
-      totalTime: totalSec!=null ? formatSeconds(totalSec) : (rawTime||''),
+      totalTime: totalSec != null ? formatSeconds(totalSec) : (rawTime || ''),
       resultRank: rank,
       status,
       club: r.club || '',
-      abbreviation: r.abbreviation||'',
-      resultRankClass: ''   // lisätään paikka luokalle
+      abbreviation: r.abbreviation || '',
+      resultRankClass: '',
     };
   });
 
-  // --- Laske sarjakohtaiset sijoitukset ja värit ---
   const byClass = new Map();
-  rows.forEach(r=>{
+  rows.forEach(r => {
     const cls = r.className || '__no_class__';
-    if(!byClass.has(cls)) byClass.set(cls, []);
+    if (!byClass.has(cls)) byClass.set(cls, []);
     byClass.get(cls).push(r);
   });
-
-  for(const [cls, list] of byClass.entries()){
-  const withTotal = list.filter(r => r.totalSeconds != null && r.status === 'Ok');
-  
-  if(withTotal.length){
-    withTotal.sort((a,b) => a.totalSeconds - b.totalSeconds);
-    for(let i=0; i<withTotal.length; i++){
-      withTotal[i].resultRank = i+1;
-
-      // väritä sijoitus (kokonaissija)
-      let rankClass = '';
-      if(i===0) rankClass = 'rank-1';
-      else if(i===1) rankClass = 'rank-2';
-      else if(i===2) rankClass = 'rank-3';
-      withTotal[i].resultRankClass = rankClass;
-
-      // --- LISÄYS: aseta myös stage-kohtainen luokka stage 0:lle ---
-      // varmista taulukkomuoto (kuten multistage käyttää)
-      if(!Array.isArray(withTotal[i].stageRankClass)) withTotal[i].stageRankClass = [];
-      withTotal[i].stageRankClass[0] = rankClass;
-
-      // päivitä myös stageRanks[0] varmistaen että näkyy oikein
-      if(Array.isArray(withTotal[i].stageRanks)){
-        withTotal[i].stageRanks[0] = withTotal[i].stageRanks[0] || (i+1);
-      } else {
-        withTotal[i].stageRanks = [ i+1 ];
+  for (const [, list2] of byClass.entries()) {
+    const withTotal = list2.filter(r => r.totalSeconds != null && r.status === 'Ok');
+    if (withTotal.length) {
+      withTotal.sort((a, b) => a.totalSeconds - b.totalSeconds);
+      for (let i = 0; i < withTotal.length; i++) {
+        withTotal[i].resultRank = i + 1;
+        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+        withTotal[i].resultRankClass = rankClass;
+        if (!Array.isArray(withTotal[i].stageRankClass)) withTotal[i].stageRankClass = [];
+        withTotal[i].stageRankClass[0] = rankClass;
+        if (Array.isArray(withTotal[i].stageRanks)) {
+          withTotal[i].stageRanks[0] = withTotal[i].stageRanks[0] || (i + 1);
+        } else {
+          withTotal[i].stageRanks = [i + 1];
+        }
       }
     }
   }
 }
-}
 
+function showValue(v) { return (v === null || v === undefined || v === '') ? '-' : v; }
 
-function showValue(v) {
-  return (v === null || v === undefined || v === '') ? '-' : v;
-}
-function prepareRowsMultistage(allResults, mainCourseClasses){
+function stageResultsCount(allResults) { return allResults.length || 1; }
+
+function prepareRowsMultistage(allResults, mainCourseClasses) {
   const tempMap = {};
   const totalStages = stageResultsCount(allResults);
-
-  for(const stageData of allResults){
-    const stageNumber = stageData.stageNumber || (allResults.indexOf(stageData)+1);
-    const idx = (typeof stageNumber === 'number') ? stageNumber-1 : (allResults.indexOf(stageData));
+  for (const stageData of allResults) {
+    const stageNumber = stageData.stageNumber || (allResults.indexOf(stageData) + 1);
+    const idx = (typeof stageNumber === 'number') ? stageNumber - 1 : allResults.indexOf(stageData);
     const stageCourseClasses = stageData.stageCourseClasses || {};
-    for(const r of stageData.results){
-      const {surname,givenName} = parseName(r.name||'');
+    for (const r of stageData.results) {
+      const { surname, givenName } = parseName(r.name || '');
       const key = makeKey(r);
-        if(!tempMap[key]){
+      if (!tempMap[key]) {
         tempMap[key] = {
           id: r.id || null,
           bibNumber: r.bibNumber || '',
@@ -530,281 +795,189 @@ function prepareRowsMultistage(allResults, mainCourseClasses){
           totalTime: '',
           resultRank: '',
           status: '',
-          club: r.club || ''
+          club: r.club || '',
         };
       }
       const item = tempMap[key];
       const className = r.className || stageCourseClasses[r.classId] || mainCourseClasses[r.classId] || '';
-      if(className) item.classNames.add(className);
+      if (className) item.classNames.add(className);
       item.startTimes[idx] = formatTime(r.startTime);
       const rawStageTime = r.resultTime || r.time || (r.result && r.result.time) || r.stageTime || '';
       const sec = parseDurationToSeconds(rawStageTime) ?? parseDurationToSeconds(r.seconds) ?? null;
-      if(sec!=null){ item.stageSeconds[idx] = sec; item.stageTimes[idx] = formatSeconds(sec); }
-      else if(rawStageTime) { item.stageTimes[idx] = rawStageTime; }
+      if (sec != null) { item.stageSeconds[idx] = sec; item.stageTimes[idx] = formatSeconds(sec); }
+      else if (rawStageTime) { item.stageTimes[idx] = rawStageTime; }
       item.stageRanks[idx] = r.rank || r.resultRank || (r.result && r.result.rank) || item.stageRanks[idx];
-
       item.stageStatuses[idx] = r.status || r.resultStatus || item.stageStatuses[idx];
-      if(r.club) item.club = r.club;
+      if (r.club) item.club = r.club;
     }
   }
 
-  rows = Object.values(tempMap).map(item=>{
-    item.className = Array.from(item.classNames).length===1 ? Array.from(item.classNames)[0] : Array.from(item.classNames).join(' / ');
-// laske yhteisajan vain jos kaikilla stageilla on sekuntiarvo JA status "OK"
-const allHaveTime = item.stageSeconds.every(s => s != null);
-const allOk = item.stageStatuses.every(st => (st||'').toUpperCase() === 'OK');
-
-if(allHaveTime && allOk){
-  item.totalSeconds = item.stageSeconds.reduce((a,b)=>a+b,0);
-  item.totalTime = formatSeconds(item.totalSeconds);
-  item.status = 'OK';
-} else {
-  item.totalSeconds = null;
-  // näytä kuitenkin mahdolliset osatulosajat selkeyden vuoksi
-  item.totalTime = item.stageTimes.map(t => t||'').join(' | ');
-  item.status = item.stageStatuses.filter(Boolean).join(' | ');
-}
-
-item.resultRank = '';
-
-    item.resultRank = ''; item.status = item.stageStatuses.filter(Boolean).join(' | ');
-    item.stageTimes = item.stageTimes.map(t => t||'');
+  rows = Object.values(tempMap).map(item => {
+    item.className = Array.from(item.classNames).length === 1 ? Array.from(item.classNames)[0] : Array.from(item.classNames).join(' / ');
+    const allHaveTime = item.stageSeconds.every(s => s != null);
+    const allOk = item.stageStatuses.every(st => (st || '').toUpperCase() === 'OK');
+    if (allHaveTime && allOk) {
+      item.totalSeconds = item.stageSeconds.reduce((a, b) => a + b, 0);
+      item.totalTime = formatSeconds(item.totalSeconds);
+      item.status = 'OK';
+    } else {
+      item.totalSeconds = null;
+      item.totalTime = item.stageTimes.map(t => t || '').join(' | ');
+      item.status = item.stageStatuses.filter(Boolean).join(' | ');
+    }
+    item.resultRank = '';
+    item.stageTimes = item.stageTimes.map(t => t || '');
     return item;
   });
 
-  // Hyödynnetään pääeventin (rawData.results) valmiita totalTime/totalSeconds/sijoituksia jos annettu
-  if(rawData && Array.isArray(rawData.results) && rawData.results.length){
+  if (rawData && Array.isArray(rawData.results) && rawData.results.length) {
     const mainMap = new Map();
-    for(const r of rawData.results){
-      const key = r.id ? `ID_${r.id}` : `${r.bibNumber||''}||${r.chip||''}||${r.name||''}`;
+    for (const r of rawData.results) {
+      const key = r.id ? `ID_${r.id}` : `${r.bibNumber || ''}||${r.chip || ''}||${r.name || ''}`;
       const totalSec = parseDurationToSeconds(r.resultTime) ?? parseDurationToSeconds(r.totalTime) ?? parseDurationToSeconds(r.totalSeconds) ?? null;
-      mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null,  status: r.status || r.resultStatus || null });
-   
+      mainMap.set(key, { totalSec, rank: r.rank || r.resultRank || r.position || (r.result && (r.result.rank || r.result.position)) || null, status: r.status || r.resultStatus || null });
     }
-    rows.forEach(row=>{
-      const key = row.id ? `ID_${row.id}` : `${row.bibNumber||''}||${row.chip||''}||${row.surname + ' ' + row.givenName}`;
+    rows.forEach(row => {
+      const key = row.id ? `ID_${row.id}` : `${row.bibNumber || ''}||${row.chip || ''}||${row.surname + ' ' + row.givenName}`;
       const m = mainMap.get(key);
-      if(m){
-        if(m.totalSec!=null){ row.totalSeconds = m.totalSec; row.totalTime = formatSeconds(m.totalSec); }
-        if(m.rank) row.resultRank = m.rank;
-        if(m.status) row.status = m.status;
+      if (m) {
+        if (m.totalSec != null) { row.totalSeconds = m.totalSec; row.totalTime = formatSeconds(m.totalSec); }
+        if (m.rank) row.resultRank = m.rank;
+        if (m.status) row.status = m.status;
       }
     });
   }
 
-  // Hyödynnetään stage-kohtaiset sijoitukset sarjakohtaisesti (jos stageSeconds löytyy)
-for(let stageIdx=0; stageIdx<stageCount; stageIdx++){
-  const byClass = new Map();
-  rows.forEach(r=>{
-    const cls = r.className || '__no_class__';
-    if(!byClass.has(cls)) byClass.set(cls, []);
-    byClass.get(cls).push(r);
-  });
+  for (let stageIdx = 0; stageIdx < stageCount; stageIdx++) {
+    const byClass = new Map();
+    rows.forEach(r => {
+      const cls = r.className || '__no_class__';
+      if (!byClass.has(cls)) byClass.set(cls, []);
+      byClass.get(cls).push(r);
+    });
+    for (const [, list] of byClass.entries()) {
+      const withTime = list.filter(r => r.stageSeconds[stageIdx] != null && (r.stageStatuses[stageIdx] || '').toUpperCase() === 'OK');
+      if (withTime.length) {
+        withTime.sort((a, b) => a.stageSeconds[stageIdx] - b.stageSeconds[stageIdx]);
+        for (let i = 0; i < withTime.length; i++) {
+          const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+          withTime[i].stageRanks[stageIdx] = i + 1;
+          withTime[i].stageRankClass = withTime[i].stageRankClass || [];
+          withTime[i].stageRankClass[stageIdx] = rankClass;
+        }
+      }
+    }
+  }
 
-  for(const [cls, list] of byClass.entries()){
-    const withTime = list.filter(r=>r.stageSeconds[stageIdx] != null && (r.stageStatuses[stageIdx]||'').toUpperCase()==='OK');
-    if(withTime.length){
-      withTime.sort((a,b)=>a.stageSeconds[stageIdx]-b.stageSeconds[stageIdx]);
-      for(let i=0;i<withTime.length;i++){
-        let rankClass = '';
-        if(i===0) rankClass='rank-1';
-        else if(i===1) rankClass='rank-2';
-        else if(i===2) rankClass='rank-3';
-        withTime[i].stageRanks[stageIdx] = i+1; // päivitä sijoitus
-        withTime[i].stageRankClass = withTime[i].stageRankClass || [];
-        withTime[i].stageRankClass[stageIdx] = rankClass; // aseta väri
+  const byClass2 = new Map();
+  rows.forEach(r => {
+    const cls = r.className || '__no_class__';
+    if (!byClass2.has(cls)) byClass2.set(cls, []);
+    byClass2.get(cls).push(r);
+  });
+  for (const [, list] of byClass2.entries()) {
+    const withTotal = list.filter(r => r.totalSeconds != null);
+    if (withTotal.length) {
+      withTotal.sort((a, b) => a.totalSeconds - b.totalSeconds);
+      for (let i = 0; i < withTotal.length; i++) {
+        withTotal[i].resultRank = i + 1;
+        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+        withTotal[i].resultRankClass = rankClass;
       }
     }
   }
 }
 
-  // Laske yhteissijat sarjakohtaisesti jos totalSeconds on olemassa
-  const byClass2 = new Map();
-  rows.forEach(r=>{
-    const cls = r.className || '__no_class__';
-    if(!byClass2.has(cls)) byClass2.set(cls, []);
-    byClass2.get(cls).push(r);
-  });
-for(const [cls, list] of byClass2.entries()){
-  const withTotal = list.filter(r=>r.totalSeconds!=null); // vain valmiit rivit
-  if(withTotal.length){
-    withTotal.sort((a,b)=>a.totalSeconds-b.totalSeconds);
-    for(let i=0;i<withTotal.length;i++){
-      withTotal[i].resultRank = i+1;
-
-      // lisätään solutasoinen väriluokka
-      let rankClass = '';
-      if(i===0) rankClass = 'rank-1';
-      else if(i===1) rankClass = 'rank-2';
-      else if(i===2) rankClass = 'rank-3';
-      withTotal[i].resultRankClass = rankClass;
-    }
-  }
-}
-
-}
-function normalize(s){
-  return s.toLowerCase().replace(/[^a-zåäö0-9]/gi, '');
-}
-
-function stageResultsCount(allResults){ return allResults.length || 1; }
-
-// -----------------------------------------------------------------
-
-function populateClubSelect() {
-  const sel = document.getElementById('clubSelect');
-  sel.innerHTML = '<option>Kaikki seurat</option>';
-
-  const threshold = 2; // montako merkkiä ero saa olla (voit säätää)
-  const clubs = [];
-
-  rows.forEach(r => {
-    if (!r.club) return;
-    const name = r.club.trim();
-    const norm = normalize(name);
-
-    // Etsi jo olemassa oleva seura, joka on riittävän lähellä
-    const match = clubs.find(c => levenshteinDistance(normalize(r.club), normalize(c.name)) <= threshold);
-
-
-    if (match) {
-      // Lisää vaihtoehtoiset nimet samaan ryhmään (jos haluat seurata niitä)
-      match.aliases.push(name);
-    } else {
-      // Uusi seura
-      clubs.push({ name, aliases: [name] });
-    }
-  });
-
-  // Järjestetään pääseuran nimen mukaan
-  clubs.sort((a, b) => a.name.localeCompare(b.name));
-
-  // Lisätään selectiin
-  clubs.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.name;
-    opt.textContent = c.name;
-    sel.appendChild(opt);
-  });
-
-  sel.addEventListener('change', () => render());
-}
-
-//----------------
-
-function populateClassLinks(){
+// ════════════════════════════════════════════════════════════════════
+//  Class links
+// ════════════════════════════════════════════════════════════════════
+function populateClassLinks() {
   const container = document.getElementById('classLinks');
   container.innerHTML = '';
-
-  // 1. Kerätään kaikki luokat riveiltä ja pilkotaan osiin
   const allClasses = rows
     .flatMap(r => (r.className || '').split('/'))
     .map(c => c.trim())
     .filter(Boolean);
-
-  // 2. Poistetaan duplikaatit ja järjestetään
   const uniqueClasses = [...new Set(allClasses)].sort((a, b) => a.localeCompare(b));
-
-  // 3. Luodaan linkit
   uniqueClasses.forEach(cn => {
     const a = document.createElement('a');
     a.href = '#';
+    a.className = 'chip' + (selectedClass === cn ? ' active' : '');
     a.textContent = cn;
     a.addEventListener('click', e => {
       e.preventDefault();
-      selectedClass = cn;  // valitaan tarkka sarja
-
-      // Päivitä URL myös valitulle sarjalle
+      selectedClass = cn;
       const p = new URLSearchParams(location.search);
       p.set('class', cn);
       history.replaceState(null, '', location.pathname + '?' + p.toString());
-
+      updateClassLinkState();
       render();
     });
     container.appendChild(a);
   });
 }
 
+function updateClassLinkState() {
+  const p = new URLSearchParams(location.search);
+  if (selectedClass) p.set('class', selectedClass); else p.delete('class');
+  history.replaceState(null, '', location.pathname + '?' + p.toString());
+  populateClassLinks();
+}
 
-
-function render(){
+// ════════════════════════════════════════════════════════════════════
+//  Render
+// ════════════════════════════════════════════════════════════════════
+function getFilteredRows() {
   const selClub = document.getElementById('clubSelect').value;
   const q = document.getElementById('search').value.trim().toLowerCase();
-
-  // 1) Perussuodatus (seura, luokka, haku)
-  let filtered = rows.filter(r=>{
-    if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
-    if(selectedClass && r.className !== selectedClass) return false;
-    if(!q) return true;
-    return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club,r.totalTime,r.resultRank,r.status]
-      .some(v=>String(v||'').toLowerCase().includes(q));
+  let filtered = rows.filter(r => {
+    if (selClub && r.club !== selClub) return false;
+    if (selectedClass && r.className !== selectedClass) return false;
+    if (!q) return true;
+    return [r.surname, r.givenName, String(r.bibNumber), r.chip, r.className, r.club, r.totalTime, r.resultRank, r.status]
+      .some(v => String(v || '').toLowerCase().includes(q));
   });
-
-  // 2) Top-N suodatus (esim. ?top=3&by=stageRank1 tai ?top=3&by=resultRank)
   if (filterTop && filterTop.by) {
     const by = filterTop.by.toLowerCase();
     const n = filterTop.n || 3;
-
     if (by.startsWith('stagerank')) {
       const idx = parseInt(by.replace('stagerank', ''), 10) - 1;
-      if (!isNaN(idx) && idx >= 0) {
-        filtered = filtered.filter(r => {
-          const val = Number(r.stageRanks[idx]);
-          return Number.isFinite(val) && val >= 1 && val <= n;
-        });
-      }
+      if (!isNaN(idx) && idx >= 0) filtered = filtered.filter(r => { const v = Number(r.stageRanks[idx]); return Number.isFinite(v) && v >= 1 && v <= n; });
     } else if (by === 'resultrank' || by === 'totalrank') {
-      filtered = filtered.filter(r => {
-        const val = Number(r.resultRank);
-        return Number.isFinite(val) && val >= 1 && val <= n;
-      });
+      filtered = filtered.filter(r => { const v = Number(r.resultRank); return Number.isFinite(v) && v >= 1 && v <= n; });
     }
   }
+  return filtered;
+}
 
-  // 3) Monikenttälajittelu tai yksittäinen lajittelu
-  const sortKeys = (multiSortKeys && multiSortKeys.length)
-    ? multiSortKeys
-    : (sortState.key ? [sortState.key] : []);
-
-  const sortOrders = (multiSortOrder && multiSortOrder.length)
-    ? multiSortOrder
-    : [sortState.asc ? 'asc' : 'desc'];
+function render() {
+  createTableHeader();
+  const selClub = document.getElementById('clubSelect').value;
+  let filtered = getFilteredRows();
+  const sortKeys = (multiSortKeys && multiSortKeys.length) ? multiSortKeys : (sortState.key ? [sortState.key] : []);
+  const sortOrders = (multiSortOrder && multiSortOrder.length) ? multiSortOrder : [sortState.asc ? 'asc' : 'desc'];
 
   if (sortKeys.length) {
-    filtered.sort((a,b)=>{
+    filtered.sort((a, b) => {
       const getValue = (obj, k) => {
         let va;
-        if (k.startsWith('startTime')) {
-          const idx = parseInt(k.replace('startTime',''),10)-1;
-          va = obj.startTimes[idx] || '';
-        } else if (k.startsWith('stageTime')) {
-          const idx = parseInt(k.replace('stageTime',''),10)-1;
-          va = obj.stageSeconds[idx]!=null ? obj.stageSeconds[idx] : (obj.stageTimes[idx]||'');
-        } else if (k.startsWith('stageRank')) {
-          const idx = parseInt(k.replace('stageRank',''),10)-1;
-          va = obj.stageRanks[idx] || '';
-        } else if (k === 'totalTime') {
-          va = obj.totalSeconds!=null ? obj.totalSeconds : (obj.totalTime || '');
-        } else {
-          va = obj[k];
-        }
+        if (k.startsWith('startTime')) { const idx = parseInt(k.replace('startTime', ''), 10) - 1; va = obj.startTimes[idx] || ''; }
+        else if (k.startsWith('stageTime')) { const idx = parseInt(k.replace('stageTime', ''), 10) - 1; va = obj.stageSeconds[idx] != null ? obj.stageSeconds[idx] : (obj.stageTimes[idx] || ''); }
+        else if (k.startsWith('stageRank')) { const idx = parseInt(k.replace('stageRank', ''), 10) - 1; va = obj.stageRanks[idx] || ''; }
+        else if (k === 'totalTime') { va = obj.totalSeconds != null ? obj.totalSeconds : (obj.totalTime || ''); }
+        else va = obj[k];
         if (typeof va === 'string') va = va.toLowerCase();
         return va;
       };
-
-      for (let i=0; i<sortKeys.length; i++) {
+      for (let i = 0; i < sortKeys.length; i++) {
         const k = sortKeys[i];
         const asc = (sortOrders[i] !== 'desc');
-
         let va = getValue(a, k);
         let vb = getValue(b, k);
-
-        // tyhjät viimeiseksi
         const isEmptyA = (va === '-' || va === '' || va == null);
         const isEmptyB = (vb === '-' || vb === '' || vb == null);
         if (isEmptyA && !isEmptyB) return 1;
         if (!isEmptyA && isEmptyB) return -1;
-
         if (va < vb) return asc ? -1 : 1;
         if (va > vb) return asc ? 1 : -1;
       }
@@ -814,74 +987,74 @@ function render(){
 
   const tbody = document.querySelector('#results tbody');
   tbody.innerHTML = '';
-
-  for(const r of filtered){
-    const tr=document.createElement('tr');
-    const rankClass = r.resultRankClass ? ` class="${r.resultRankClass}"` : '';
-    let html = `<td>${r.className||''}</td>`;
-    for(let i=0;i<stageCount;i++){
+  if (filtered.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="99" style="text-align:center;color:var(--muted)">${T('empty')}</td>`;
+    tbody.appendChild(tr);
+  }
+  for (const r of filtered) {
+    const tr = document.createElement('tr');
+    const c0 = startColor(r.startTimes && r.startTimes[0]);
+    if (c0) tr.setAttribute('style', `background:${c0.bg};color:${c0.fg}`);
+    const totalRankClass = r.resultRankClass ? ` class="${r.resultRankClass}"` : '';
+    let html = `<td>${esc(r.className || '')}</td>`;
+    for (let i = 0; i < stageCount; i++) {
       const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
-      if(eventState != "Complete"){
+      if (eventState !== 'Complete') {
         html += `<td class="start-time">${showValue(r.startTimes[i])}</td>`;
         html += `<td class="clock">${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
-        html += `<td class="status">${showValue(r.stageStatuses[i])}</td>`;
+        html += `<td class="status">${esc(showValue(r.stageStatuses[i]))}</td>`;
       } else {
         html += `<td>${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
-        html += `<td>${showValue(r.stageStatuses[i])}</td>`;
+        html += `<td>${esc(showValue(r.stageStatuses[i]))}</td>`;
       }
     }
-
-    html += `<td>${r.bibNumber||''}</td><td>${r.chip||''}</td><td>${r.surname||''}</td><td>${r.givenName||''}</td><td>${r.club||''}</td>`;
-    if(stageCount > 1){
-      html += `<td>${r.totalTime || ''}</td><td${rankClass}>${showValue(r.resultRank)}</td>`;
+    html += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(r.club || '')}</td>`;
+    if (stageCount > 1) {
+      html += `<td>${esc(r.totalTime || '')}</td><td${totalRankClass}>${showValue(r.resultRank)}</td>`;
     }
     tr.innerHTML = html;
     tbody.appendChild(tr);
   }
 
-  // Päivitä lajittelunuoli vain ensimmäiseen avaimen otsikkoon
-  document.querySelectorAll('th').forEach(th=>{ th.classList.remove('sorted'); th.removeAttribute('data-order'); });
+  document.querySelectorAll('th').forEach(th => { th.classList.remove('sorted'); th.removeAttribute('data-order'); });
   if (sortKeys.length) {
     const header = document.querySelector(`th[data-key="${sortKeys[0]}"]`);
-    if(header){ header.classList.add('sorted'); header.setAttribute('data-order', (sortOrders[0] !== 'desc') ? '▲' : '▼'); }
+    if (header) { header.classList.add('sorted'); header.setAttribute('data-order', (sortOrders[0] !== 'desc') ? '▲' : '▼'); }
   }
-  // --- Näytä osallistujamäärä ja päivitä otsikko ---
+
   const countDiv = document.getElementById('countInfo');
   if (countDiv) {
-    const clubSel = document.getElementById('clubSelect');
-    const club = clubSel ? clubSel.value : '';
-    let label = '';
-    if (selectedClass) label += selectedClass;
-    if (club && club !== 'Kaikki seurat') {
-      label += (label ? ', ' : '') + club;
-    }
-
-    countDiv.textContent = `(valinta ${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
-
-    const eventName = document.querySelector('h2')?.textContent || 'Startlist Viewer';
-    document.title = `${eventName} (${filtered.length} osallistujaa${label ? ' – ' + label : ''})`;
+    const club = selClub;
+    let label = selectedClass || '';
+    if (club) label += (label ? ' – ' : '') + club;
+    countDiv.textContent = Tf('cntSel', filtered.length) + (label ? ' – ' + label : '');
   }
 
+  const summary = document.getElementById('summaryInfo');
+  const clubsSet = new Set(filtered.map(r => r.club).filter(Boolean));
+  const classesSet = new Set(filtered.map(r => r.className).filter(Boolean));
+  summary.innerHTML = `${Tf('sumClubs', clubsSet.size)} · ${Tf('sumClasses', classesSet.size)} · ${Tf('sumTotal', filtered.length)}`;
 }
 
-// --- KELLOPÄIVITYS: päivittää näkyvät kellot reaaliajassa ---
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
   const hh = Math.floor(totalSec / 3600);
   const mm = Math.floor((totalSec % 3600) / 60);
   const ss = totalSec % 60;
-  return (hh > 0 ? `${String(hh).padStart(2,'0')}:` : '') +
-         `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  return (hh > 0 ? `${String(hh).padStart(2, '0')}:` : '') + `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  Live clocks
+// ════════════════════════════════════════════════════════════════════
 function updateVisibleClocks() {
   const tbody = document.querySelector('#results tbody');
   if (!tbody) return;
   const rowsEl = tbody.querySelectorAll('tr');
   const tbodyRect = tbody.getBoundingClientRect();
-
   rowsEl.forEach(row => {
     const rowRect = row.getBoundingClientRect();
     if (rowRect.bottom >= tbodyRect.top && rowRect.top <= tbodyRect.bottom) {
@@ -889,163 +1062,139 @@ function updateVisibleClocks() {
       const clockCell = row.querySelector('.clock');
       const statusCell = row.querySelector('.status');
       if (!startCell || !clockCell || !statusCell) return;
-
       const status = statusCell.textContent.trim().toUpperCase();
       const startText = startCell.textContent.trim();
-      if (!startText) {
-        clockCell.textContent = '-';
-        return;
-      }
-
-      // Jos maaliin tullut, ei päivitetä kelloa (pidä solun nykyinen sisältö)
-      if (status === 'OK' || status === 'Ok') {
-        return;
-      }
-
+      if (!startText) { clockCell.textContent = '-'; return; }
+      if (status === 'OK') return;
       const startTime = parseStartTime(startText, rawData?.begin);
-      if (!(startTime instanceof Date) || isNaN(startTime)) {
-        clockCell.textContent = '_-';
-        return;
-      }
+      if (!(startTime instanceof Date) || isNaN(startTime)) { clockCell.textContent = '_-'; return; }
       const now = new Date();
-      // Jos lähtöaika on tulevaisuudessa, näytetään vain '-'
-      if ( now < startTime) {
-        clockCell.textContent = '-';
-        return;
-      }
-
-      // Jos kilpailija Competing tai Registered ja aika on mennyt
+      if (now < startTime) { clockCell.textContent = '-'; return; }
       if (status === 'COMPETING' || status === 'REGISTERED') {
         const diff = now - startTime;
         clockCell.textContent = formatElapsed(diff);
-
-        // Jos tila ei ole Competing, lisätään hint-luokka
-        if (status !== 'COMPETING') {
-          clockCell.classList.add('hint');
-        } else {
-          clockCell.classList.remove('hint');
-        }
+        if (status !== 'COMPETING') clockCell.classList.add('hint');
+        else clockCell.classList.remove('hint');
       }
     }
   });
 }
-
-// --- päivitetään kellot sekunnin välein ---
 setInterval(updateVisibleClocks, 1000);
 
-function rowsToCsv(data){
-  const header = ["Sarja luokka"];
-  for(let i=0;i<stageCount;i++){
-    header.push(`Lähtö ${i+1}`, `Aika ${i+1}`, `Sija ${i+1}`, `Tila ${i+1}`);
+// ════════════════════════════════════════════════════════════════════
+//  CSV export
+// ════════════════════════════════════════════════════════════════════
+function rowsToCsv(data) {
+  const header = [T('colClass')];
+  for (let i = 0; i < stageCount; i++) {
+    header.push(`${T('colStart')} ${i + 1}`, `${T('colTime')} ${i + 1}`, `${T('colRank')} ${i + 1}`, `${T('colTimestatus')} ${i + 1}`);
   }
-  header.push("Nro","Emit","Sukunimi","Etunimi","Seura","Yhteisaika","Yhteissija","Tila");
-  const rowsCsv = data.map(r=>{
-    const row = [ r.className||'' ];
-    for(let i=0;i<stageCount;i++){
-      row.push(r.startTimes[i]||'', r.stageTimes[i]||'', r.stageRanks[i]||'', r.stageStatuses[i]||'');
-    }
-    row.push(r.bibNumber||'', r.chip||'', r.surname||'', r.givenName||'', r.club||'', r.totalTime||'', r.resultRank||'', r.status||'');
+  header.push(T('colBib'), T('colChip'), T('colSurname'), T('colGivenName'), T('colClub'), T('colTotalTime'), T('colTotalRank'), T('colStatus'));
+  return data.map(r => {
+    const row = [r.className || ''];
+    for (let i = 0; i < stageCount; i++) row.push(r.startTimes[i] || '', r.stageTimes[i] || '', r.stageRanks[i] || '', r.stageStatuses[i] || '');
+    row.push(r.bibNumber || '', r.chip || '', r.surname || '', r.givenName || '', r.club || '', r.totalTime || '', r.resultRank || '', r.status || '');
     return row;
-  });
-  const escape = v => { const s = String(v).replace(/"/g,'""'); return /[",\n]/.test(s) ? `"${s}"` : s; };
-  const csvLines = [ header.map(escape).join(',') ];
-  rowsCsv.forEach(row => csvLines.push(row.map(escape).join(',')));
-  return csvLines.join('\n');
+  })
+  .map(row => row.map(v => { const s = String(v).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; }).join(','))
+  .join('\n');
 }
 
-function downloadCsv(filename, csvContent){
-  const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8'});
+function exportCsvHandler() {
+  const filtered = getFilteredRows();
+  const csv = rowsToCsv(filtered);
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `startlist_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
-function exportCsvHandler(){
-  const selClub = document.getElementById('clubSelect').value;
-  const q = document.getElementById('search').value.trim().toLowerCase();
+// ════════════════════════════════════════════════════════════════════
+//  PDF / Print export
+// ════════════════════════════════════════════════════════════════════
+function downloadPDF() {
+  const filtered = getFilteredRows();
+  const title = document.getElementById('eventTitle').textContent || T('appTitle');
+  const subtitle = rawData ? formatEventRange(rawData) : '';
 
-  // Sama suodatuslogiikka kuin render(): seura, luokka, haku
-  let filtered = rows.filter(r=>{
-    if(selClub && selClub!=='Kaikki seurat' && r.club!==selClub) return false;
-    if(selectedClass && r.className !== selectedClass) return false;
-    if(!q) return true;
-    return [r.surname,r.givenName,String(r.bibNumber),r.chip,r.className,r.club,r.totalTime,r.resultRank,r.status]
-      .some(v=>String(v||'').toLowerCase().includes(q));
-  });
+  let thead = '<tr><th>' + T('colClass') + '</th>';
+  for (let i = 0; i < stageCount; i++) {
+    if (eventState !== 'Complete') thead += `<th>${T('colStart')} ${i + 1}</th>`;
+    thead += `<th>${T('colTime')} ${i + 1}</th><th>${T('colRank')} ${i + 1}</th><th>${T('colTimestatus')} ${i + 1}</th>`;
+  }
+  thead += `<th>${T('colBib')}</th><th>${T('colChip')}</th><th>${T('colSurname')}</th><th>${T('colGivenName')}</th><th>${T('colClub')}</th>`;
+  if (stageCount > 1) thead += `<th>${T('colTotalTime')}</th><th>${T('colTotalRank')}</th>`;
+  thead += '</tr>';
 
-  // Top-N suodatus (jos asetettu URL:issa)
-  if (filterTop && filterTop.by) {
-    const by = filterTop.by.toLowerCase();
-    const n = filterTop.n || 3;
-
-    if (by.startsWith('stagerank')) {
-      const idx = parseInt(by.replace('stagerank', ''), 10) - 1;
-      if (!isNaN(idx) && idx >= 0) {
-        filtered = filtered.filter(r => {
-          const val = Number(r.stageRanks[idx]);
-          return Number.isFinite(val) && val >= 1 && val <= n;
-        });
-      }
-    } else if (by === 'resultrank' || by === 'totalrank') {
-      filtered = filtered.filter(r => {
-        const val = Number(r.resultRank);
-        return Number.isFinite(val) && val >= 1 && val <= n;
-      });
+  const tbodyRows = filtered.map(r => {
+    const c = showColors ? startColor(r.startTimes && r.startTimes[0]) : null;
+    const style = c ? ` style="background:${c.bg};color:${c.fg}"` : '';
+    let tr = `<tr${style}><td>${esc(r.className || '')}</td>`;
+    for (let i = 0; i < stageCount; i++) {
+      if (eventState !== 'Complete') tr += `<td>${showValue(r.startTimes[i])}</td>`;
+      tr += `<td>${showValue(r.stageTimes[i])}</td><td>${showValue(r.stageRanks[i])}</td><td>${esc(showValue(r.stageStatuses[i]))}</td>`;
     }
-  }
+    tr += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(r.club || '')}</td>`;
+    if (stageCount > 1) tr += `<td>${esc(r.totalTime || '')}</td><td>${showValue(r.resultRank)}</td>`;
+    return tr + '</tr>';
+  }).join('');
 
-  // Monikenttälajittelu (tai yksittäinen)
-  const sortKeys = (multiSortKeys && multiSortKeys.length)
-    ? multiSortKeys
-    : (sortState.key ? [sortState.key] : []);
-  const sortOrders = (multiSortOrder && multiSortOrder.length)
-    ? multiSortOrder
-    : [sortState.asc ? 'asc' : 'desc'];
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>${esc(title)}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:20px;font-size:11px;color:#111}
+  h2{margin:0 0 4px;font-size:16px}
+  p.sub{font-size:12px;color:#555;margin:0 0 8px}
+  table{border-collapse:collapse;width:100%;margin-top:8px}
+  th,td{padding:4px 6px;border:1px solid #ccc;text-align:left;white-space:nowrap;font-size:10px}
+  th{background:#1f3a5f;color:#fff;font-weight:600}
+  tr:nth-child(even){background:#f4f6f9}
+  @media print{body{margin:10px}}
+</style></head><body>
+<h2>${esc(title)}</h2>
+${subtitle ? `<p class="sub">${esc(subtitle)}</p>` : ''}
+<p style="font-size:12px;color:#666;margin:0 0 8px">${Tf('pdfN', filtered.length)}</p>
+<table><thead>${thead}</thead><tbody>${tbodyRows}</tbody></table>
+</body></html>`;
 
-  if (sortKeys.length) {
-    filtered.sort((a,b)=>{
-      const getValue = (obj, k) => {
-        let va;
-        if (k.startsWith('startTime')) {
-          const idx = parseInt(k.replace('startTime',''),10)-1;
-          va = obj.startTimes[idx] || '';
-        } else if (k.startsWith('stageTime')) {
-          const idx = parseInt(k.replace('stageTime',''),10)-1;
-          va = obj.stageSeconds[idx]!=null ? obj.stageSeconds[idx] : (obj.stageTimes[idx]||'');
-        } else if (k.startsWith('stageRank')) {
-          const idx = parseInt(k.replace('stageRank',''),10)-1;
-          va = obj.stageRanks[idx] || '';
-        } else if (k === 'totalTime') {
-          va = obj.totalSeconds!=null ? obj.totalSeconds : (obj.totalTime || '');
-        } else {
-          va = obj[k];
-        }
-        if (typeof va === 'string') va = va.toLowerCase();
-        return va;
-      };
-
-      for (let i=0; i<sortKeys.length; i++) {
-        const k = sortKeys[i];
-        const asc = (sortOrders[i] !== 'desc');
-        let va = getValue(a, k);
-        let vb = getValue(b, k);
-
-        const isEmptyA = (va === '-' || va === '' || va == null);
-        const isEmptyB = (vb === '-' || vb === '' || vb == null);
-        if (isEmptyA && !isEmptyB) return 1;
-        if (!isEmptyA && isEmptyB) return -1;
-
-        if (va < vb) return asc ? -1 : 1;
-        if (va > vb) return asc ? 1 : -1;
-      }
-      return 0;
-    });
-  }
-
-  const csv = rowsToCsv(filtered);
-  const filename = `startlist_${new Date().toISOString().slice(0,10)}.csv`;
-  downloadCsv(filename, csv);
+  const w = window.open('', '_blank');
+  if (!w) { alert(T('popupBlocked')); return; }
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 300);
 }
+
+// ════════════════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════════════════
+function initApp() {
+  initLang();
+  setLang(lang);
+  decodeParamsIntoUI();
+  document.addEventListener('click', e => {
+    const th = e.target.closest('th');
+    if (!th) return;
+    const key = th.dataset.key;
+    if (!key) return;
+    if (sortState.key === key) sortState.asc = !sortState.asc;
+    else { sortState.key = key; sortState.asc = true; }
+    multiSortKeys = [sortState.key];
+    multiSortOrder = [sortState.asc ? 'asc' : 'desc'];
+    const p = new URLSearchParams(location.search);
+    p.set('sort', sortState.key); p.set('order', sortState.asc ? 'asc' : 'desc');
+    history.replaceState(null, '', location.pathname + '?' + p.toString());
+    render();
+  });
+  if (eventId) document.getElementById('navUrl').value = eventId;
+  render();
+  loadData();
+}
+
+document.addEventListener('DOMContentLoaded', () => { initApp(); });
 </script>
 </body>
 </html>
