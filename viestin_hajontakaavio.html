@@ -58,6 +58,7 @@
   th:hover{background:var(--primary-light)}
   th .arrow{margin-left:4px;font-size:10px;opacity:.5}
   th.sorted .arrow{opacity:1;color:var(--sorted)}
+  th.col-time, td.col-time{width:70px;min-width:70px;max-width:70px}
   tbody tr:hover{background:var(--row-hover)}
   tbody tr:nth-child(even){background:rgba(0,0,0,.02)}
   @media(prefers-color-scheme:dark){tbody tr:nth-child(even){background:rgba(255,255,255,.02)}}
@@ -78,43 +79,48 @@
 <div class="topbar">
   <div class="mark">📋</div>
   <div class="brand">
-    <h1>Viestin hajontakaavio</h1>
-    <p>Karttojen pussitukseen & vaihtohenkilökunnalle — oikeat hajonnat oikeille joukkueille</p>
+    <h1 id="appTitle">Viestin hajontakaavio</h1>
+    <p id="appSubtitle">Karttojen pussitukseen & vaihtohenkilökunnalle — oikeat hajonnat oikeille joukkueille</p>
   </div>
   <div class="acts">
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="toggleLang()" id="btnLang">EN</button>
+    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="shareLink()" id="btnShare" disabled>Jaa linkki</button>
     <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.25)" onclick="downloadCSV()" id="btnCsv" disabled>CSV</button>
     <button class="btn btn-accent" onclick="downloadPDF()" id="btnPdf" disabled>Tulosta / PDF</button>
   </div>
 </div>
 
 <div class="input-bar">
-  <label>Navisport:</label>
+  <label data-loc="lblNavisport">Navisport:</label>
   <input type="text" id="navUrl" placeholder="navisport.com/events/slug tai UUID">
   <button class="btn btn-primary" id="btnLoad" onclick="loadNavisport()">Hae</button>
   <label class="file-label" id="fileLabel">
     <input type="file" id="hajontaFile" accept=".csv" onchange="loadHajonta(this)">
-    Hajontakaavio CSV (tulospalvelulta)
+    <span data-loc="fileLabel">Hajontakaavio CSV (tulospalvelulta)</span>
   </label>
 </div>
 
 <div class="status info" id="statusMsg">Syötä NaviSport-tapahtuman URL/slug ja lataa hajontakaavio CSV (kilpailun tulospalvelulta)</div>
 
 <div class="filters" id="filtersBar" style="display:none">
-  <label>Seura:</label>
-  <select id="filterSeura" onchange="applyFilters()"><option value="">Kaikki</option></select>
-  <label>Sarja:</label>
-  <select id="filterSarja" onchange="applyFilters()"><option value="">Kaikki</option></select>
-  <label>Haku:</label>
-  <input type="text" id="filterSearch" placeholder="joukkue..." oninput="applyFilters()">
+  <label data-loc="fClub">Seura:</label>
+  <select id="filterSeura" onchange="applyFilters()"><option data-loc="allOption" value="">Kaikki</option></select>
+  <label data-loc="fClass">Sarja:</label>
+  <select id="filterSarja" onchange="applyFilters()"><option data-loc="allOption2" value="">Kaikki</option></select>
+  <label data-loc="fSearch">Haku:</label>
+  <input type="text" id="filterSearch" data-loc="phSearch" placeholder="joukkue..." oninput="applyFilters()">
   <div class="export-bar" style="margin-left:auto">
     <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-      <input type="checkbox" checked onchange="toggleRunner('nimi1',this.checked)"> J1
+      <input type="checkbox" checked onchange="toggleRunner('nimi1',this.checked)"> <span data-loc="j1">J1</span>
     </label>
     <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-      <input type="checkbox" checked onchange="toggleRunner('nimi2',this.checked)"> J2
+      <input type="checkbox" checked onchange="toggleRunner('nimi2',this.checked)"> <span data-loc="j2">J2</span>
     </label>
     <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-      <input type="checkbox" checked onchange="toggleRunner('nimi3',this.checked)"> J3
+      <input type="checkbox" checked onchange="toggleRunner('nimi3',this.checked)"> <span data-loc="j3">J3</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;margin-left:6px;padding-left:8px;border-left:1px solid var(--border)">
+      <input type="checkbox" checked onchange="toggleColors(this.checked)"> <span data-loc="colors">Värit</span>
     </label>
     <span id="countInfo" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
   </div>
@@ -132,6 +138,122 @@
 <script>
 const NAV_ORIGIN = 'https://navisport.com';
 
+const LANGS = {
+  fi: {
+    appTitle: 'Viestin hajontakaavio',
+    appSubtitle: 'Karttojen pussitukseen & vaihtohenkilökunnalle — oikeat hajonnat oikeille joukkueille',
+    btnLang: 'EN', btnShare: 'Jaa linkki', btnCsv: 'CSV', btnPrint: 'Tulosta / PDF', btnFetch: 'Hae',
+    shareCopied: 'Linkki kopioitu', shareFailed: 'Linkin kopiointi epäonnistui',
+    phInput: 'navisport.com/events/slug tai UUID',
+    lblNavisport: 'Navisport:',
+    fileLabel: 'Hajontakaavio CSV (tulospalvelulta)',
+    statusIntro: 'Syötä NaviSport-tapahtuman URL/slug ja lataa hajontakaavio CSV (kilpailun tulospalvelulta)',
+    emptySlug: 'Syötä NaviSport-tapahtuman URL tai slug',
+    loading: 'Haetaan tapahtumaa...',
+    badResponse: 'Odottamaton NaviSport-vaste',
+    fetchingStage: 'Haetaan vaihe',
+    err: 'Virhe',
+    teamsStarter: 'joukkuetta/lähtijää',
+    hajuntaLoaded: 'Hajontakaavio',
+    hajuntaErr: 'Hajontakaavion virhe',
+    emptyFile: 'Tyhjä tiedosto',
+    noKpn: 'Saraketta "Kilpailunumero" ei löydy',
+    fClub: 'Seura:', fClass: 'Sarja:', fSearch: 'Haku:',
+    allClubs: 'Kaikki seurat', allClasses: 'Kaikki sarjat', allOption: 'Kaikki',
+    phSearch: 'joukkue...',
+    j1: 'J1', j2: 'J2', j3: 'J3',
+    colors: 'Värit',
+    colTime: 'Lähtöaika', colClub: 'Seura', colClass: 'Sarja', colBib: 'Nro', colTeam: 'Joukkue',
+    colLeg1: 'Osuus 1', colLeg2: 'Osuus 2', colLeg3: 'Osuus 3',
+    colRun1: 'Juoksija 1', colRun2: 'Juoksija 2', colRun3: 'Juoksija 3',
+    cntTeams: '{a} / {b} joukkuetta',
+    sumClubs: '{a} seuraa', sumClasses: '{a} sarjaa', sumTeams: '{a} joukkuetta',
+    popupBlocked: 'Salli popup-ikkuna tälle sivulle',
+    docTitleSuffix: 'Hajontakaavio',
+    pdfTeams: '{a} joukkuetta',
+  },
+  en: {
+    appTitle: 'Relay start spread',
+    appSubtitle: 'For map bagging & exchange crew — right spread to the right teams',
+    btnLang: 'FI', btnShare: 'Share link', btnCsv: 'CSV', btnPrint: 'Print / PDF', btnFetch: 'Fetch',
+    shareCopied: 'Link copied', shareFailed: 'Failed to copy link',
+    phInput: 'navisport.com/events/slug or UUID',
+    lblNavisport: 'Navisport:',
+    fileLabel: 'Spread CSV (from results service)',
+    statusIntro: 'Enter the Navisport event URL/slug and load the spread CSV (from the race results service)',
+    emptySlug: 'Enter a Navisport event URL or slug',
+    loading: 'Loading event...',
+    badResponse: 'Unexpected Navisport response',
+    fetchingStage: 'Fetching stage',
+    err: 'Error',
+    teamsStarter: 'teams/starters',
+    hajuntaLoaded: 'Spread',
+    hajuntaErr: 'Spread error',
+    emptyFile: 'Empty file',
+    noKpn: 'Column "Kilpailunumero" (race number) not found',
+    fClub: 'Club:', fClass: 'Class:', fSearch: 'Search:',
+    allClubs: 'All clubs', allClasses: 'All classes', allOption: 'All',
+    phSearch: 'team...',
+    j1: 'L1', j2: 'L2', j3: 'L3',
+    colors: 'Colors',
+    colTime: 'Start', colClub: 'Club', colClass: 'Class', colBib: 'No', colTeam: 'Team',
+    colLeg1: 'Leg 1', colLeg2: 'Leg 2', colLeg3: 'Leg 3',
+    colRun1: 'Runner 1', colRun2: 'Runner 2', colRun3: 'Runner 3',
+    cntTeams: '{a} / {b} teams',
+    sumClubs: '{a} clubs', sumClasses: '{a} classes', sumTeams: '{a} teams',
+    popupBlocked: 'Allow popups for this page',
+    docTitleSuffix: 'Start spread',
+    pdfTeams: '{a} teams',
+  },
+};
+
+let lang = 'fi';
+function initLang() {
+  lang = 'fi';
+  try {
+    const saved = localStorage.getItem('vh_lang');
+    if (saved === 'fi' || saved === 'en') { lang = saved; return; }
+    const nav = (navigator.language || 'fi').toLowerCase();
+    if (nav.indexOf('en') === 0) lang = 'en';
+  } catch (e) {}
+}
+function T(key) {
+  const s = (LANGS[lang] || LANGS.fi)[key];
+  return s != null ? s : key;
+}
+function Tf(key, a, b) {
+  return T(key).replace('{a}', a).replace('{b}', b);
+}
+function setLang(l) {
+  if (l !== 'fi' && l !== 'en') l = 'fi';
+  lang = l;
+  try { localStorage.setItem('vh_lang', l); } catch (e) {}
+  const elById = {
+    btnLang: T('btnLang'), btnShare: T('btnShare'), btnCsv: T('btnCsv'), btnPdf: T('btnPrint'), btnLoad: T('btnFetch'),
+    appTitle: T('appTitle'), appSubtitle: T('appSubtitle'),
+  };
+  for (const [id, txt] of Object.entries(elById)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  }
+  document.getElementById('navUrl').placeholder = T('phInput');
+  document.getElementById('filterSearch').placeholder = T('phSearch');
+  document.querySelectorAll('[data-loc]').forEach(el => {
+    let key = el.getAttribute('data-loc');
+    if (key === 'allOption2') key = 'allOption';
+    el.textContent = T(key);
+  });
+  const intro = document.getElementById('statusMsg');
+  if (!eventData && !hajontaFileLoaded) intro.textContent = T('statusIntro');
+  refreshFiltersOptions();
+  renderTable();
+  updateSummary();
+}
+function toggleLang() {
+  setLang(lang === 'fi' ? 'en' : 'fi');
+}
+let hajontaFileLoaded = false;
+
 let eventData = null;      // NaviSport event JSON
 let hajontaData = {};      // kilpailunumero → {osuus1, osuus2, osuus3}
 let mergedRows = [];       // final rows for display
@@ -139,20 +261,27 @@ let filteredRows = [];     // after filters
 let sortKey = null;
 let sortAsc = true;
 let showRunners = { nimi1: true, nimi2: true, nimi3: true };
+let showColors = true;
 
 const ALL_COLUMNS = [
-  { key: 'seura',           label: 'Seura' },
-  { key: 'sarja',           label: 'Sarja' },
-  { key: 'kilpailunumero',  label: 'Nro' },
-  { key: 'joukkue',         label: 'Joukkue' },
-  { key: 'osuus1',          label: 'Osuus 1' },
-  { key: 'osuus2',          label: 'Osuus 2' },
-  { key: 'osuus3',          label: 'Osuus 3' },
-  { key: 'nimi1',           label: 'Juoksija 1', runner: true },
-  { key: 'nimi2',           label: 'Juoksija 2', runner: true },
-  { key: 'nimi3',           label: 'Juoksija 3', runner: true },
+  { key: 'startTime',       labelKey: 'colTime' },
+  { key: 'seura',           labelKey: 'colClub' },
+  { key: 'sarja',           labelKey: 'colClass' },
+  { key: 'kilpailunumero',  labelKey: 'colBib' },
+  { key: 'joukkue',         labelKey: 'colTeam' },
+  { key: 'osuus1',          labelKey: 'colLeg1', hajonta: true },
+  { key: 'osuus2',          labelKey: 'colLeg2', hajonta: true },
+  { key: 'osuus3',          labelKey: 'colLeg3', hajonta: true },
+  { key: 'nimi1',           labelKey: 'colRun1', runner: true },
+  { key: 'nimi2',           labelKey: 'colRun2', runner: true },
+  { key: 'nimi3',           labelKey: 'colRun3', runner: true },
 ];
-function getColumns() { return ALL_COLUMNS.filter(c => !c.runner || showRunners[c.key]); }
+function getColumns() {
+  const hasHajonta = Object.keys(hajontaData).length > 0;
+  return ALL_COLUMNS.filter(c =>
+    (c.runner ? showRunners[c.key] : true) && (c.hajonta ? hasHajonta : true)
+  ).map(c => ({ ...c, label: T(c.labelKey) }));
+}
 
 // ── NaviSport fetch ──
 
@@ -176,7 +305,7 @@ async function navFetchEvent(slugOrUuid) {
   if (!r.ok) throw new Error(`HTTP ${r.status} for slug "${slugOrUuid.value}"`);
   const batch = await r.json();
   const data = batch?.[0]?.result?.data;
-  if (!data) throw new Error('Odottamaton NaviSport-vaste');
+  if (!data) throw new Error(T('badResponse'));
   return data;
 }
 
@@ -191,9 +320,9 @@ function navName(r) {
   return `${r.surname||''} ${r.givenName||''}`.trim();
 }
 
-function navTime(r) {
-  if (!r.startTime) return '';
-  try { return new Date(r.startTime).toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}); }
+function navTime(startTime) {
+  if (!startTime) return '';
+  try { return new Date(startTime).toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}); }
   catch { return ''; }
 }
 
@@ -201,8 +330,8 @@ function navTime(r) {
 
 async function loadNavisport() {
   const raw = document.getElementById('navUrl').value.trim();
-  if (!raw) { setStatus('Syötä NaviSport-tapahtuman URL tai slug', 'err'); return; }
-  setStatus('Haetaan tapahtumaa...', 'info');
+  if (!raw) { setStatus(T('emptySlug'), 'err'); return; }
+  setStatus(T('loading'), 'info');
   document.getElementById('btnLoad').disabled = true;
 
   try {
@@ -220,12 +349,12 @@ async function loadNavisport() {
     }
 
     const name = (json.name || '').trim();
-    document.title = (name || 'Viestin hajontakaavio') + ' — Hajontakaavio';
-    setStatus(`✓ ${name || raw} — ${eventData.length} joukkuetta/lähtijää`, 'ok');
+    document.title = (name || T('appTitle')) + ' — ' + T('docTitleSuffix');
+    setStatus(`✓ ${name || raw} — ${eventData.length} ${T('teamsStarter')}`, 'ok');
     document.getElementById('btnLoad').disabled = false;
     tryMerge();
   } catch(e) {
-    setStatus('Virhe: ' + e.message, 'err');
+    setStatus(T('err') + ': ' + e.message, 'err');
     document.getElementById('btnLoad').disabled = false;
     console.error(e);
   }
@@ -253,12 +382,14 @@ function loadRelay(json) {
         sarja: cc[r.classId] || cc[parent?.classId] || '',
         joukkue: parent?.name || r.club || '',
         seura: parent?.club || r.club || '',
+        startTime: '',
         runners: [],
       };
     }
     if (!teamMap[bib].sarja) teamMap[bib].sarja = cc[r.classId] || cc[parent?.classId] || '';
     if (!teamMap[bib].joukkue) teamMap[bib].joukkue = parent?.name || r.club || '';
     if (parent?.club && !teamMap[bib].seura) teamMap[bib].seura = parent.club;
+    if (!teamMap[bib].startTime) teamMap[bib].startTime = (parent?.startTime || r.startTime) ? navTime(parent?.startTime || r.startTime) : '';
 
     teamMap[bib].runners.push({
       nimi: navName(r),
@@ -281,6 +412,7 @@ function loadIndividual(json) {
       sarja: cc[r.classId] || '',
       joukkue: r.club || navName(r),
       seura: r.club || '',
+      startTime: navTime(r.startTime),
       runners: [{ nimi: navName(r), osuus: '' }],
     }));
 }
@@ -293,7 +425,7 @@ async function loadMultistage(json) {
 
   for (let i = 0; i < stages.length; i++) {
     const ev = stages[i];
-    setStatus(`Haetaan vaihe ${i+1}/${stages.length}...`, 'info');
+    setStatus(`${T('fetchingStage')} ${i+1}/${stages.length}...`, 'info');
     let stageJson;
     try { stageJson = await navFetchByUUID(ev.id); } catch(e) { continue; }
     const stageCc = {};
@@ -309,8 +441,11 @@ async function loadMultistage(json) {
           sarja: stageCc[r.classId] || cc[r.classId] || '',
           joukkue: r.club || navName(r),
           seura: r.club || '',
+          startTime: navTime(r.startTime),
           runners: [],
         };
+      } else if (!teamMap[bib].startTime) {
+        teamMap[bib].startTime = navTime(r.startTime);
       }
       teamMap[bib].runners.push({
         nimi: navName(r),
@@ -332,13 +467,15 @@ function loadHajonta(input) {
   reader.onload = e => {
     try {
       hajontaData = parseHajontaCSV(e.target.result);
+      hajontaFileLoaded = true;
       lbl.classList.add('has-file');
-      lbl.childNodes[lbl.childNodes.length - 1].textContent = ' ' + file.name;
+      const lblText = lbl.querySelector('[data-loc="fileLabel"]');
+      if (lblText) lblText.textContent = T('fileLabel') + ' — ' + file.name;
       const n = Object.keys(hajontaData).length;
-      setStatus(`✓ Hajontakaavio: ${n} joukkuetta`, 'ok');
+      setStatus(`✓ ${T('hajuntaLoaded')}: ${n} ${T('sumTeams').replace('{a}', n)}`, 'ok');
       tryMerge();
     } catch(err) {
-      setStatus('Hajontakaavion virhe: ' + err.message, 'err');
+      setStatus(T('hajuntaErr') + ': ' + err.message, 'err');
     }
   };
   reader.readAsText(file);
@@ -346,13 +483,13 @@ function loadHajonta(input) {
 
 function parseHajontaCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) throw new TextDecoder('utf-8').decode(new Uint8Array(0)) || 'Tyhjä tiedosto';
+  if (lines.length < 2) throw new TextDecoder('utf-8').decode(new Uint8Array(0)) || T('emptyFile');
   const hdr = parseCSVLine(lines[0]);
   const numIdx = hdr.findIndex(h => /kilpailu/i.test(h));
   const o1Idx = hdr.findIndex(h => /osuus\s*1/i.test(h));
   const o2Idx = hdr.findIndex(h => /osuus\s*2/i.test(h));
   const o3Idx = hdr.findIndex(h => /osuus\s*3/i.test(h));
-  if (numIdx < 0) throw new TextDecoder('utf-8').decode(new Uint8Array(0)) || 'Saraketta "Kilpailunumero" ei löydy';
+  if (numIdx < 0) throw new TextDecoder('utf-8').decode(new Uint8Array(0)) || T('noKpn');
 
   const data = {};
   for (let i = 1; i < lines.length; i++) {
@@ -401,6 +538,7 @@ function tryMerge() {
       sarja: t.sarja,
       kilpailunumero: t.kilpailunumero,
       joukkue: t.joukkue,
+      startTime: t.startTime || '',
       osuus1: h.osuus1 || '',
       osuus2: h.osuus2 || '',
       osuus3: h.osuus3 || '',
@@ -418,8 +556,9 @@ function tryMerge() {
     return +a.kilpailunumero - +b.kilpailunumero;
   });
 
-  populateFilters();
+  refreshFiltersOptions();
   applyFilters();
+  document.getElementById('btnShare').disabled = false;
   document.getElementById('btnCsv').disabled = false;
   document.getElementById('btnPdf').disabled = false;
   document.getElementById('filtersBar').style.display = 'flex';
@@ -427,15 +566,19 @@ function tryMerge() {
 
 // ── Filters ──
 
-function populateFilters() {
+function refreshFiltersOptions() {
   const seurat = [...new Set(mergedRows.map(r => r.seura).filter(Boolean))].sort((a,b) => a.localeCompare(b,'fi'));
   const sarjat = [...new Set(mergedRows.map(r => r.sarja).filter(Boolean))].sort((a,b) => a.localeCompare(b,'fi'));
 
   const sSel = document.getElementById('filterSeura');
-  sSel.innerHTML = '<option value="">Kaikki seurat</option>' + seurat.map(s => `<option>${s}</option>`).join('');
+  const sCur = sSel.value;
+  sSel.innerHTML = `<option value="">${T('allClubs')}</option>` + seurat.map(s => `<option>${esc(s)}</option>`).join('');
+  sSel.value = sCur;
 
   const cSel = document.getElementById('filterSarja');
-  cSel.innerHTML = '<option value="">Kaikki sarjat</option>' + sarjat.map(s => `<option>${s}</option>`).join('');
+  const cCur = cSel.value;
+  cSel.innerHTML = `<option value="">${T('allClasses')}</option>` + sarjat.map(s => `<option>${esc(s)}</option>`).join('');
+  cSel.value = cCur;
 }
 
 function applyFilters() {
@@ -487,15 +630,16 @@ function renderTable() {
   thead.innerHTML = cols.map(c => {
     const arrow = sortKey === c.key ? (sortAsc ? '▲' : '▼') : '▽';
     const cls = sortKey === c.key ? 'sorted' : '';
-    return `<th class="${cls}" onclick="toggleSort('${c.key}')">${c.label} <span class="arrow">${arrow}</span></th>`;
+    const wcls = c.key === 'startTime' ? ' col-time' : '';
+    return `<th class="${cls}${wcls}" onclick="toggleSort('${c.key}')">${esc(c.label)} <span class="arrow">${arrow}</span></th>`;
   }).join('');
 
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = filteredRows.map(r => {
-    return '<tr>' + cols.map(c => `<td>${esc(r[c.key])}</td>`).join('') + '</tr>';
+    return `<tr style="${rowStyle(r).trim()}">` + cols.map(c => `<td${c.key === 'startTime' ? ' class="col-time"' : ''}>${esc(r[c.key])}</td>`).join('') + '</tr>';
   }).join('');
 
-  document.getElementById('countInfo').textContent = `${filteredRows.length} / ${mergedRows.length} joukkuetta`;
+  document.getElementById('countInfo').textContent = Tf('cntTeams', filteredRows.length, mergedRows.length);
   updateSummary();
 }
 
@@ -503,15 +647,62 @@ function updateSummary() {
   const seurat = new Set(filteredRows.map(r => r.seura).filter(Boolean));
   const sarjat = new Set(filteredRows.map(r => r.sarja).filter(Boolean));
   document.getElementById('summaryInfo').innerHTML =
-    `<b>${seurat.size}</b> seuraa · <b>${sarjat.size}</b> sarjaa · <b>${filteredRows.length}</b> joukkuetta`;
+    `${Tf('sumClubs', seurat.size)} · ${Tf('sumClasses', sarjat.size)} · ${Tf('sumTeams', filteredRows.length)}`;
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+const START_PALETTE = [
+  { bg: '#ffe9c7', fg: '#4a3000' },
+  { bg: '#d7f0e0', fg: '#123a24' },
+  { bg: '#dbe8ff', fg: '#142d5c' },
+  { bg: '#f3dcf5', fg: '#4a1e52' },
+  { bg: '#fde0e0', fg: '#571e1e' },
+  { bg: '#e4f5d5', fg: '#27410d' },
+  { bg: '#e7e2f8', fg: '#2c2452' },
+  { bg: '#fff2cc', fg: '#4a3a00' },
+];
+function toggleColors(checked) {
+  showColors = checked;
+  renderTable();
+}
+
+function startColor(time) {
+  if (!time || !showColors) return null;
+  let h = 0;
+  for (let i = 0; i < time.length; i++) h = (h * 31 + time.charCodeAt(i)) >>> 0;
+  return START_PALETTE[h % START_PALETTE.length];
+}
+function rowStyle(r) {
+  const c = startColor(r.startTime);
+  return c ? ` background:${c.bg};color:${c.fg};` : '';
+}
 
 function setStatus(msg, type) {
   const el = document.getElementById('statusMsg');
   el.textContent = msg;
   el.className = 'status ' + type;
+}
+
+// ── Share link ──
+
+function shareLink() {
+  const raw = document.getElementById('navUrl').value;
+  const slug = extractSlug(raw.trim()).value;
+  const url = location.origin + location.pathname + '?slug=' + encodeURIComponent(slug);
+  const done = () => setStatus(`✓ ${T('shareCopied')}: ${url}`, 'ok');
+  const fail = () => setStatus(`${T('shareFailed')}: ${url}`, 'err');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done, fail);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch { fail(); }
+    document.body.removeChild(ta);
+  }
 }
 
 // ── CSV Export ──
@@ -535,7 +726,7 @@ function downloadCSV() {
 
 function downloadPDF() {
   const cols = getColumns();
-  const title = document.title.replace(' — Hajontakaavio', '') || 'Viestin hajontakaavio';
+  const title = document.title.replace(' — ' + T('docTitleSuffix'), '') || T('appTitle');
   const seura = document.getElementById('filterSeura').value;
   const sarja = document.getElementById('filterSarja').value;
 
@@ -545,9 +736,11 @@ function downloadPDF() {
   }
 
   const thead = '<tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
-  const tbody = filteredRows.map(r =>
-    '<tr>' + cols.map(c => `<td>${esc(r[c.key])}</td>`).join('') + '</tr>'
-  ).join('');
+  const tbody = filteredRows.map(r => {
+    const c = startColor(r.startTime);
+    const style = c ? ` style="background:${c.bg};color:${c.fg}"` : '';
+    return `<tr${style}>` + cols.map(c2 => `<td>${esc(r[c2.key])}</td>`).join('') + '</tr>';
+  }).join('');
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
@@ -563,12 +756,12 @@ function downloadPDF() {
 </style></head><body>
 <h2>${esc(title)}</h2>
 ${subtitle}
-<p style="font-size:12px;color:#666;margin:0 0 8px">${filteredRows.length} joukkuetta</p>
+<p style="font-size:12px;color:#666;margin:0 0 8px">${Tf('pdfTeams', filteredRows.length)}</p>
 <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
 </body></html>`;
 
   const w = window.open('', '_blank');
-  if (!w) { alert('Salli popup-ikkuna tälle sivulle'); return; }
+  if (!w) { alert(T('popupBlocked')); return; }
   w.document.write(html);
   w.document.close();
   setTimeout(() => w.print(), 300);
@@ -577,6 +770,8 @@ ${subtitle}
 // ── Init ──
 
 document.addEventListener('DOMContentLoaded', () => {
+  initLang();
+  setLang(lang);
   const params = new URLSearchParams(window.location.search);
   const slug = params.get('slug') || params.get('event') || params.get('url') || '';
   if (slug) {

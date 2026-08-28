@@ -5,6 +5,7 @@ usage() {
   echo "Käyttö: $0 [-p] [-r] [-o output.csv] input.csv"
   echo "  -p  täytä tuntemattomat juoksijat \"N N\" -paikkamerkinnöillä (kaikki joukkuerivit)"
   echo "  -r  poista joukkuenimistä \" (AM)\"-merkinnät"
+  echo "  -R  poista \"N N\" -paikkamerkinnät nimisarakkeista"
   echo "  -o  tulostiedoston nimi (oletus: <input>_output.csv)"
   exit 1
 }
@@ -13,6 +14,7 @@ CSV=""
 OUT=""
 PSEUDO=0
 REMOVE=0
+REMOVE_PSEUDO=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -p|--pseudo)
@@ -20,6 +22,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     -r|--remove-am)
       REMOVE=1
+      ;;
+    -R|--remove-pseudo)
+      REMOVE_PSEUDO=1
       ;;
     -o|--output)
       if [[ $# -lt 2 ]]; then
@@ -69,7 +74,7 @@ while IFS= read -r line; do
 done < "$UUFILE"
 regex="(${regex:1})"
 
-awk -v FS=',' -v OFS=',' -v pat="$regex" -v pseudo="$PSEUDO" -v remove="$REMOVE" '
+awk -v FS=',' -v OFS=',' -v pat="$regex" -v pseudo="$PSEUDO" -v remove="$REMOVE" -v remove_pseudo="$REMOVE_PSEUDO" '
 BEGIN { gsub(/"/, "", pat) }
 NR==1 {
   # etsitään otsikosta Nimi-k ja Osuus-k sarakkeiden indeksit
@@ -98,6 +103,16 @@ NR==1 {
     $3 = "\"" joukkue "\""
   } else if (seura ~ pat && joukkue !~ /\(AM\)"?$/) {
     $3 = "\"" joukkue " (AM)\""
+  }
+  if (remove_pseudo) {
+    for (leg in nimi_idx) {
+      ni = nimi_idx[leg]
+      val = $ni
+      gsub(/^"|"$/, "", val)
+      if (val == "N N") {
+        $ni = "\"\""
+      }
+    }
   }
   if (pseudo) {
     for (leg in nimi_idx) {
