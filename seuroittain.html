@@ -27,11 +27,11 @@
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;line-height:1.5}
 
-  .topbar{background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px}
+  .topbar{background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .mark{width:38px;height:38px;background:var(--accent);border-radius:9px;display:grid;place-items:center;font-size:17px;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(230,126,34,.35)}
   .brand h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
   .brand p{font-size:12px;color:#9db4cc;font-weight:400}
-  .topbar .acts{margin-left:auto;display:flex;gap:7px}
+  .topbar .acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 
   .input-bar{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
   .input-bar label{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
@@ -65,7 +65,8 @@
   th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
   th{background:var(--primary);color:#fff;cursor:pointer;user-select:none;position:relative;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
   th:hover{background:var(--primary-light)}
-  th.sorted::after{content:attr(data-order);position:absolute;right:10px;font-size:12px}
+  th .arrow{margin-left:4px;font-size:10px;opacity:.45;font-weight:700;letter-spacing:0}
+  th.sorted .arrow{opacity:1;color:var(--sorted)}
   tbody tr:hover{background:var(--row-hover)}
   tbody tr:nth-child(even){background:rgba(0,0,0,.02)}
   @media(prefers-color-scheme:dark){tbody tr:nth-child(even){background:rgba(255,255,255,.02)}}
@@ -78,6 +79,18 @@
 
   .official-link{color:var(--accent);text-decoration:none;font-size:13px}
   .official-link:hover{text-decoration:underline}
+
+  @media(max-width:640px){
+    .topbar{padding:10px 12px;gap:10px}
+    .brand{min-width:0}
+    .brand h1{font-size:15px}
+    .brand p{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .topbar .acts{width:100%;gap:6px}
+    .topbar .acts .btn{flex:1;justify-content:center;padding:7px 6px;font-size:12px}
+    .input-bar,.filters,.class-links{padding:8px 12px}
+    .table-wrap{padding:0 12px 12px}
+    .input-bar input[type=text]{min-width:150px}
+  }
 </style>
 </head>
 <body>
@@ -102,8 +115,6 @@
   <button class="btn btn-primary" id="btnLoad" onclick="loadBySlugOrUuid()" data-loc="btnFetch">Hae</button>
 </div>
 
-<div class="status info" id="statusMsg">Ladataan tapahtumaa...</div>
-
 <div class="filters" id="filtersBar">
   <label data-loc="fClub">Seura:</label>
   <select id="clubSelect" onchange="onClubChange()"><option data-loc="allClubs" value="">Kaikki seurat</option></select>
@@ -124,6 +135,8 @@
     <tbody></tbody>
   </table>
 </div>
+
+<div class="status info" id="statusMsg" style="position:sticky;bottom:0;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -2px 8px rgba(23,35,55,.06)">Ladataan tapahtumaa...</div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════
@@ -158,7 +171,6 @@ const LANGS = {
     colTotalTime: 'Yhteisaika', colTotalRank: 'Yhteissija', colStatus: 'Tila',
     stageLabel: 'Vaihe', stageSub: 'Osuus',
     colStart: 'Lähtö', colTime: 'Aika', colRank: 'Sija', colTimestatus: 'Tila',
-    sortHint: '(sorttaa)',
     cntSel: 'valinta {a} osallistujaa',
     sumClubs: '{a} seuraa', sumClasses: '{a} sarjaa', sumTotal: '{a} osallistujaa',
     popupBlocked: 'Salli popup-ikkuna tälle sivulle',
@@ -191,7 +203,6 @@ const LANGS = {
     colTotalTime: 'Total time', colTotalRank: 'Total rank', colStatus: 'Status',
     stageLabel: 'Stage', stageSub: 'Leg',
     colStart: 'Start', colTime: 'Time', colRank: 'Rank', colTimestatus: 'Status',
-    sortHint: '(sort)',
     cntSel: 'selection {a} participants',
     sumClubs: '{a} clubs', sumClasses: '{a} classes', sumTotal: '{a} participants',
     popupBlocked: 'Allow popups for this page',
@@ -476,7 +487,6 @@ function levDist(a = '', b = '') {
 }
 
 function clubsList() {
-  if (!rawClubs || !rawClubs.length) return [];
   const threshold = 2;
   const clubs = [];
   rows.forEach(r => {
@@ -684,13 +694,13 @@ function createTableHeader() {
   if (!rawData) return;
   const tr1 = document.createElement('tr');
   const tr2 = document.createElement('tr');
-  tr1.innerHTML = `<th rowspan="2" data-key="className">${T('colClass')} <span class="hint">${T('sortHint')}</span></th>`;
+  tr1.innerHTML = `<th rowspan="2" data-key="className">${T('colClass')} <span class="arrow">▽</span></th>`;
   for (let i = 0; i < stageCount; i++) {
     const cols = eventState === 'Complete' ? 3 : 4;
     const label = stageCount > 1 ? `${T('stageLabel')} ${i + 1}` : '';
     tr1.innerHTML += `<th colspan="${cols}">${esc(label)}</th>`;
   }
-  tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">${T('colBib')}</th><th rowspan="2" data-key="chip">${T('colChip')}</th><th rowspan="2" data-key="surname">${T('colSurname')} <span class="hint">${T('sortHint')}</span></th><th rowspan="2" data-key="givenName">${T('colGivenName')}</th><th rowspan="2" data-key="club">${T('colClub')}</th>`;
+  tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">${T('colBib')}</th><th rowspan="2" data-key="chip">${T('colChip')}</th><th rowspan="2" data-key="surname">${T('colSurname')} <span class="arrow">▽</span></th><th rowspan="2" data-key="givenName">${T('colGivenName')}</th><th rowspan="2" data-key="club">${T('colClub')}</th>`;
   if (stageCount > 1) {
     tr1.innerHTML += `<th rowspan="2" data-key="totalTime">${T('colTotalTime')}</th><th rowspan="2" data-key="resultRank">${T('colTotalRank')}</th>`;
   }
@@ -699,7 +709,7 @@ function createTableHeader() {
     if (eventState === 'Complete') {
       tr2.innerHTML += `<th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
     } else {
-      tr2.innerHTML += `<th data-key="startTime${n}">${T('colStart')} ${n} <span class="hint">${T('sortHint')}</span></th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
+      tr2.innerHTML += `<th data-key="startTime${n}">${T('colStart')} ${n} <span class="arrow">▽</span></th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
     }
   }
   head.appendChild(tr1);
@@ -1019,10 +1029,14 @@ function render() {
     tbody.appendChild(tr);
   }
 
-  document.querySelectorAll('th').forEach(th => { th.classList.remove('sorted'); th.removeAttribute('data-order'); });
+  document.querySelectorAll('th').forEach(th => { th.classList.remove('sorted'); });
   if (sortKeys.length) {
     const header = document.querySelector(`th[data-key="${sortKeys[0]}"]`);
-    if (header) { header.classList.add('sorted'); header.setAttribute('data-order', (sortOrders[0] !== 'desc') ? '▲' : '▼'); }
+    if (header) {
+      header.classList.add('sorted');
+      const arrow = header.querySelector('.arrow');
+      if (arrow) arrow.textContent = (sortOrders[0] !== 'desc') ? '▲' : '▼';
+    }
   }
 
   const countDiv = document.getElementById('countInfo');
