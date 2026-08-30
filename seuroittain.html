@@ -53,6 +53,9 @@
   .filters{padding:8px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--border)}
   .filters select,.filters input{padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12.5px;background:var(--bg);color:var(--fg)}
   .filters label{font-size:12px;color:var(--muted);font-weight:600}
+  .filter-radio{display:flex;align-items:center;gap:3px;padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--bg);cursor:pointer}
+  .filter-radio input{margin:0;width:auto;padding:0}
+  .filter-radio:has(input:checked){border-color:var(--primary);color:var(--primary)}
   .filters input:focus{outline:none;border-color:var(--primary-light)}
 
   .class-links{padding:8px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -61,6 +64,17 @@
   .class-links .chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
 
   .table-wrap{overflow-x:auto;padding:0 24px 24px}
+  #results th[data-key="surname"]{width:170px}
+  #results th[data-key="givenName"]{width:150px}
+  #results th[data-key="bibNumber"]{width:70px}
+  #results th[data-key="chip"]{width:100px}
+  #results th[data-key="className"]{width:90px}
+  #results th[data-key="club"]{width:160px}
+  #results th[data-key="totalTime"]{width:95px}
+  #results th[data-key="startTime"],#results th[data-key^="stageTime"]{width:82px}
+  #results th[data-key^="stageRank"]{width:52px}
+  #results th[data-key*="Status"]{width:74px}
+  #results td.col-name{max-width:170px;overflow:hidden;text-overflow:ellipsis}
   table{border-collapse:collapse;width:100%;background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-top:16px}
   th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
   th{background:var(--primary);color:#fff;cursor:pointer;user-select:none;position:relative;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
@@ -120,8 +134,14 @@
   <select id="clubSelect" onchange="onClubChange()"><option data-loc="allClubs" value="">Kaikki seurat</option></select>
   <label data-loc="fSearch">Haku:</label>
   <input type="text" id="search" data-loc="phSearch" placeholder="nimi, nro, chip, luokka..." oninput="render()">
+  <label data-loc="fTop">Näytä:</label>
+  <label class="filter-radio"><input type="radio" name="topN" value="" checked onchange="onTopChange(this.value)"><span data-loc="topNone">Kaikki</span></label>
+  <label class="filter-radio"><input type="radio" name="topN" value="3" onchange="onTopChange(this.value)"><span>Top 3</span></label>
+  <label class="filter-radio"><input type="radio" name="topN" value="5" onchange="onTopChange(this.value)"><span>Top 5</span></label>
+  <label class="filter-radio"><input type="radio" name="topN" value="10" onchange="onTopChange(this.value)"><span>Top 10</span></label>
   <button class="btn btn-outline" onclick="selectedClass=null; updateClassLinkState(); render()" data-loc="btnAllClasses">Näytä kaikki sarjat</button>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="colorsCheck" checked onchange="toggleColors(this.checked)"><span data-loc="btnColors">Värit</span></label>
+  <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="classcolorsCheck" onchange="toggleClassColors(this.checked)"><span data-loc="btnClassColors">Sarjavärit</span></label>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="abbrCheck" onchange="toggleAbbr(this.checked)"><span data-loc="btnAbbr">Lyhenne</span></label>
   <span id="countInfo" class="summary" style="margin-left:auto;padding:0"></span>
 </div>
@@ -160,6 +180,7 @@ const LANGS = {
     fClub: 'Seura:', fSearch: 'Haku:',
     allClubs: 'Kaikki seurat', allOption: 'Kaikki',
     phSearch: 'nimi, nro, chip, luokka...',
+    fTop: 'Näytä:', topNone: 'Kaikki', btnClassColors: 'Sarjavärit',
     btnAllClasses: 'Näytä kaikki sarjat',
     empty: 'Ei tuloksia',
     missingEventTitle: 'Tapahtuma puuttuu: URL-parametri eventid ei ole määritelty.',
@@ -192,6 +213,7 @@ const LANGS = {
     fClub: 'Club:', fSearch: 'Search:',
     allClubs: 'All clubs', allOption: 'All',
     phSearch: 'name, no, chip, class...',
+    fTop: 'Show:', topNone: 'All', btnClassColors: 'Class colors',
     btnAllClasses: 'Show all classes',
     empty: 'No results',
     missingEventTitle: 'Event missing: the eventid URL parameter is not set.',
@@ -304,6 +326,7 @@ let stageCount = 1;
 let selectedClass = null;
 let eventState = null;
 let showColors = true;
+let showClassColors = false;
 let showAbbr = false;
 
 const START_PALETTE = [
@@ -330,13 +353,112 @@ function startColor(startText) {
   }
   return START_PALETTE[group % START_PALETTE.length];
 }
+
+// Categorical class palette (Tableau 10 — industry-standard, colorblind-aware,
+// distinct hues). Same palette as kilpailuanalyysi.html. Cycles via index % length.
+const CLASS_PALETTE = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+let classColorMap = {};
+
+// Deterministic class → {bg,fg} mapping (stable across views/sorts).
+function buildClassColors() {
+  const map = {};
+  const unique = [...new Set(rows.map(r => r.className || '').filter(Boolean))]
+    .sort((a, b) => normalize(a).localeCompare(normalize(b)));
+  unique.forEach((cn, i) => {
+    const bg = CLASS_PALETTE[i % CLASS_PALETTE.length];
+    map[cn] = { bg, fg: readableFg(bg) };
+  });
+  classColorMap = map;
+  return classColorMap;
+}
+
+// Pick black/white text so saturated Tableau colors stay readable.
+function readableFg(bg) {
+  const c = bg.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.55 ? '#111' : '#fff';
+}
+
+// Row background color following the current primary sort key:
+// sorted by start time → per-minute scheme, otherwise → class scheme.
+function rowColor(r) {
+  const primary = (multiSortKeys && multiSortKeys.length) ? multiSortKeys[0] : (sortState.key || null);
+  if (showClassColors && primary !== null && primary.indexOf('startTime') === 0) {
+    if (showColors && r.startTimes && r.startTimes[0]) return startColor(r.startTimes[0]);
+  } else if (showClassColors) {
+    const c = classColorMap[r.className || ''];
+    if (c) return c;
+  }
+  if (showColors && r.startTimes && r.startTimes[0]) return startColor(r.startTimes[0]);
+  return null;
+}
 function toggleColors(checked) {
   showColors = checked;
+  render();
+}
+function toggleClassColors(checked) {
+  showClassColors = checked;
   render();
 }
 function toggleAbbr(checked) {
   showAbbr = checked;
   render();
+}
+
+// Expand a single class sort into class + rank so runners stay in placing
+// order inside each class. Explicit multi-key sorts are left untouched.
+function expandClassRankSort(keys, orders) {
+  keys = (keys || []).slice();
+  orders = (orders || []).slice();
+  if (keys.length === 1 && keys[0] === 'className' && keys.indexOf('resultRank') === -1) {
+    keys.push('resultRank');
+    orders.push('asc');
+  }
+  while (orders.length < keys.length) orders.push('asc');
+  return { sortKeys: keys, sortOrders: orders };
+}
+
+// Current sort spec from state/URL, with the class→rank expansion applied.
+function currentSortSpec() {
+  const keys = (multiSortKeys && multiSortKeys.length) ? multiSortKeys : (sortState.key ? [sortState.key] : []);
+  const orders = (multiSortOrder && multiSortOrder.length) ? multiSortOrder : [sortState.asc ? 'asc' : 'desc'];
+  return expandClassRankSort(keys, orders);
+}
+
+function getSortValue(obj, k) {
+  let va;
+  if (k.startsWith('startTime')) { const idx = parseInt(k.replace('startTime', ''), 10) - 1; va = obj.startTimes[idx] || ''; }
+  else if (k.startsWith('stageTime')) { const idx = parseInt(k.replace('stageTime', ''), 10) - 1; va = obj.stageSeconds[idx] != null ? obj.stageSeconds[idx] : (obj.stageTimes[idx] || ''); }
+  else if (k.startsWith('stageRank')) { const idx = parseInt(k.replace('stageRank', ''), 10) - 1; va = obj.stageRanks[idx] || ''; }
+  else if (k === 'totalTime') { va = obj.totalSeconds != null ? obj.totalSeconds : (obj.totalTime || ''); }
+  else va = obj[k];
+  if (typeof va === 'string') va = va.toLowerCase();
+  return va;
+}
+
+// Shared multi-key comparator (empty values last).
+function compareRows(a, b, sortKeys, sortOrders) {
+  for (let i = 0; i < sortKeys.length; i++) {
+    const k = sortKeys[i];
+    const asc = (sortOrders[i] !== 'desc');
+    let va = getSortValue(a, k);
+    let vb = getSortValue(b, k);
+    const isEmptyA = (va === '-' || va === '' || va == null);
+    const isEmptyB = (vb === '-' || vb === '' || vb == null);
+    if (isEmptyA && !isEmptyB) return 1;
+    if (!isEmptyA && isEmptyB) return -1;
+    if (va < vb) return asc ? -1 : 1;
+    if (va > vb) return asc ? 1 : -1;
+  }
+  return 0;
+}
+
+// Sort a copy of a row list using the current spec (used by render + exports).
+function applyCurrentSort(list) {
+  const { sortKeys, sortOrders } = currentSortSpec();
+  if (!sortKeys.length) return list.slice();
+  return list.slice().sort((a, b) => compareRows(a, b, sortKeys, sortOrders));
 }
 
 const params = new URLSearchParams(window.location.search);
@@ -414,6 +536,9 @@ function decodeParamsIntoUI() {
   if (sort) {
     multiSortKeys = sort.split(',').map(s => s.trim()).filter(Boolean);
     multiSortOrder = (order ? order.split(',') : []).map(s => (s || '').trim().toLowerCase());
+    const expanded = expandClassRankSort(multiSortKeys, multiSortOrder);
+    multiSortKeys = expanded.sortKeys;
+    multiSortOrder = expanded.sortOrders;
     sortState.key = multiSortKeys[0] || null;
     sortState.asc = (multiSortOrder[0] !== 'desc');
   }
@@ -427,6 +552,7 @@ function decodeParamsIntoUI() {
   if (clubParam) sel.value = clubParam;
   const q = p.get('q');
   if (q) document.getElementById('search').value = q;
+  syncTopRadios();
 }
 
 function makeKey(r) {
@@ -743,10 +869,29 @@ function onClubChange() {
   render();
 }
 
+function onTopChange(value) {
+  const n = parseInt(value, 10);
+  const p = new URLSearchParams(location.search);
+  if (Number.isFinite(n) && n > 0) {
+    filterTop = { n, by: 'resultrank' };
+    p.set('top', String(n)); p.set('by', 'resultrank');
+  } else {
+    filterTop = null;
+    p.delete('top'); p.delete('by');
+  }
+  history.replaceState(null, '', location.pathname + '?' + p.toString());
+  render();
+}
+
+function syncTopRadios() {
+  const val = filterTop && filterTop.by === 'resultrank' ? String(filterTop.n) : '';
+  document.querySelectorAll('input[name="topN"]').forEach(r => { r.checked = (r.value === val); });
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  Table header
 // ════════════════════════════════════════════════════════════════════
-function createTableHeader() {
+function createTableHeader(showBib) {
   const head = document.getElementById('tableHead');
   head.innerHTML = '';
   if (!rawData) return;
@@ -758,16 +903,18 @@ function createTableHeader() {
     const label = stageCount > 1 ? `${T('stageLabel')} ${i + 1}` : '';
     tr1.innerHTML += `<th colspan="${cols}">${esc(label)}</th>`;
   }
-  tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">${T('colBib')}</th><th rowspan="2" data-key="chip">${T('colChip')}</th><th rowspan="2" data-key="surname">${T('colSurname')} <span class="arrow">▽</span></th><th rowspan="2" data-key="givenName">${T('colGivenName')}</th><th rowspan="2" data-key="club">${T('colClub')}</th>`;
+  tr1.innerHTML += `<th rowspan="2" data-key="surname">${T('colSurname')} <span class="arrow">▽</span></th><th rowspan="2" data-key="givenName">${T('colGivenName')}</th><th rowspan="2" data-key="club">${T('colClub')}</th>`;
+  if (showBib) tr1.innerHTML += `<th rowspan="2" data-key="bibNumber">${T('colBib')}</th>`;
+  tr1.innerHTML += `<th rowspan="2" data-key="chip">${T('colChip')}</th>`;
   if (stageCount > 1) {
     tr1.innerHTML += `<th rowspan="2" data-key="totalTime">${T('colTotalTime')}</th><th rowspan="2" data-key="resultRank">${T('colTotalRank')}</th>`;
   }
   for (let i = 0; i < stageCount; i++) {
     const n = i + 1;
     if (eventState === 'Complete') {
-      tr2.innerHTML += `<th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
+      tr2.innerHTML += `<th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
     } else {
-      tr2.innerHTML += `<th data-key="startTime${n}">${T('colStart')} ${n} <span class="arrow">▽</span></th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
+      tr2.innerHTML += `<th data-key="startTime${n}">${T('colStart')} ${n} <span class="arrow">▽</span></th><th data-key="stageRank${n}">${T('colRank')} ${n}</th><th data-key="stageTime${n}">${T('colTime')} ${n}</th><th data-key="stageStatus${n}">${T('colTimestatus')} ${n}</th>`;
     }
   }
   head.appendChild(tr1);
@@ -835,6 +982,8 @@ function prepareRows(json, mainCourseClasses) {
 }
 
 function showValue(v) { return (v === null || v === undefined || v === '') ? '-' : v; }
+
+function hasBibNumbers() { return rows.some(r => String(r.bibNumber ?? '').trim() !== ''); }
 
 function stageResultsCount(allResults) { return allResults.length || 1; }
 
@@ -1023,38 +1172,15 @@ function getFilteredRows() {
 }
 
 function render() {
-  createTableHeader();
+  buildClassColors();
+  const showBib = hasBibNumbers();
+  createTableHeader(showBib);
   const selClub = document.getElementById('clubSelect').value;
   let filtered = getFilteredRows();
-  const sortKeys = (multiSortKeys && multiSortKeys.length) ? multiSortKeys : (sortState.key ? [sortState.key] : []);
-  const sortOrders = (multiSortOrder && multiSortOrder.length) ? multiSortOrder : [sortState.asc ? 'asc' : 'desc'];
+  const { sortKeys, sortOrders } = currentSortSpec();
 
   if (sortKeys.length) {
-    filtered.sort((a, b) => {
-      const getValue = (obj, k) => {
-        let va;
-        if (k.startsWith('startTime')) { const idx = parseInt(k.replace('startTime', ''), 10) - 1; va = obj.startTimes[idx] || ''; }
-        else if (k.startsWith('stageTime')) { const idx = parseInt(k.replace('stageTime', ''), 10) - 1; va = obj.stageSeconds[idx] != null ? obj.stageSeconds[idx] : (obj.stageTimes[idx] || ''); }
-        else if (k.startsWith('stageRank')) { const idx = parseInt(k.replace('stageRank', ''), 10) - 1; va = obj.stageRanks[idx] || ''; }
-        else if (k === 'totalTime') { va = obj.totalSeconds != null ? obj.totalSeconds : (obj.totalTime || ''); }
-        else va = obj[k];
-        if (typeof va === 'string') va = va.toLowerCase();
-        return va;
-      };
-      for (let i = 0; i < sortKeys.length; i++) {
-        const k = sortKeys[i];
-        const asc = (sortOrders[i] !== 'desc');
-        let va = getValue(a, k);
-        let vb = getValue(b, k);
-        const isEmptyA = (va === '-' || va === '' || va == null);
-        const isEmptyB = (vb === '-' || vb === '' || vb == null);
-        if (isEmptyA && !isEmptyB) return 1;
-        if (!isEmptyA && isEmptyB) return -1;
-        if (va < vb) return asc ? -1 : 1;
-        if (va > vb) return asc ? 1 : -1;
-      }
-      return 0;
-    });
+    filtered = applyCurrentSort(filtered);
   }
 
   const tbody = document.querySelector('#results tbody');
@@ -1066,7 +1192,7 @@ function render() {
   }
   for (const r of filtered) {
     const tr = document.createElement('tr');
-    const c0 = startColor(r.startTimes && r.startTimes[0]);
+    const c0 = rowColor(r);
     if (c0) tr.setAttribute('style', `background:${c0.bg};color:${c0.fg}`);
     const totalRankClass = r.resultRankClass ? ` class="${r.resultRankClass}"` : '';
     let html = `<td>${esc(r.className || '')}</td>`;
@@ -1074,16 +1200,18 @@ function render() {
       const rankClass = r.stageRankClass && r.stageRankClass[i] ? r.stageRankClass[i] : '';
       if (eventState !== 'Complete') {
         html += `<td class="start-time">${showValue(r.startTimes[i])}</td>`;
-        html += `<td class="clock">${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
+        html += `<td class="clock">${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="status">${esc(showValue(r.stageStatuses[i]))}</td>`;
       } else {
-        html += `<td>${showValue(r.stageTimes[i])}</td>`;
         html += `<td class="${rankClass}">${showValue(r.stageRanks[i])}</td>`;
+        html += `<td>${showValue(r.stageTimes[i])}</td>`;
         html += `<td>${esc(showValue(r.stageStatuses[i]))}</td>`;
       }
     }
-    html += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
+    html += `<td class="col-name" title="${esc(r.surname || '')}">${esc(r.surname || '')}</td><td class="col-name" title="${esc(r.givenName || '')}">${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
+    if (showBib) html += `<td>${esc(r.bibNumber || '')}</td>`;
+    html += `<td>${esc(r.chip || '')}</td>`;
     if (stageCount > 1) {
       html += `<td>${esc(r.totalTime || '')}</td><td${totalRankClass}>${showValue(r.resultRank)}</td>`;
     }
@@ -1163,21 +1291,26 @@ setInterval(updateVisibleClocks, 1000);
 function rowsToCsv(data) {
   const header = [T('colClass')];
   for (let i = 0; i < stageCount; i++) {
-    header.push(`${T('colStart')} ${i + 1}`, `${T('colTime')} ${i + 1}`, `${T('colRank')} ${i + 1}`, `${T('colTimestatus')} ${i + 1}`);
+    header.push(`${T('colStart')} ${i + 1}`, `${T('colRank')} ${i + 1}`, `${T('colTime')} ${i + 1}`, `${T('colTimestatus')} ${i + 1}`);
   }
-  header.push(T('colBib'), T('colChip'), T('colSurname'), T('colGivenName'), T('colClub'), T('colTotalTime'), T('colTotalRank'), T('colStatus'));
-  return data.map(r => {
+  header.push(T('colSurname'), T('colGivenName'), T('colClub'));
+  if (hasBibNumbers()) header.push(T('colBib'));
+  header.push(T('colChip'), T('colTotalTime'), T('colTotalRank'), T('colStatus'));
+  const escape = v => { const s = String(v).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; };
+  const lines = [header.map(escape).join(',')];
+  data.forEach(r => {
     const row = [r.className || ''];
-    for (let i = 0; i < stageCount; i++) row.push(r.startTimes[i] || '', r.stageTimes[i] || '', r.stageRanks[i] || '', r.stageStatuses[i] || '');
-    row.push(r.bibNumber || '', r.chip || '', r.surname || '', r.givenName || '', showAbbr ? (r.abbr || r.club || '') : (r.club || ''), r.totalTime || '', r.resultRank || '', r.status || '');
-    return row;
-  })
-  .map(row => row.map(v => { const s = String(v).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; }).join(','))
-  .join('\n');
+    for (let i = 0; i < stageCount; i++) row.push(r.startTimes[i] || '', r.stageRanks[i] || '', r.stageTimes[i] || '', r.stageStatuses[i] || '');
+    row.push(r.surname || '', r.givenName || '', showAbbr ? (r.abbr || r.club || '') : (r.club || ''));
+    if (hasBibNumbers()) row.push(r.bibNumber || '');
+    row.push(r.chip || '', r.totalTime || '', r.resultRank || '', r.status || '');
+    lines.push(row.map(escape).join(','));
+  });
+  return lines.join('\n');
 }
 
 function exportCsvHandler() {
-  const filtered = getFilteredRows();
+  const filtered = applyCurrentSort(getFilteredRows());
   const csv = rowsToCsv(filtered);
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -1192,28 +1325,33 @@ function exportCsvHandler() {
 //  PDF / Print export
 // ════════════════════════════════════════════════════════════════════
 function downloadPDF() {
-  const filtered = getFilteredRows();
+  const filtered = applyCurrentSort(getFilteredRows());
   const title = document.getElementById('eventTitle').textContent || T('appTitle');
   const subtitle = rawData ? formatEventRange(rawData) : '';
 
   let thead = '<tr><th>' + T('colClass') + '</th>';
   for (let i = 0; i < stageCount; i++) {
     if (eventState !== 'Complete') thead += `<th>${T('colStart')} ${i + 1}</th>`;
-    thead += `<th>${T('colTime')} ${i + 1}</th><th>${T('colRank')} ${i + 1}</th><th>${T('colTimestatus')} ${i + 1}</th>`;
+    thead += `<th>${T('colRank')} ${i + 1}</th><th>${T('colTime')} ${i + 1}</th><th>${T('colTimestatus')} ${i + 1}</th>`;
   }
-  thead += `<th>${T('colBib')}</th><th>${T('colChip')}</th><th>${T('colSurname')}</th><th>${T('colGivenName')}</th><th>${T('colClub')}</th>`;
+  const showBib = hasBibNumbers();
+  thead += `<th>${T('colSurname')}</th><th>${T('colGivenName')}</th><th>${T('colClub')}</th>`;
+  if (showBib) thead += `<th>${T('colBib')}</th>`;
+  thead += `<th>${T('colChip')}</th>`;
   if (stageCount > 1) thead += `<th>${T('colTotalTime')}</th><th>${T('colTotalRank')}</th>`;
   thead += '</tr>';
 
   const tbodyRows = filtered.map(r => {
-    const c = showColors ? startColor(r.startTimes && r.startTimes[0]) : null;
+    const c = rowColor(r);
     const style = c ? ` style="background:${c.bg};color:${c.fg}"` : '';
     let tr = `<tr${style}><td>${esc(r.className || '')}</td>`;
     for (let i = 0; i < stageCount; i++) {
       if (eventState !== 'Complete') tr += `<td>${showValue(r.startTimes[i])}</td>`;
-      tr += `<td>${showValue(r.stageTimes[i])}</td><td>${showValue(r.stageRanks[i])}</td><td>${esc(showValue(r.stageStatuses[i]))}</td>`;
+      tr += `<td>${showValue(r.stageRanks[i])}</td><td>${showValue(r.stageTimes[i])}</td><td>${esc(showValue(r.stageStatuses[i]))}</td>`;
     }
-    tr += `<td>${esc(r.bibNumber || '')}</td><td>${esc(r.chip || '')}</td><td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
+    tr += `<td>${esc(r.surname || '')}</td><td>${esc(r.givenName || '')}</td><td>${esc(showAbbr ? (r.abbr || r.club) : r.club)}</td>`;
+    if (showBib) tr += `<td>${esc(r.bibNumber || '')}</td>`;
+    tr += `<td>${esc(r.chip || '')}</td>`;
     if (stageCount > 1) tr += `<td>${esc(r.totalTime || '')}</td><td>${showValue(r.resultRank)}</td>`;
     return tr + '</tr>';
   }).join('');
@@ -1258,10 +1396,11 @@ function initApp() {
     if (!key) return;
     if (sortState.key === key) sortState.asc = !sortState.asc;
     else { sortState.key = key; sortState.asc = true; }
-    multiSortKeys = [sortState.key];
-    multiSortOrder = [sortState.asc ? 'asc' : 'desc'];
+    const expanded = expandClassRankSort([sortState.key], [sortState.asc ? 'asc' : 'desc']);
+    multiSortKeys = expanded.sortKeys;
+    multiSortOrder = expanded.sortOrders;
     const p = new URLSearchParams(location.search);
-    p.set('sort', sortState.key); p.set('order', sortState.asc ? 'asc' : 'desc');
+    p.set('sort', multiSortKeys.join(',')); p.set('order', multiSortOrder.join(','));
     history.replaceState(null, '', location.pathname + '?' + p.toString());
     render();
   });

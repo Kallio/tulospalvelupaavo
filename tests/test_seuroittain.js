@@ -41,7 +41,7 @@ global.setInterval = () => 0;
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { parseName, parseStartTime, formatTime, parseDurationToSeconds, formatSeconds, mapResultsWithClubs, loadClubs, prepareRows, prepareRowsMultistage, rowsToCsv, normalize, makeKey, stageResultsCount, showValue }; global.__state = { rows: () => rows, setRows: r => rows = r, clubsCache: () => clubsCache, setClubsCache: c => clubsCache = c, rawData: () => rawData, setRawData: r => rawData = r, stageCount: () => stageCount, setStageCount: n => stageCount = n, selectedClass: () => selectedClass, setSelectedClass: c => selectedClass = c, filterTop: () => filterTop, setFilterTop: f => filterTop = f, sortState: () => sortState, setSortState: s => sortState = s };');
+  eval(code + '; global.__p = { parseName, parseStartTime, formatTime, parseDurationToSeconds, formatSeconds, mapResultsWithClubs, loadClubs, prepareRows, prepareRowsMultistage, rowsToCsv, normalize, makeKey, stageResultsCount, showValue, expandClassRankSort, currentSortSpec, applyCurrentSort, compareRows, buildClassColors, classColorMap, CLASS_PALETTE, readableFg, rowColor, startColor }; global.__state = { rows: () => rows, setRows: r => rows = r, clubsCache: () => clubsCache, setClubsCache: c => clubsCache = c, rawData: () => rawData, setRawData: r => rawData = r, stageCount: () => stageCount, setStageCount: n => stageCount = n, selectedClass: () => selectedClass, setSelectedClass: c => selectedClass = c, filterTop: () => filterTop, setFilterTop: f => filterTop = f, sortState: () => sortState, setSortState: s => sortState = s, multiSortKeys: () => multiSortKeys, setMultiSortKeys: k => multiSortKeys = k, multiSortOrder: () => multiSortOrder, setMultiSortOrder: o => multiSortOrder = o, showColors: () => showColors, setShowColors: v => showColors = v, showClassColors: () => showClassColors, setShowClassColors: v => showClassColors = v };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -140,9 +140,73 @@ assert('prepareRows: DNS excluded from ranking', pRows[2].resultRankClass === ''
 // ── rowsToCsv ──
 const csv = P.rowsToCsv(pRows);
 const csvLines = csv.split('\n');
-assert('csv: header', csvLines[0] === 'Sarja luokka,Lähtö 1,Aika 1,Sija 1,Tila 1,Nro,Emit,Sukunimi,Etunimi,Seura,Yhteisaika,Yhteissija,Tila', csvLines[0]);
-assert('csv: data row', csvLines[1] === 'H14,10:00,10:30,2,Ok,7,111,Virtanen,Eino,ES,10:30,2,Ok', csvLines[1]);
-assert('csv: escape quotes', P.rowsToCsv([{ className: 'H14', startTimes: [''], stageTimes: [''], stageRanks: [''], stageStatuses: ['Ok'], bibNumber: '', chip: '', surname: 'A"B', givenName: 'C,D', club: '', totalTime: '', resultRank: '', status: '' }]).split('\n')[1] === 'H14,,,,Ok,,,"A""B","C,D",,,,', P.rowsToCsv([{ className: 'H14', startTimes: [''], stageTimes: [''], stageRanks: [''], stageStatuses: ['Ok'], bibNumber: '', chip: '', surname: 'A"B', givenName: 'C,D', club: '', totalTime: '', resultRank: '', status: '' }]).split('\n')[1]);
+assert('csv: header', csvLines[0] === 'Sarja,Lähtö 1,Sija 1,Aika 1,Tila 1,Sukunimi,Etunimi,Seura,Nro,Emit,Yhteisaika,Yhteissija,Tila', csvLines[0]);
+assert('csv: data row', csvLines[1] === 'H14,10:00,2,10:30,Ok,Virtanen,Eino,ES,7,111,10:30,2,Ok', csvLines[1]);
+assert('csv: escape quotes', P.rowsToCsv([{ className: 'H14', startTimes: [''], stageTimes: [''], stageRanks: [''], stageStatuses: ['Ok'], bibNumber: '', chip: '', surname: 'A"B', givenName: 'C,D', club: '', totalTime: '', resultRank: '', status: '' }]).split('\n')[1] === 'H14,,,,Ok,"A""B","C,D",,,,,,', P.rowsToCsv([{ className: 'H14', startTimes: [''], stageTimes: [''], stageRanks: [''], stageStatuses: ['Ok'], bibNumber: '', chip: '', surname: 'A"B', givenName: 'C,D', club: '', totalTime: '', resultRank: '', status: '' }]).split('\n')[1]);
+
+// ── expandClassRankSort / currentSortSpec / applyCurrentSort ──
+const ec = (k, o) => JSON.stringify(P.expandClassRankSort(k, o));
+assert('expandClassRankSort: class asc → class,resultRank/asc,asc', ec(['className'], ['asc']) === JSON.stringify({ sortKeys: ['className', 'resultRank'], sortOrders: ['asc', 'asc'] }), ec(['className'], ['asc']));
+assert('expandClassRankSort: class desc → rank stays asc', ec(['className'], ['desc']) === JSON.stringify({ sortKeys: ['className', 'resultRank'], sortOrders: ['desc', 'asc'] }), ec(['className'], ['desc']));
+assert('expandClassRankSort: rank-only untouched', ec(['resultRank'], ['desc']) === JSON.stringify({ sortKeys: ['resultRank'], sortOrders: ['desc'] }), ec(['resultRank'], ['desc']));
+assert('expandClassRankSort: explicit multi-key untouched', ec(['className', 'surname'], ['asc', 'asc']) === JSON.stringify({ sortKeys: ['className', 'surname'], sortOrders: ['asc', 'asc'] }), ec(['className', 'surname'], ['asc', 'asc']));
+assert('expandClassRankSort: pads missing orders', ec(['surname'], []) === JSON.stringify({ sortKeys: ['surname'], sortOrders: ['asc'] }), ec(['surname'], []));
+assert('expandClassRankSort: empty → empty', ec([], []) === JSON.stringify({ sortKeys: [], sortOrders: [] }), ec([], []));
+
+S.setMultiSortKeys(['className']);
+S.setMultiSortOrder(['asc']);
+assert('currentSortSpec: expands className from state', JSON.stringify(P.currentSortSpec()) === JSON.stringify({ sortKeys: ['className', 'resultRank'], sortOrders: ['asc', 'asc'] }), JSON.stringify(P.currentSortSpec()));
+S.setMultiSortKeys(['startTime1']);
+S.setMultiSortOrder(['asc']);
+assert('currentSortSpec: start-time untouched', JSON.stringify(P.currentSortSpec()) === JSON.stringify({ sortKeys: ['startTime1'], sortOrders: ['asc'] }), JSON.stringify(P.currentSortSpec()));
+S.setMultiSortKeys([]);
+S.setMultiSortOrder([]);
+S.setSortState({ key: 'className', asc: true });
+assert('currentSortSpec: fallback sortState also expands', JSON.stringify(P.currentSortSpec()) === JSON.stringify({ sortKeys: ['className', 'resultRank'], sortOrders: ['asc', 'asc'] }), JSON.stringify(P.currentSortSpec()));
+
+const sortRows = [
+  { className: 'H16', resultRank: 2 },
+  { className: 'H14', resultRank: 2 },
+  { className: 'H14', resultRank: 1 },
+  { className: 'H14', resultRank: '' },
+];
+S.setMultiSortKeys(['className']);
+S.setMultiSortOrder(['asc']);
+const sorted = P.applyCurrentSort(sortRows);
+assert('applyCurrentSort: class asc, rank asc, non-OK last in class', JSON.stringify(sorted.map(r => r.className + '/' + r.resultRank)) === '["H14/1","H14/2","H14/","H16/2"]', JSON.stringify(sorted.map(r => r.className + '/' + r.resultRank)));
+S.setMultiSortKeys([]);
+S.setMultiSortOrder([]);
+S.setSortState({ key: null, asc: true });
+
+// ── class palette / row colors ──
+assert('CLASS_PALETTE: 10 distinct colors (Tableau 10)', P.CLASS_PALETTE.length === 10 && new Set(P.CLASS_PALETTE).size === 10, P.CLASS_PALETTE.join(','));
+S.setRows([
+  { className: 'H16', resultRank: 2 },
+  { className: 'H14', resultRank: 1 },
+  { className: 'H14', resultRank: 2 },
+  { className: 'D10', resultRank: 1 },
+]);
+const cmap1 = P.buildClassColors();
+const cmap2 = P.buildClassColors();
+assert('buildClassColors: deterministic', JSON.stringify(cmap1) === JSON.stringify(cmap2), JSON.stringify(cmap1));
+assert('buildClassColors: class colors H14/D10/H16', cmap1.H14 && cmap1.D10 && cmap1.H16, JSON.stringify(cmap1));
+assert('buildClassColors: distinct per class', new Set(Object.keys(cmap1).map(c => cmap1[c].bg)).size === 3, Object.keys(cmap1).map(c => cmap1[c].bg).join(','));
+assert('readableFg: dark text on light bg, light on dark', P.readableFg('#ff9da7') === '#111' && P.readableFg('#4e79a7') === '#fff', P.readableFg('#ff9da7') + ',' + P.readableFg('#4e79a7'));
+
+S.setShowClassColors(true);
+S.setShowColors(true);
+S.setMultiSortKeys(['className']);
+S.setMultiSortOrder(['asc']);
+const rcClass = P.rowColor({ className: 'H14', startTimes: ['10:00'] });
+assert('rowColor: class scheme by default (sorted by class)', rcClass && rcClass.bg === cmap2.H14.bg, JSON.stringify(rcClass));
+S.setMultiSortKeys(['startTime1']);
+S.setMultiSortOrder(['asc']);
+const rcStart = P.rowColor({ className: 'H14', startTimes: ['10:00'] });
+const startRef = P.startColor('10:00');
+assert('rowColor: start-minute scheme when sorted by start time', rcStart && rcStart.bg === startRef.bg, JSON.stringify(rcStart));
+S.setMultiSortKeys([]);
+S.setMultiSortOrder([]);
+S.setSortState({ key: null, asc: true });
 
 // ── mapResultsWithClubs ──
 (async () => {
