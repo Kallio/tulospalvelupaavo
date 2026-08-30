@@ -41,7 +41,7 @@ global.setInterval = () => 0;
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { parseName, parseStartTime, formatTime, parseDurationToSeconds, formatSeconds, mapResultsWithClubs, loadClubs, prepareRows, prepareRowsMultistage, rowsToCsv, normalize, makeKey, stageResultsCount, showValue, expandClassRankSort, currentSortSpec, applyCurrentSort, compareRows, buildClassColors, classColorMap, CLASS_PALETTE, readableFg, rowColor, startColor }; global.__state = { rows: () => rows, setRows: r => rows = r, clubsCache: () => clubsCache, setClubsCache: c => clubsCache = c, rawData: () => rawData, setRawData: r => rawData = r, stageCount: () => stageCount, setStageCount: n => stageCount = n, selectedClass: () => selectedClass, setSelectedClass: c => selectedClass = c, filterTop: () => filterTop, setFilterTop: f => filterTop = f, sortState: () => sortState, setSortState: s => sortState = s, multiSortKeys: () => multiSortKeys, setMultiSortKeys: k => multiSortKeys = k, multiSortOrder: () => multiSortOrder, setMultiSortOrder: o => multiSortOrder = o, showColors: () => showColors, setShowColors: v => showColors = v, showClassColors: () => showClassColors, setShowClassColors: v => showClassColors = v };');
+  eval(code + '; global.__p = { parseName, parseStartTime, formatTime, parseDurationToSeconds, formatSeconds, mapResultsWithClubs, loadClubs, prepareRows, prepareRowsMultistage, rowsToCsv, normalize, makeKey, stageResultsCount, showValue, expandClassRankSort, currentSortSpec, applyCurrentSort, compareRows, buildClassColors, classColorMap, CLASS_PALETTE, readableFg, rowColor, startColor, hasBibNumbers, isActiveThreat, classTopResultSettled, computeClassSettlements, classNamesOf }; global.__state = { rows: () => rows, setRows: r => rows = r, clubsCache: () => clubsCache, setClubsCache: c => clubsCache = c, rawData: () => rawData, setRawData: r => rawData = r, stageCount: () => stageCount, setStageCount: n => stageCount = n, selectedClasses: () => selectedClasses, setSelectedClasses: c => selectedClasses = c, filterTop: () => filterTop, setFilterTop: f => filterTop = f, sortState: () => sortState, setSortState: s => sortState = s, multiSortKeys: () => multiSortKeys, setMultiSortKeys: k => multiSortKeys = k, multiSortOrder: () => multiSortOrder, setMultiSortOrder: o => multiSortOrder = o, showColors: () => showColors, setShowColors: v => showColors = v, showClassColors: () => showClassColors, setShowClassColors: v => showClassColors = v, classSettlements: () => classSettlements, setClassSettlements: c => classSettlements = c, eventState: () => eventState, setEventState: s => eventState = s };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -62,12 +62,12 @@ assert('parseName: empty', JSON.stringify(P.parseName('')) === JSON.stringify({ 
 assert('parseName: null', JSON.stringify(P.parseName(null)) === JSON.stringify({ surname: '', givenName: '' }));
 assert('parseName: trims', JSON.stringify(P.parseName('  Virtanen Eino  ')) === JSON.stringify({ surname: 'Virtanen', givenName: 'Eino' }));
 
-// ── parseStartTime (regex is `^(\d{1,2}).:$` — only matches "H?" malformed strings) ──
+// ── parseStartTime (HH:MM parsed onto the event date) ──
 const begin = new Date(2026, 7, 14, 8, 0);
-assert('parseStartTime: "10:30" → null (no match)', P.parseStartTime('10:30', begin) === null);
+assert('parseStartTime: "10:30" → 10:30 on event date', (() => { const d = P.parseStartTime('10:30', begin); return d instanceof Date && d.getHours() === 10 && d.getMinutes() === 30 && d.getMonth() === 7 && d.getDate() === 14; })(), String(P.parseStartTime('10:30', begin)));
 assert('parseStartTime: no eventBegin → null', P.parseStartTime('10:30', null) === null);
 assert('parseStartTime: empty → null', P.parseStartTime('', begin) === null);
-assert('parseStartTime: "12:5" → invalid date (regex quirk)', P.parseStartTime('12:5', begin) === null || Number.isNaN(P.parseStartTime('12:5', begin).getTime()));
+assert('parseStartTime: malformed → null', P.parseStartTime('12:5', begin) === null);
 
 // ── formatTime ──
 assert('formatTime: local 20:05', P.formatTime(new Date(2026, 7, 14, 20, 5)) === '20:05', P.formatTime(new Date(2026, 7, 14, 20, 5)));
@@ -102,6 +102,9 @@ assert('showValue: empty → -', P.showValue('') === '-');
 assert('showValue: null → -', P.showValue(null) === '-');
 assert('showValue: 0 → 0', P.showValue(0) === 0);
 assert('showValue: value passes', P.showValue('x') === 'x');
+assert('classNamesOf: single class', JSON.stringify(P.classNamesOf({ className: 'H14' })) === '["H14"]');
+assert('classNamesOf: joined classes split', JSON.stringify(P.classNamesOf({ className: 'H14 / H16' })) === '["H14","H16"]');
+assert('classNamesOf: empty', JSON.stringify(P.classNamesOf({ className: '' })) === '[]');
 
 // ── makeKey / stageResultsCount ──
 assert('makeKey: bib||chip||name', P.makeKey({ bibNumber: 7, chip: '111', name: 'Virtanen Eino' }) === '7||111||virtanen eino');
@@ -216,7 +219,7 @@ S.setSortState({ key: null, asc: true });
     { club: 'Jämsän Retki-Veikot', name: 'B' },
     { club: 'Tuntematon', abbreviation: 'T' },
   ]);
-  assert('mapClubs: abbreviation matched', mapped[0].club === 'Espoon Suunta' && mapped[0].abbreviation === 'Espoon Suunta');
+  assert('mapClubs: abbreviation matched', mapped[0].club === 'Espoon Suunta' && mapped[0].abbreviation === 'ES');
   assert('mapClubs: full name matched', mapped[1].club === 'Jämsän Retki-Veikot');
   assert('mapClubs: unknown club unchanged', mapped[2].club === 'Tuntematon' && mapped[2].abbreviation === 'T');
 
@@ -266,6 +269,41 @@ S.setSortState({ key: null, asc: true });
   const r101m = S.rows().find(r => r.bibNumber === 101);
   assert('multistage: main totals merged by id', r101m.totalSeconds === 1200 && r101m.totalTime === '20:00' && r101m.status === 'Ok', JSON.stringify({ ts: r101m.totalSeconds, tt: r101m.totalTime, st: r101m.status }));
   assert('multistage: merged total re-ranked', r101m.resultRank === 1);
+
+  // ── live top-result settlement ──
+  S.setRawData({ begin: '2026-08-14T08:00:00', results: [] });
+  S.setStageCount(1);
+  S.setRows([
+    { className: 'H14', stageStatuses: ['OK'], stageSeconds: [600], startTimes: ['10:00'] },
+    { className: 'H14', stageStatuses: ['OK'], stageSeconds: [660], startTimes: ['10:01'] },
+    { className: 'H14', stageStatuses: [''], stageSeconds: [null], startTimes: ['10:02'] },
+    { className: 'H14', stageStatuses: ['DNS'], stageSeconds: [null], startTimes: ['10:03'] },
+  ]);
+  const dt = (h, m, s) => new Date(2026, 7, 14, h, m, s || 0);
+  assert('settle: DNS/threats not started → winner locked', P.classTopResultSettled(S.rows(), 1, dt(10, 0, 30)) === true, String(P.classTopResultSettled(S.rows(), 1, dt(10, 0, 30))));
+  assert('settle: on-course runner inside cutoff → open', P.classTopResultSettled(S.rows(), 1, dt(10, 2, 30)) === false, String(P.classTopResultSettled(S.rows(), 1, dt(10, 2, 30))));
+  assert('settle: on-course elapsed ≥ cutoff → locked', P.classTopResultSettled(S.rows(), 1, dt(10, 12, 0)) === true, String(P.classTopResultSettled(S.rows(), 1, dt(10, 12, 0))));
+  assert('settle: top3 uses 2nd place cutoff', P.classTopResultSettled(S.rows(), 3, dt(10, 12, 0)) === false && P.classTopResultSettled(S.rows(), 3, dt(10, 13, 0)) === true, [String(P.classTopResultSettled(S.rows(), 3, dt(10, 12, 0))), String(P.classTopResultSettled(S.rows(), 3, dt(10, 13, 0)))].join(','));
+  assert('settle: no finishers → open', P.classTopResultSettled([{ className: 'H14', stageStatuses: [''], stageSeconds: [null], startTimes: ['10:00'] }], 1, dt(10, 30)) === false, String(P.classTopResultSettled([{ className: 'H14', stageStatuses: [''], stageSeconds: [null], startTimes: ['10:00'] }], 1, dt(10, 30))));
+  const cs = P.computeClassSettlements(dt(10, 12, 0));
+  assert('computeClassSettlements: top1..top10 keys', JSON.stringify(Object.keys(cs.H14 || {}).sort()) === '["top1","top10","top3","top5"]', JSON.stringify(Object.keys(cs.H14 || {})));
+  assert('computeClassSettlements: winner locked, top3 not yet', cs.H14.top1 === true && cs.H14.top3 === false, JSON.stringify(cs.H14));
+
+  // completed race → winners/top results are final truths
+  S.setEventState('Complete');
+  S.setRows([
+    { className: 'H14', stageStatuses: ['OK'], stageSeconds: [600], totalSeconds: 600, startTimes: ['10:00'] },
+    { className: 'H14', stageStatuses: ['OK'], stageSeconds: [660], totalSeconds: 660, startTimes: ['10:01'] },
+    { className: 'H14', stageStatuses: ['OK'], stageSeconds: [700], totalSeconds: 700, startTimes: ['10:02'] },
+    { className: 'H14', stageStatuses: ['DNF'], stageSeconds: [null], totalSeconds: null, startTimes: ['10:03'] },
+  ]);
+  const csDone = P.computeClassSettlements(new Date());
+  assert('settle complete: winner + top3 marked', csDone.H14.top1 === true && csDone.H14.top3 === true, JSON.stringify(csDone.H14));
+  assert('settle complete: top5/10 need enough finishers', csDone.H14.top5 === false && csDone.H14.top10 === false, JSON.stringify(csDone.H14));
+  S.setEventState(null);
+
+  S.setRawData(null);
+  S.setRows([]);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

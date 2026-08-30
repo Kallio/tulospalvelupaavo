@@ -62,6 +62,8 @@
   .class-links .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--fg);text-decoration:none;cursor:pointer;transition:all .12s}
   .class-links .chip:hover{border-color:var(--accent);color:var(--accent)}
   .class-links .chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+  .class-links .chip.settled{border-color:#2e7d32;background:rgba(46,125,50,.08);color:#2e7d32}
+  .class-links .chip.active.settled{background:#2e7d32;border-color:#2e7d32;color:#fff}
 
   .table-wrap{overflow-x:auto;padding:0 24px 24px}
   #results th[data-key="surname"]{width:170px}
@@ -93,6 +95,7 @@
 
   .official-link{color:var(--accent);text-decoration:none;font-size:13px}
   .official-link:hover{text-decoration:underline}
+  .official-note{color:var(--muted);font-size:12px}
 
   @media(max-width:640px){
     .topbar{padding:10px 12px;gap:10px}
@@ -139,7 +142,7 @@
   <label class="filter-radio"><input type="radio" name="topN" value="3" onchange="onTopChange(this.value)"><span>Top 3</span></label>
   <label class="filter-radio"><input type="radio" name="topN" value="5" onchange="onTopChange(this.value)"><span>Top 5</span></label>
   <label class="filter-radio"><input type="radio" name="topN" value="10" onchange="onTopChange(this.value)"><span>Top 10</span></label>
-  <button class="btn btn-outline" onclick="selectedClass=null; updateClassLinkState(); render()" data-loc="btnAllClasses">Näytä kaikki sarjat</button>
+  <button class="btn btn-outline" onclick="clearSelectedClasses(); render()" data-loc="btnAllClasses">Näytä kaikki sarjat</button>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="colorsCheck" checked onchange="toggleColors(this.checked)"><span data-loc="btnColors">Värit</span></label>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="classcolorsCheck" onchange="toggleClassColors(this.checked)"><span data-loc="btnClassColors">Sarjavärit</span></label>
   <label style="display:flex;align-items:center;gap:4px;font-weight:600;cursor:pointer"><input type="checkbox" id="abbrCheck" onchange="toggleAbbr(this.checked)"><span data-loc="btnAbbr">Lyhenne</span></label>
@@ -175,6 +178,9 @@ const LANGS = {
     emptySlug: 'Syötä NaviSport-tapahtuman URL/slug tai UUID',
     statusLoading: 'Ladataan tapahtumaa...',
     statusDone: 'Valmis',
+    statusLive: 'päivittyy automaattisesti',
+    winnerFound: 'sarjan voittaja selvillä',
+    topSettled: 'Parhaat tulokset varmistuneet (sijat: ',
     errLoad: 'Virhe ladattaessa dataa',
     loadingStage: 'Ladataan vaihe',
     fClub: 'Seura:', fSearch: 'Haku:',
@@ -186,6 +192,8 @@ const LANGS = {
     missingEventTitle: 'Tapahtuma puuttuu: URL-parametri eventid ei ole määritelty.',
     missingEventHow: 'Löydät tapahtuman UUID:n Navisport-sivulta: avaa tapahtuman sivu, kopioi UUID URL-osoitteesta ja liitä se tämän sivun ?eventid=-parametriin.',
     officialResults: 'Virallinen tulospalvelusivu',
+    officialNote: 'Tämä on epävirallinen seuranäkymä. Viralliset tulokset:',
+    officialResultsTitle: 'Avautuu uuteen välilehteen',
     clubsMissing: '⚠️ clubs.json-tiedostoa ei löytynyt, hae IRMAsta tiedosto esimerkiksi tällä',
     clubsTool: 'työkalulla.',
     colClass: 'Sarja', colBib: 'Nro', colChip: 'Emit',
@@ -208,6 +216,9 @@ const LANGS = {
     emptySlug: 'Enter a Navisport event URL/slug or UUID',
     statusLoading: 'Loading event...',
     statusDone: 'Done',
+    statusLive: 'auto-refreshing',
+    winnerFound: 'class winner determined',
+    topSettled: 'Top results settled (places: ',
     errLoad: 'Error loading data',
     loadingStage: 'Loading stage',
     fClub: 'Club:', fSearch: 'Search:',
@@ -219,6 +230,8 @@ const LANGS = {
     missingEventTitle: 'Event missing: the eventid URL parameter is not set.',
     missingEventHow: 'Find the event UUID on the Navisport page: open the event page, copy the UUID from the URL and add it to this page\'s ?eventid= parameter.',
     officialResults: 'Official results service',
+    officialNote: 'This is an unofficial club view. Official results:',
+    officialResultsTitle: 'Opens in a new tab',
     clubsMissing: '⚠️ clubs.json not found, fetch it from IRMA e.g. with this',
     clubsTool: 'tool.',
     colClass: 'Class', colBib: 'No', colChip: 'Emit',
@@ -296,7 +309,7 @@ function shareLink() {
   if (sel) p.set('club', sel); else p.delete('club');
   const q = document.getElementById('search').value.trim();
   if (q) p.set('q', q); else p.delete('q');
-  if (selectedClass) p.set('class', selectedClass); else p.delete('class');
+  if (selectedClasses.length) p.set('class', selectedClasses.join(',')); else p.delete('class');
   const url = location.origin + location.pathname + '?' + p.toString();
   const done = () => setStatus(`✓ ${T('shareCopied')}: ${url}`, 'ok');
   const fail = () => setStatus(`${T('shareFailed')}: ${url}`, 'err');
@@ -323,11 +336,17 @@ let rawData = null;
 let rawClubs = null;
 let rows = [];
 let stageCount = 1;
-let selectedClass = null;
+let selectedClasses = [];
 let eventState = null;
 let showColors = true;
 let showClassColors = false;
 let showAbbr = false;
+
+// Live-race results: class top results that are already settled + polling.
+let classSettlements = {};
+let pollTimer = null;
+let pollingNow = false;
+const POLL_INTERVAL_MS = 30000;
 
 const START_PALETTE = [
   { bg: '#ffe9c7', fg: '#4a3000' },
@@ -546,7 +565,7 @@ function decodeParamsIntoUI() {
   const by = p.get('by');
   if (by && Number.isFinite(top)) filterTop = { n: top, by: by.trim().toLowerCase() };
   const classParam = p.get('class');
-  if (classParam) selectedClass = classParam;
+  selectedClasses = (classParam || '').split(',').map(s => s.trim()).filter(Boolean);
   const clubParam = p.get('club');
   const sel = document.getElementById('clubSelect');
   if (clubParam) sel.value = clubParam;
@@ -568,11 +587,11 @@ function parseName(name) {
 }
 
 function parseStartTime(text, eventBegin) {
-  const match = text.match(/^(\d{1,2}).:$/);
+  const match = String(text || '').match(/^(\d{1,2}):(\d{2})$/);
   if (!match || !eventBegin) return null;
-  const [, hh, mm] = match.map(Number);
   const base = new Date(eventBegin);
-  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm);
+  if (Number.isNaN(base.getTime())) return null;
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), Number(match[1]), Number(match[2]));
 }
 
 function formatTime(date) {
@@ -786,13 +805,19 @@ async function loadData(mainJsonOpt) {
     document.title = `${eventName} — ${T('viewByClub')}`;
 
     if (eventId) {
+      const external = document.createElement('span');
+      external.className = 'official-note';
+      external.textContent = T('officialNote') + ' ';
       const link = document.createElement('a');
       link.href = `https://navisport.com/events/${eventId}`;
       link.target = '_blank';
-      link.textContent = T('officialResults');
+      link.rel = 'noopener noreferrer';
+      link.textContent = `${T('officialResults')} ↗`;
+      link.title = T('officialResultsTitle');
       link.className = 'official-link';
       const range = document.getElementById('eventRange');
       range.appendChild(document.createTextNode(' · '));
+      range.appendChild(external);
       range.appendChild(link);
     }
 
@@ -829,11 +854,15 @@ async function loadData(mainJsonOpt) {
     buildClubOptions();
     populateClassLinks();
     render();
+    computeClassSettlements(new Date());
+    populateClassLinks();
     document.getElementById('btnShare').disabled = false;
     document.getElementById('btnCsv').disabled = false;
     const btnPrint = document.getElementById('btnPrint');
     if (btnPrint) btnPrint.disabled = false;
-    setStatus(`${T('statusDone')} — ${rows.length}`, 'ok');
+    const live = (eventState && eventState !== 'Complete') ? ` · ${T('statusLive')}` : '';
+    setStatus(`${T('statusDone')} — ${rows.length}${live}`, 'ok');
+    schedulePoll();
   } catch (err) {
     console.error(err);
     setStatus(`${T('errLoad')}: ${err.message}`, 'err');
@@ -985,6 +1014,92 @@ function showValue(v) { return (v === null || v === undefined || v === '') ? '-'
 
 function hasBibNumbers() { return rows.some(r => String(r.bibNumber ?? '').trim() !== ''); }
 
+// ── Live-race: when are a class's top results "settled"? ──
+// A runner still on the course holds a threat to the top N only while their
+// elapsed time is less than the current top-N cut-off time. Once every
+// on-course runner has already used more time than the cut-off, nobody can
+// finish fast enough to reach the top N → top results are final.
+const FINAL_STATUSES = ['OK', 'DNS', 'DNF', 'MP', 'NQD', 'DSQ', 'DQ', 'WO', 'DISQUALIFIED', 'DID NOT START', 'DID NOT FINISH', 'MISSING', 'OVERTIME', 'OVER TIME'];
+function isActiveThreat(r) {
+  if (r.stageSeconds[0] != null) return false;
+  const st = String(r.stageStatuses[0] || '').trim();
+  if (!st) return true;
+  const up = st.toUpperCase();
+  return !FINAL_STATUSES.some(f => f === up);
+}
+
+function classTopResultSettled(classRows, n, now, complete) {
+  if (!classRows || !classRows.length) return false;
+  const finished = (complete && stageCount > 1)
+    ? classRows.filter(r => r.totalSeconds != null).map(r => r.totalSeconds).sort((a, b) => a - b)
+    : classRows
+        .filter(r => (r.stageStatuses[0] || '').toUpperCase() === 'OK' && r.stageSeconds[0] != null)
+        .map(r => r.stageSeconds[0])
+        .sort((a, b) => a - b);
+  if (!finished.length) return false;
+  if (complete) return finished.length >= n;
+  if (!(now instanceof Date) || isNaN(now)) return false;
+  const cutoff = finished[Math.min(n, finished.length) - 1];
+  for (const r of classRows) {
+    if (!isActiveThreat(r)) continue;
+    const start = parseStartTime(r.startTimes[0] || '', rawData && rawData.begin);
+    if (!(start instanceof Date) || isNaN(start.getTime())) continue;
+    if (now < start) continue;
+    if ((now - start) / 1000 < cutoff) return false;
+  }
+  return true;
+}
+
+function computeClassSettlements(now) {
+  classSettlements = {};
+  if (!rows.length) return classSettlements;
+  const complete = eventState === 'Complete';
+  const liveSingle = !complete && stageCount === 1;
+  if (!complete && !liveSingle) return classSettlements;
+  const byClass = new Map();
+  rows.forEach(r => {
+    const c = r.className || '__no_class__';
+    if (!byClass.has(c)) byClass.set(c, []);
+    byClass.get(c).push(r);
+  });
+  const nowD = (now instanceof Date) ? now : new Date();
+  for (const [cn, list] of byClass.entries()) {
+    classSettlements[cn] = {
+      top1: classTopResultSettled(list, 1, nowD, complete),
+      top3: classTopResultSettled(list, 3, nowD, complete),
+      top5: classTopResultSettled(list, 5, nowD, complete),
+      top10: classTopResultSettled(list, 10, nowD, complete),
+    };
+  }
+  return classSettlements;
+}
+
+// ── Live-race: auto-refresh results while the event is ongoing ──
+function schedulePoll() {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  if (eventState === 'Complete' || !eventId) return;
+  if (document.hidden) { pollTimer = setTimeout(schedulePoll, POLL_INTERVAL_MS); return; }
+  pollTimer = setTimeout(pollEventData, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  pollingNow = false;
+}
+
+async function pollEventData() {
+  if (pollingNow) return;
+  pollingNow = true;
+  try {
+    await loadData();
+  } catch (e) {
+    console.warn('Poll failed', e);
+  } finally {
+    pollingNow = false;
+    schedulePoll();
+  }
+}
+
 function stageResultsCount(allResults) { return allResults.length || 1; }
 
 function prepareRowsMultistage(allResults, mainCourseClasses) {
@@ -1037,14 +1152,13 @@ function prepareRowsMultistage(allResults, mainCourseClasses) {
     item.className = Array.from(item.classNames).length === 1 ? Array.from(item.classNames)[0] : Array.from(item.classNames).join(' / ');
     const allHaveTime = item.stageSeconds.every(s => s != null);
     const allOk = item.stageStatuses.every(st => (st || '').toUpperCase() === 'OK');
+    item.status = item.stageStatuses.filter(Boolean).join(' | ');
     if (allHaveTime && allOk) {
       item.totalSeconds = item.stageSeconds.reduce((a, b) => a + b, 0);
       item.totalTime = formatSeconds(item.totalSeconds);
-      item.status = 'OK';
     } else {
       item.totalSeconds = null;
       item.totalTime = item.stageTimes.map(t => t || '').join(' | ');
-      item.status = item.stageStatuses.filter(Boolean).join(' | ');
     }
     item.resultRank = '';
     item.stageTimes = item.stageTimes.map(t => t || '');
@@ -1115,22 +1229,36 @@ function prepareRowsMultistage(allResults, mainCourseClasses) {
 function populateClassLinks() {
   const container = document.getElementById('classLinks');
   container.innerHTML = '';
-  const allClasses = rows
-    .flatMap(r => (r.className || '').split('/'))
-    .map(c => c.trim())
-    .filter(Boolean);
+  const allClasses = rows.flatMap(classNamesOf);
   const uniqueClasses = [...new Set(allClasses)].sort((a, b) => a.localeCompare(b));
   uniqueClasses.forEach(cn => {
     const a = document.createElement('a');
     a.href = '#';
-    a.className = 'chip' + (selectedClass === cn ? ' active' : '');
-    a.textContent = cn;
+    a.className = 'chip' + (selectedClasses.includes(cn) ? ' active' : '');
+    const s = classSettlements[cn];
+    let label = cn;
+    let title = '';
+    if (s && s.top1) {
+      a.classList.add('settled');
+      label += ' ✓';
+      title = `${cn} — ${T('winnerFound')}`;
+    } else if (s) {
+      const marks = [];
+      if (s.top3) marks.push('3');
+      if (s.top5) marks.push('5');
+      if (s.top10) marks.push('10');
+      if (marks.length) {
+        label += ` ·${marks.join('·')}`;
+        title = `${cn} — ${T('topSettled')}${marks.join(', ')})`;
+      }
+    }
+    a.textContent = label;
+    if (title) a.title = title;
     a.addEventListener('click', e => {
       e.preventDefault();
-      selectedClass = cn;
-      const p = new URLSearchParams(location.search);
-      p.set('class', cn);
-      history.replaceState(null, '', location.pathname + '?' + p.toString());
+      const idx = selectedClasses.indexOf(cn);
+      if (idx >= 0) selectedClasses.splice(idx, 1);
+      else selectedClasses.push(cn);
       updateClassLinkState();
       render();
     });
@@ -1138,11 +1266,22 @@ function populateClassLinks() {
   });
 }
 
+function classNamesOf(r) {
+  return String(r.className || '').split('/').map(c => c.trim()).filter(Boolean);
+}
+
 function updateClassLinkState() {
   const p = new URLSearchParams(location.search);
-  if (selectedClass) p.set('class', selectedClass); else p.delete('class');
+  if (selectedClasses.length) p.set('class', selectedClasses.join(','));
+  else p.delete('class');
   history.replaceState(null, '', location.pathname + '?' + p.toString());
   populateClassLinks();
+}
+
+function clearSelectedClasses() {
+  selectedClasses = [];
+  updateClassLinkState();
+  render();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1153,7 +1292,7 @@ function getFilteredRows() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   let filtered = rows.filter(r => {
     if (selClub && r.club !== selClub) return false;
-    if (selectedClass && r.className !== selectedClass) return false;
+    if (selectedClasses.length && !classNamesOf(r).some(cn => selectedClasses.includes(cn))) return false;
     if (!q) return true;
     return [r.surname, r.givenName, String(r.bibNumber), r.chip, r.className, r.club, r.totalTime, r.resultRank, r.status]
       .some(v => String(v || '').toLowerCase().includes(q));
@@ -1232,7 +1371,7 @@ function render() {
   const countDiv = document.getElementById('countInfo');
   if (countDiv) {
     const club = selClub;
-    let label = selectedClass || '';
+    let label = selectedClasses.join(', ');
     if (club) label += (label ? ' – ' : '') + club;
     countDiv.textContent = Tf('cntSel', filtered.length) + (label ? ' – ' + label : '');
   }
