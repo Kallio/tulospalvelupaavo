@@ -87,6 +87,7 @@ assert('digits face the 67mm edge (rotate 90°)', html.includes('rotate(90deg)')
 assert('two dotted fold lines per part (thirds)', html.includes('.part .fold') && html.includes('border-left: 0.2mm dotted') && /\[PART_W \/ 3, \(2 \* PART_W\) \/ 3\]/.test(html));
 assert('title typo: tolppa not töppä', html.includes('olppa') && !html.includes('öppä') && html.includes('Tolpparastinumero'));
 assert('Arial Narrow font used', html.includes("'Arial Narrow'"));
+assert('condensed fallback list for Windows (Arial Narrow may be missing)', html.includes('Roboto Condensed') && html.includes('Liberation Sans Narrow') && html.includes("'Helvetica Neue Condensed'"));
 assert('130pt font size base', html.includes('130'));
 assert('4-part fixed default', html.includes('DEFAULT_PER_SHEET = 4'));
 assert('@page size A4 portrait', html.includes('@page { size: A4 portrait'));

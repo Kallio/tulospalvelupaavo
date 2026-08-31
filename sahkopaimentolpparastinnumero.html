@@ -72,7 +72,13 @@
   .part {
     position: absolute;
     width: 150mm; height: 67mm;
-    font-family: 'Arial Narrow', Arial, sans-serif;
+    /* Prefer Arial Narrow (and its Bundled/Office variants, which are the
+     * names Windows exposes) for the condensed label look; fall back through
+     * other narrow/condensed families before landing on plain Arial. The
+     * number font auto-shrinks, so any of these still fits the label. */
+    font-family: 'Arial Narrow', 'Arial Narrow Bold', 'Helvetica Neue Condensed',
+                 'HelveticaNeue-CondensedBold', 'Roboto Condensed', 'Liberation Sans Narrow',
+                 Arial, sans-serif;
   }
   /* solid outer border (per part) */
   .part::after {
