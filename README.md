@@ -381,20 +381,14 @@ at once), so a list of N numbers produces
 ceil(N/4) pages filled top-to-bottom.
 
 The number font auto-shrinks to fit its half-lappu box, so any length of
-number stays on the label. The number per page is fixed at the 4-lappu
-maximum (the only sensible layout for a 210&nbsp;mm-wide sheet), and you can
-toggle whether to draw the solid border + two fold lines.
-The blank middle panel of every lappu shows a **QR code by default**
-(pre-embedded vector, no runtime encoder) pointing to
-`kallio.github.io/tulospalvelupaavo` — so it works fully offline with no
-network. Optionally pick a local logo image (the file browser in the sidebar)
-to replace the QR with your club logo. You can also load your own number font
-(`.ttf/.otf/.woff/.woff2`) — it replaces the default Arial Narrow for the
-label digits and auto-shrinks to fit.
-These labels also pair with a **3D-printed mount** for the Emit reader:
-print the model [`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
-and bolt the Emit reader onto it with screws and nuts. A link to download the
-STL sits in the sidebar right by the print button.
+number stays on the label. The blank middle panel of every lappu shows a
+**QR code by default** (pre-embedded vector, no runtime encoder) pointing to
+`kallio.github.io/tulospalvelupaavo`; you can replace it with a local logo
+file (the sidebar file browser) or load your own number font
+(`.ttf/.otf/.woff/.woff2`). These labels also pair with a **3D-printed mount**
+for the Emit reader: print the model
+[`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
+and bolt the reader onto it with screws and nuts.
 Offline — no
 dependencies, works straight from `file://`. Press the
 **"Tulosta / Tallenna A4-PDF"** button and use the browser's *Save as PDF*
