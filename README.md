@@ -388,7 +388,9 @@ The blank middle panel of every lappu shows a **QR code by default**
 (pre-embedded vector, no runtime encoder) pointing to
 `kallio.github.io/tulospalvelupaavo` — so it works fully offline with no
 network. Optionally pick a local logo image (the file browser in the sidebar)
-to replace the QR with your club logo.
+to replace the QR with your club logo. You can also load your own number font
+(`.ttf/.otf/.woff/.woff2`) — it replaces the default Arial Narrow for the
+label digits and auto-shrinks to fit.
 Offline — no
 dependencies, works straight from `file://`. Press the
 **"Tulosta / Tallenna A4-PDF"** button and use the browser's *Save as PDF*

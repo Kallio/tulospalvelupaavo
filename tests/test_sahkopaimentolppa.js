@@ -106,6 +106,10 @@ assert('QR shown when no logo file selected', html.includes("!el('logoFile').fil
 assert('QR SVG gets explicit mm size (fixes invisible auto-height SVG)', html.includes('.part .logo svg') && html.includes('34mm'));
 assert('numbers limited to 3 digits', html.includes('.filter(function (s) { return s.length <= 3; })'));
 assert('over-long numbers warned in summary', html.includes('hylättiin (yli 3 merkkiä)') && html.includes('state.skipped'));
+assert('custom font file input present', html.includes('id="fontFile"') && html.includes('accept=".ttf,.otf,.woff,.woff2"'));
+assert('custom font style override element', html.includes('id="custom-font-style"'));
+assert('custom font loaded via FontFace (ArrayBuffer from base64, no raw data URL)', html.includes('new FontFace(family, base64ToArrayBuffer(') && html.includes('document.fonts.add'));
+assert('custom font reset available', html.includes('resetCustomFont'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

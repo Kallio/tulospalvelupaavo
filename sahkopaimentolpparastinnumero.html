@@ -130,6 +130,7 @@
     shape-rendering: crispEdges;
   }
 </style>
+<style id="custom-font-style"></style>
 </head>
 <body>
 
@@ -150,6 +151,10 @@
     <input type="file" id="logoFile" accept="image/*">
     <div class="hint">Oletuksena lapussa on QR-koodi osoitteeseen kallio.github.io/tulospalvelupaavo. Valitsemalla tiedoston saat sen tilalle. Tyhjä lomake nollaa oletuksen.</div>
     <label class="condenses"><input type="checkbox" id="showBorders" checked> Näytä kehykset ja taitoviivat</label>
+    <label for="fontFile">Oma fontti (ttf/otf/woff/woff2)</label>
+    <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2">
+    <div id="fontStatus" class="hint" style="color:#7ec8e3;display:none;"></div>
+    <button class="bs btn-sm" id="resetFontBtn" style="display:none;margin-top:6px;" type="button">Palauta oletusfontti</button>
   </div>
 
   <div class="ps">
@@ -272,6 +277,68 @@ function loadLogo() {
   reader.readAsDataURL(f);
 }
 
+/* Optional custom font (ttf/otf/woff/woff2) for the label numbers, matching
+ * the bib generator's approach: register the font with FontFace, then point
+ * a <style> block's .part font-family at it. Using a style element means the
+ * font survives re-renders and prints. fitFont() auto-shrinks to the real
+ * measured width, so any font still fits the label. The base64 data URL is
+ * decoded into a Uint8Array buffer, which FontFace accepts (passing the raw
+ * data URL string fails in Chrome with "Invalid source url"). */
+function base64ToArrayBuffer(b64) {
+  var bin = atob(b64);
+  var u8 = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8.buffer;
+}
+
+function applyCustomFontFromDataUrl(fileName, family, dataUrl) {
+  document.getElementById('custom-font-style').textContent =
+    ".part { font-family: '" + family + "', sans-serif; }";
+  if (typeof FontFace === 'undefined' || !document.fonts) {
+    renderAll();
+    return;
+  }
+  var face = new FontFace(family, base64ToArrayBuffer(dataUrl.slice(dataUrl.indexOf(',') + 1)));
+  face.load().then(function () {
+    document.fonts.add(face);
+    document.getElementById('fontStatus').style.display = 'block';
+    document.getElementById('fontStatus').style.color = '#6a6';
+    document.getElementById('fontStatus').textContent = 'Fontti: ' + fileName;
+    document.getElementById('resetFontBtn').style.display = 'block';
+    renderAll();
+  }).catch(function (e) {
+    document.getElementById('fontStatus').style.display = 'block';
+    document.getElementById('fontStatus').style.color = '#e94560';
+    document.getElementById('fontStatus').textContent = 'Fontin lataus epäonnistui: ' + (e && e.message || e);
+  });
+}
+
+function loadCustomFont(input) {
+  var f = input.files && input.files[0];
+  if (!f) return;
+  var statusEl = document.getElementById('fontStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#7ec8e3';
+  statusEl.textContent = 'Ladataan…';
+  var reader = new FileReader();
+  reader.onload = function () {
+    applyCustomFontFromDataUrl(f.name, f.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_'), reader.result);
+  };
+  reader.onerror = function () {
+    statusEl.style.color = '#e94560';
+    statusEl.textContent = 'Tiedoston lukeminen epäonnistui';
+  };
+  reader.readAsDataURL(f);
+}
+
+function resetCustomFont() {
+  document.getElementById('custom-font-style').textContent = '';
+  document.getElementById('fontStatus').style.display = 'none';
+  document.getElementById('resetFontBtn').style.display = 'none';
+  if (el('fontFile')) el('fontFile').value = '';
+  renderAll();
+}
+
 function renderStatus() {
   var n = state.numbers.length;
   var sheets = chunkNumbers(state.numbers, DEFAULT_PER_SHEET).length;
@@ -380,6 +447,8 @@ function init() {
     state.showBorders = el('showBorders').checked;
     renderAll();
   });
+  el('fontFile').addEventListener('change', function () { loadCustomFont(this); });
+  el('resetFontBtn').addEventListener('click', resetCustomFont);
   el('printBtn').addEventListener('click', function () { window.print(); });
   update();
 }

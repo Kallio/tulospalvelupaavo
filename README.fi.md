@@ -392,7 +392,9 @@ Jokaisen lapun tyhjässä keskimmäisessä ruudussa on oletuksena **QR-koodi**
 (esikäännetty vektorigrafiikka, ei ajonaikaista koodaajaa) osoitteeseen
 `kallio.github.io/tulospalvelupaavo` — toimii täysin myös offline ilman
 verkkoa. Voit halutessasi valita paikallisen logotiedoston (sivupalkin
-tiedostonvalitsin), joka korvaa QR-koodin seuran logolla.
+tiedostonvalitsin), joka korvaa QR-koodin seuran logolla. Numerofontin voi
+myös korvata omalla tiedostolla (`.ttf/.otf/.woff/.woff2`) — se korvaa
+oletusfontin (Arial Narrow) ja pienenee automaattisesti mahtuakseen lapun.
 Toimii ilman
 riippuvuuksia suoraan `file://`-tiedostosta. Paina **"Tulosta /
 Tallenna A4-PDF"** -nappia ja käytä selaimen *Save as PDF* -toimintoa
