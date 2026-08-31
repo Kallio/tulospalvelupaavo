@@ -385,20 +385,14 @@ rako, joten kerralla voi pilata korkeintaan kaksi lappua), joten N numeroa
 tuottaa ceil(N/4) sivua täytettynä ylhäältä alas.
 
 Numeron fontti pienenee automaattisesti mahtuakseen laapunpuolikkaaseen, joten
-minkä tahansa pituinen numero pysyy lapussa. Lappujen määrä per sivu on
-kiinnitetty 4:n (210&nbsp;mm:n levyiselle arkille ainoa järkevä asettelu), ja
-voit valita näytetäänkö kehys + kaksi taitokatkoviivaa.
-Jokaisen lapun tyhjässä keskimmäisessä ruudussa on oletuksena **QR-koodi**
-(esikäännetty vektorigrafiikka, ei ajonaikaista koodaajaa) osoitteeseen
-`kallio.github.io/tulospalvelupaavo` — toimii täysin myös offline ilman
-verkkoa. Voit halutessasi valita paikallisen logotiedoston (sivupalkin
-tiedostonvalitsin), joka korvaa QR-koodin seuran logolla. Numerofontin voi
-myös korvata omalla tiedostolla (`.ttf/.otf/.woff/.woff2`) — se korvaa
-oletusfontin (Arial Narrow) ja pienenee automaattisesti mahtuakseen lapun.
-Näille lapuille on myös tarjolla **3D-tulostettu kiinnike** Emit-lukijalle:
-tulosta malli [`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
-ja kiinnitä Emit-lukija siihen ruuveilla ja muttereilla. Sivupalkissa on linkki
-STL:n lataamiseen tulostussivun yhteydessä.
+minkä tahansa pituinen numero pysyy lapussa. Jokaisen lapun tyhjässä
+keskimmäisessä ruudussa on oletuksena **QR-koodi** (esikäännetty vektorigrafiikka,
+ei ajonaikaista koodaajaa) osoitteeseen `kallio.github.io/tulospalvelupaavo`;
+voit korvata sen paikallisella logotiedostolla (sivupalkin tiedostonvalitsin)
+tai asettaa oman numerofontin (`.ttf/.otf/.woff/.woff2`). Näille lapuille on
+myös tarjolla **3D-tulostettu kiinnike** Emit-lukijalle: tulosta malli
+[`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
+ja kiinnitä lukija siihen ruuveilla ja muttereilla.
 Toimii ilman
 riippuvuuksia suoraan `file://`-tiedostosta. Paina **"Tulosta /
 Tallenna A4-PDF"** -nappia ja käytä selaimen *Save as PDF* -toimintoa
