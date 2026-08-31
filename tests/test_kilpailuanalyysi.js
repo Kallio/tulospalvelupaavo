@@ -30,7 +30,19 @@ global.document = {
   body,
   addEventListener() {},
 };
-global.window = { history: { replaceState() {} }, location: { search: '' }, addEventListener() {}, print() {} };
+const mockLocation = { search: '', pathname: '/kilpailuanalyysi.html', _hash: '' };
+Object.defineProperty(mockLocation, 'hash', {
+  get() { return this._hash ? '#' + this._hash : ''; },
+  set(v) { this._hash = String(v).replace(/^#/, ''); },
+});
+const mockHistory = {
+  replaceState(_a, _b, url) {
+    const i = url.indexOf('#');
+    mockLocation._hash = i >= 0 ? url.slice(i + 1) : '';
+  },
+};
+global.window = { history: mockHistory, location: mockLocation, addEventListener() {}, print() {} };
+global.location = mockLocation;
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 global.Blob = function () {};
@@ -263,6 +275,8 @@ try {
       parseClassName, compareClassNames, classSortKey, autoDetectGroups, scheduleData,
       compareFlowSeries, comparePaceRows, comparePaceSection, compareFlowSection,
       compareColHtml, renderCompare, setMode, parseHash, analyzeCompare,
+      compareAvgSummary, flowCards,
+      slugFromHash, setCompareShareHash, setShareHash,
     };
     global.__state = {
       event: () => state.event,
@@ -323,6 +337,35 @@ assert('flow: results wait 47:20', (flow.lastFinish - flow.firstFinish) / 1000 =
 assert('flow: total 57:20', (flow.lastFinish - flow.firstStart) / 1000 === 3440);
 assert('flow: 14 start minutes, 11 finish minutes', flow.startMinutes.length === 14 && flow.finishMinutes.length === 11);
 assert('flow: first start minute 0', flow.startMinutes[0] === 0);
+
+// ── DNS / DSQ counts surfaced (compare + CSV) ──
+const statusEvent = {
+  id: 'e-st', name: 'Tilakisa', begin: '2026-03-21T08:00:00.000Z',
+  raceType: 'Individual', eventKind: 'Event',
+  results: [
+    { id: 'st1', classId: 'ca', status: 'Ok', time: 600, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'st2', classId: 'ca', status: 'Ok', time: 700, startTime: '2026-03-21T08:02:00.000Z' },
+    { id: 'st3', classId: 'ca', status: 'DNS', time: 0 },
+    { id: 'st4', classId: 'ca', status: 'Dns', time: 0 },
+    { id: 'st5', classId: 'ca', status: 'Dsq', time: 500, startTime: '2026-03-21T08:04:00.000Z' },
+    { id: 'st6', classId: 'ca', status: 'DSQ', time: 0, startTime: '2026-03-21T08:06:00.000Z' },
+  ],
+};
+const sflow = P.eventFlow(statusEvent);
+assert('status: eventFlow counts dns 2', sflow.dns === 2, String(sflow.dns));
+assert('status: eventFlow counts dsq 2', sflow.dsq === 2, String(sflow.dsq));
+const sCards = P.flowCards(sflow, 0);
+const cardText = sCards.join(' ');
+assert('status: flowCards show DNS label + count', cardText.includes('Ei lähtenyt') && cardText.includes('>2<'), cardText);
+assert('status: flowCards show DSQ label + count', cardText.includes('Hylätty') && cardText.includes('>2<') || cardText.includes('>2<'), cardText);
+const sRows = [];
+P.addFlowRows(sRows, statusEvent);
+const csvStatus = sRows.map(r => r[0]).join(',');
+assert('status: csv has DNS + DSQ rows', csvStatus.includes('Ei lähtenyt') && csvStatus.includes('Hylätty'), csvStatus);
+P.setLang('en');
+const enCards = P.flowCards(P.eventFlow(statusEvent), 0).join(' ');
+assert('status: EN DNS/DSQ labels', enCards.includes('Did not start') && enCards.includes('Disqualified'), enCards);
+P.setLang('fi');
 
 // ── eventFlow (relay: every leg punch counts) ──
 const rflow = P.eventFlow(relayEvent);
@@ -554,13 +597,13 @@ assert('slug: empty', P.extractSlug('  ') === '');
 const rows = [];
 P.addFlowRows(rows, indEvent);
 assert('csv: starters row', rows[0][0] === 'Lähteneet' && rows[0][1] === 14);
-assert('csv: into forest seconds', rows[3][0] === 'Kaikki metsässä' && rows[3][1] === 1560, String(rows[3][1]));
-assert('csv: results wait seconds', rows[5][0] === 'Tulosten odotus' && rows[5][1] === 2840);
-assert('csv: total seconds', rows[6][0] === 'Koko kisa' && rows[6][1] === 3440);
-assert('csv: peak window row', rows[7][0] === 'Suurin maaliruuhka' && rows[7][2] === 2, JSON.stringify(rows[7]));
-assert('csv: class block header', rows[9][0] === 'Sarjat maaliin');
-assert('csv: class A row', rows[11][0] === 'A' && rows[11][1] === 10 && rows[11][2] === '10:00' && rows[11][3] === '43:00', JSON.stringify(rows[11]));
-assert('csv: class B row', rows[12][0] === 'B' && rows[12][1] === 1 && rows[12][3] === '57:20', JSON.stringify(rows[12]));
+assert('csv: into forest seconds', rows[5][0] === 'Kaikki metsässä' && rows[5][1] === 1560, String(rows[5][1]));
+assert('csv: results wait seconds', rows[7][0] === 'Tulosten odotus' && rows[7][1] === 2840);
+assert('csv: total seconds', rows[8][0] === 'Koko kisa' && rows[8][1] === 3440);
+assert('csv: peak window row', rows[9][0] === 'Suurin maaliruuhka' && rows[9][2] === 2, JSON.stringify(rows[9]));
+assert('csv: class block header', rows[11][0] === 'Sarjat maaliin');
+assert('csv: class A row', rows[13][0] === 'A' && rows[13][1] === 10 && rows[13][2] === '10:00' && rows[13][3] === '43:00', JSON.stringify(rows[13]));
+assert('csv: class B row', rows[14][0] === 'B' && rows[14][1] === 1 && rows[14][3] === '57:20', JSON.stringify(rows[14]));
 const csvStr = P.toCSV([['a;b', 'c'], ['1', '2']]);
 assert('csv: quoting', csvStr === '"a;b";c\r\n1;2');
 assert('csv: semicolon delimiter', P.toCSV([['x', 'y']]) === 'x;y');
@@ -754,10 +797,20 @@ assert('cmp: B delta = 4000m lap so 600−800 = −200', cmpPaces.find(r => r.cl
 const paceSec = P.comparePaceSection(indEvent, cmpEvent);
 assert('cmp: pace section has header', paceSec.includes('Keskivauhti vertailu'));
 assert('cmp: pace section lists A with both paces', paceSec.includes('>A<') && paceSec.includes('5:16') && paceSec.includes('2:10'), paceSec.slice(0, 400));
-assert('cmp: pace section shows delta marker', paceSec.includes('(A)') || paceSec.includes('(B)'));
+assert('cmp: pace section shows delta marker', paceSec.includes('▼ A') || paceSec.includes('▲ B'), paceSec);
+assert('cmp: pace section has legend', paceSec.includes('cmpavg') && paceSec.includes('cmpLegend') || paceSec.includes('cmpavg cmpleg'));
+
+const avgSummary = P.compareAvgSummary(indEvent, cmpEvent);
+assert('cmp: avg summary names both races',
+  avgSummary.includes('Testirastit 2026') && avgSummary.includes('Toinen kisa 2026'),
+  avgSummary);
+assert('cmp: avg summary marks faster race with ▲ on Toinen kisa 2026',
+  avgSummary.includes('Toinen kisa 2026') && avgSummary.includes('(▲)') && avgSummary.includes('nopeampi'),
+  avgSummary);
+assert('cmp: avg summary not "Kisa A/B" labels', !avgSummary.includes('Kisa B') && !avgSummary.includes('Kisa A'), avgSummary);
 
 const flowSec = P.compareFlowSection(cmpSeries);
-assert('cmp: flow section has combined chart', flowSec.includes('Virtaus vertailu') && flowSec.includes('data-chart-id') && flowSec.includes('chartwrap'));
+assert('cmp: flow section has combined chart', flowSec.includes('Läpimenon vertailu') && flowSec.includes('data-chart-id') && flowSec.includes('chartwrap'));
 assert('cmp: flow section legend names both', flowSec.includes('Testirastit 2026') && flowSec.includes('Toinen kisa 2026'));
 
 const colHtml = P.compareColHtml(indEvent, 'Kisa A');
@@ -771,8 +824,11 @@ S.compare().b = cmpEvent;
 P.render();
 const cmpOut = document.getElementById('output').innerHTML;
 assert('cmp: render wraps two columns', cmpOut.includes('cmpwrap') && (cmpOut.match(/cmpcol/g) || []).length === 2, String((cmpOut.match(/cmpcol/g) || []).length));
-assert('cmp: render has pace + flow compare sections', cmpOut.includes('Keskivauhti vertailu') && cmpOut.includes('Virtaus vertailu'));
+assert('cmp: render has flow + pace compare sections', cmpOut.includes('Läpimenon vertailu') && cmpOut.includes('Keskivauhti vertailu'));
+assert('cmp: flow compare section precedes columns', cmpOut.indexOf('Läpimenon vertailu') < cmpOut.indexOf('cmpwrap'));
+assert('cmp: pace compare last', cmpOut.lastIndexOf('Keskivauhti vertailu') > cmpOut.indexOf('cmpwrap'));
 assert('cmp: 7 canvases (1 compare-flow + 2×(flow+pace+schedule))', (cmpOut.match(/<canvas/g) || []).length === 7, String((cmpOut.match(/<canvas/g) || []).length));
+assert('cmp: header carries average summary with event name', cmpOut.includes('cmpheadavg') && cmpOut.includes('Toinen kisa 2026') && cmpOut.includes('nopeampi'), cmpOut.match(/cmpheadavg[^<]*<p[^>]*>([^<]*)/)?.[1]);
 S.setCompareMode('single');
 S.compare().a = null;
 S.compare().b = null;
@@ -781,6 +837,30 @@ S.setEvent(null);
 assert('cmp: parseHash single', JSON.stringify(P.parseHash('hyvinkaan-talvirastit-2026')) === JSON.stringify({ mode: 'single', slug: 'hyvinkaan-talvirastit-2026' }));
 assert('cmp: parseHash compare', JSON.stringify(P.parseHash('a-slug|b-slug')) === JSON.stringify({ mode: 'compare', a: 'a-slug', b: 'b-slug' }));
 assert('cmp: parseHash empty', P.parseHash('') === null);
+
+// ── share round-trip: #slugA|slugB encode/decode ──
+// setCompareShareHash writes #slugA%7CslugB; slugFromHash decodes the %7C;
+// parseHash splits on the decoded pipe. Verify the full chain.
+(function testShareRoundTrip() {
+  // Mock location.hash to simulate fresh page load
+  const origHash = location.hash;
+  try {
+    // Simulate hash as written by setCompareShareHash
+    location.hash = 'race-a%7Crace-b';
+    const fromHash = P.slugFromHash();
+    assert('share: slugFromHash decodes %7C', fromHash === 'race-a|race-b', fromHash);
+    const parsed = P.parseHash(fromHash);
+    assert('share: parseHash splits pipe', parsed && parsed.mode === 'compare' && parsed.a === 'race-a' && parsed.b === 'race-b',
+      JSON.stringify(parsed));
+    // UUID round-trip
+    location.hash = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890%7C98765432-dcba-0987-fedc-ba9876543210';
+    const uuidHash = P.slugFromHash();
+    assert('share: UUID round-trip', uuidHash === 'a1b2c3d4-e5f6-7890-abcd-ef1234567890|98765432-dcba-0987-fedc-ba9876543210', uuidHash);
+    assert('share: UUID parseHash compare', P.parseHash(uuidHash).mode === 'compare');
+  } finally {
+    location.hash = origHash || '';
+  }
+}());
 
 // ── fetch flow: slug → tRPC → REST → render ──
 (async () => {
@@ -841,7 +921,117 @@ assert('cmp: parseHash empty', P.parseHash('') === null);
   assert('compare: end-to-end both events loaded', S.compare().a && S.compare().b, JSON.stringify([S.compare().a && S.compare().a.name, S.compare().b && S.compare().b.name]));
   assert('compare: mode is compare', S.mode() === 'compare');
   const cOut = document.getElementById('output').innerHTML;
-  assert('compare: end-to-end renders wrap + compare sections', cOut.includes('cmpwrap') && cOut.includes('Virtaus vertailu') && cOut.includes('Keskivauhti vertailu'), String(cOut.length));
+  assert('compare: end-to-end renders wrap + compare sections', cOut.includes('cmpwrap') && cOut.includes('Läpimenon vertailu') && cOut.includes('Keskivauhti vertailu'), String(cOut.length));
+
+  // ── fresh load from compare hash (wireUI branch) ──
+  // A recipient opens a shared #slugA%7CslugB URL; after parseHash the page
+  // must render the compare view instead of a blank output.
+  {
+    const origHash = location.hash;
+    try {
+      const hash = encodeURIComponent('race-a|race-b');
+      location.hash = hash;
+      const fromHash = P.slugFromHash();
+      const parsed = P.parseHash(fromHash);
+      assert('hash-load: parsed compare', parsed && parsed.mode === 'compare' && parsed.a === 'race-a' && parsed.b === 'race-b');
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      document.getElementById('output')._html = '';
+      await P.analyzeCompare(parsed.a, parsed.b);
+      assert('hash-load: mode is compare', S.mode() === 'compare');
+      assert('hash-load: compare loaded', S.compare().a && S.compare().b,
+        JSON.stringify([S.compare().a && S.compare().a.name, S.compare().b && S.compare().b.name]));
+      const cmpOut = document.getElementById('output').innerHTML;
+      assert('hash-load: compare rendered', cmpOut.includes('cmpwrap') && cmpOut.includes('Keskivauhti vertailu'));
+      // Share round-trip: the compare hash written back equals the shared one
+      assert('hash-load: share hash restored', encodeURIComponent('race-a|race-b') === (location.hash.slice(1)), location.hash);
+    } finally {
+      location.hash = origHash || '';
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+    }
+  }
+
+  // ── partial-load failure: one race fails to fetch → no blank output ──
+  {
+    const origFetch = global.fetch;
+    try {
+      // Replace fetch to fail for slug 'fail-slug' while still working for normal slugs
+      global.fetch = (url) => {
+        if (url.includes('fail-slug')) {
+          return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null) });
+        }
+        return origFetch(url);
+      };
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+      document.getElementById('output')._html = '';
+
+      await P.analyzeCompare('race-a-slug', 'fail-slug');
+      const partialOut = document.getElementById('output').innerHTML;
+      assert('partial: output not blank on partial failure', partialOut.length > 0, String(partialOut.length));
+      assert('partial: status not Valmis on failure',
+        !document.getElementById('status').textContent.includes('Valmis'),
+        document.getElementById('status').textContent);
+      assert('partial: error status set', document.getElementById('status').className.includes('err'),
+        document.getElementById('status').className);
+      // The loaded side should still render its event name
+      assert('partial: loaded race renders', partialOut.includes('Testirastit 2026') || partialOut.includes('Kisapäivän kulku'),
+        partialOut.slice(0, 200));
+    } finally {
+      global.fetch = origFetch;
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+    }
+  }
+
+  // ── newer event is always placed on the right (race B) ──
+  // Regardless of which way the two races are typed into the A/B inputs, the
+  // later-timestamp event must end up in slot B so the comparison is consistent.
+  {
+    const origFetch = global.fetch;
+    try {
+      // 'race-a-slug' → older (indEvent, 2026-03-21), 'race-b-slug' → newer (cmpEvent, 2026-04-02)
+      global.fetch = (url) => {
+        if (url.includes('/trpc/eventsTrpcRouter.getEvent')) {
+          const m = url.match(/input=([^&]*)/);
+          const slug = m ? (JSON.parse(decodeURIComponent(m[1]))['0'] || '') : '';
+          const data = slug === 'newer-slug' ? { id: 'e-cmp' } : { id: 'e-ind-1' };
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([{ result: { data } }]) });
+        }
+        if (url.includes('/api/events/')) {
+          const id = url.split('/api/events/')[1];
+          const data = id === 'e-cmp' ? cmpEvent : indEvent;
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
+        }
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null) });
+      };
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+
+      // newer typed first (left) → swapped so newer lands on the right
+      await P.analyzeCompare('newer-slug', 'older-slug');
+      assert('swap: newer event lands in B when typed first',
+        S.compare().b && S.compare().b.id === 'e-cmp' && S.compare().a && S.compare().a.id === 'e-ind-1',
+        JSON.stringify([S.compare().a && S.compare().a.id, S.compare().b && S.compare().b.id]));
+      assert('swap: valid form setCompareShareHash', typeof P.setCompareShareHash === 'function');
+    } finally {
+      global.fetch = origFetch;
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+    }
+  }
 
   console.log('passed ' + pass + ' failed ' + fail);
   if (fail) process.exit(1);

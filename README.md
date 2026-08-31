@@ -433,7 +433,10 @@ a combined per-class pace table (min/km for shared classes, with the delta and
 which race is faster). Because the overlay is relative to each race's own first
 start, an interval middle-distance race and a long-distance race are directly
 comparable in shape. Enter two slugs/URLs (e.g. a UUID and a `/tapahtumat/...`
-URL) — the compare link is also shareable (`#slugA|slugB`).
+URL) — the compare link is also shareable (`#slugA|slugB`). Opening a shared
+compare link reloads both races; if one race fails to load, the page still
+renders the successfully loaded race and surfaces the failing one instead of
+showing a blank analysis.
 
 Exports the full report as CSV, prints cleanly, and can generate a shareable
 link that reloads the same analysis. UI available in Finnish and English.

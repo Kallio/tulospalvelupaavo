@@ -216,9 +216,24 @@
   .cmplegend .clsw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
   .pacetype { text-transform: uppercase; letter-spacing: 0.6px; font-size: 10px; color: var(--muted); }
 
+  /* Race B column gets a soft warm (red) tint so the two columns are told
+     apart at a glance and match the overlay chart's race colors. The tint is
+     light enough to stay easy on the eyes while still scannable. */
+  .cmpcol.b .evhead { border-left-color: #e15759; }
+  .cmpcol.b .cmptag { background: #e15759; }
+  .cmpcol.b .cmphdr .cmpname { color: #c9444f; }
+  .cmpcol.b .card, .cmpcol.b .panel { background: #fffdfb; border-color: #f3d9da; }
+  .cmpcol.b .phead { color: #b83a45; }
+  .cmpcol.b .card h4, .cmpcol.b .panel > p, .cmpcol.b .panel .empty { color: #a06a70; }
+
   /* compare pace table deltas */
   .cmpfast { font-weight: 700; }
   td.delta, th.delta { text-align: right; }
+  .cmpavg { font-size: 13px; color: var(--muted); margin: 0 0 12px; line-height: 1.6; }
+  .cmpavg.cmpleg { font-size: 11.5px; margin-top: 10px; margin-bottom: 0; }
+  .cmpheadavg { font-size: 14px; color: var(--fg); font-weight: 700; margin: 8px 0 0; line-height: 1.6; }
+  .evhead .cmpheadavg { margin-top: 10px; }
+  .evhead .cmpheadavg .arw { font-weight: 800; }
 
   .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
   .schsummary { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
@@ -314,8 +329,19 @@ const LANGS = {
     compareLoadingA: 'Ladataan kisa A',
     compareLoadingB: 'Ladataan kisa B',
     errCompareNeedTwo: 'Anna molemmat kissat (A ja B) ennen vertailua',
-    secCompareFlow: 'Virtaus vertailu',
+    secCompareFlow: 'Läpimenon vertailu',
     secComparePace: 'Keskivauhti vertailu',
+    cmpPaceAvg: 'Keskivauhti',
+    cmpAvgLabel: 'Vertailun keskiarvo',
+    cmpFaster: 'nopeampi',
+    cmpSlower: 'hitaampi',
+    cmpPerKm: 'min/km',
+    cmpAvgSummary: 'Vertauksen keskiarvo',
+    cmpDiff: 'ero',
+    cmpClasses: 'sarjaa',
+    cmpLeftFaster: 'vasemmalla nopeampi',
+    cmpRightFaster: 'oikealla nopeampi',
+    cmpLegend: '▼ = Kisa A nopeampi · ▲ = Kisa B nopeampi',
     hPaceDelta: 'Δ min/km',
     hPaceFaster: 'Nopeampi',
     btnCsv: 'Lataa CSV',
@@ -333,6 +359,8 @@ const LANGS = {
     cStarters: 'Lähteneet',
     cFinishers: 'Maaliin',
     cDnf: 'Keskeytti',
+    cDns: 'Ei lähtenyt',
+    cDsq: 'Hylätty',
     cIntoForest: 'Kaikki metsässä',
     cFirstResult: 'Aika ensimmäiseen maaliin',
     cResultsWait: 'Tulosten odotus',
@@ -410,6 +438,17 @@ const LANGS = {
     errCompareNeedTwo: 'Provide both races (A and B) before comparing',
     secCompareFlow: 'Flow comparison',
     secComparePace: 'Pace comparison',
+    cmpPaceAvg: 'Average pace',
+    cmpAvgLabel: 'Comparison average',
+    cmpFaster: 'faster',
+    cmpSlower: 'slower',
+    cmpPerKm: 'min/km',
+    cmpAvgSummary: 'Comparison average',
+    cmpDiff: 'diff',
+    cmpClasses: 'classes',
+    cmpLeftFaster: 'left faster',
+    cmpRightFaster: 'right faster',
+    cmpLegend: '▼ = Race A faster · ▲ = Race B faster',
     hPaceDelta: 'Δ min/km',
     hPaceFaster: 'Faster',
     shareCopied: 'Link copied to clipboard',
@@ -424,6 +463,8 @@ const LANGS = {
     cStarters: 'Starters',
     cFinishers: 'Finishers',
     cDnf: 'DNF',
+    cDns: 'Did not start',
+    cDsq: 'Disqualified',
     cIntoForest: 'All into the forest',
     cFirstResult: 'Time to first finisher',
     cResultsWait: 'Results wait',
@@ -1012,6 +1053,7 @@ function eventFlow(event) {
     finishers: rows.filter(r => r.status === STATUS_OK).length,
     dnf: rows.filter(r => r.status === 'DNF').length,
     dns: rows.filter(r => r.status === 'DNS').length,
+    dsq: rows.filter(r => r.status === 'DSQ').length,
     firstStart: starts.length ? starts[0] : null,
     lastStart: starts.length ? starts[starts.length - 1] : null,
     firstFinish: finishes.length ? finishes[0] : null,
@@ -1357,6 +1399,15 @@ async function fetchEventByUUID(uuid) {
   const res = await fetch('https://navisport.com/api/events/' + uuid);
   if (!res.ok) throw new Error('HTTP ' + res.status + ' for event ' + uuid);
   return res.json();
+}
+
+// Numeric timestamp (ms) for a fetched event, used to order compare sides so
+// the newer race always lands on the right (race B). Null → unknown.
+function eventTimestamp(ev) {
+  if (!ev) return null;
+  const t = parseTS(ev.begin);
+  if (t != null) return t;
+  return null;
 }
 
 async function fetchEvent(input) {
@@ -2376,26 +2427,57 @@ function paintFlowCompare(ctx, w, h, cfg) {
   };
 
   series.forEach(s => {
-    const draw = (mins, dash) => {
+    const draw = (mins, dash, fill, dropTip) => {
       const pts = stepCurve(mins);
+      const lastX = pts.length ? pts[pts.length - 1].x : 0;
+      const endX = Math.min(lastX, xMax);
       ctx.save();
+      // Keep the translucent fill (and the step curves) inside the plot box so
+      // nothing "escapes" past the y-axis, top, right or x-axis.
+      ctx.beginPath();
+      ctx.rect(padL, padT, pw, ph);
+      ctx.clip();
+      // Optional translucent area fill under the curve, so the "maaliin"
+      // (finish) series reads as a shaded band rather than a bare dotted line.
+      // The band ends at the event's own last finish minute (not the shared
+      // axis end), dropping vertically to the time-axis baseline.
+      if (fill) {
+        ctx.beginPath();
+        ctx.moveTo(X(0), Y(0));
+        let started = false;
+        for (const p of pts) {
+          if (p.x > xMax) break;
+          const x = X(p.x), y = Y(p.y);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        }
+        if (started) ctx.lineTo(X(endX), Y(0));
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
       ctx.strokeStyle = s.color;
       ctx.lineWidth = 2;
       ctx.setLineDash(dash || []);
       ctx.beginPath();
-      let started = false;
+      let startedLine = false;
       for (const p of pts) {
         if (p.x > xMax) break;
         const x = X(p.x), y = Y(p.y);
-        if (!started) { ctx.moveTo(x, y); started = true; }
+        if (!startedLine) { ctx.moveTo(x, y); startedLine = true; }
         else ctx.lineTo(x, y);
       }
-      if (started) ctx.lineTo(X(xMax), Y(mins.length));
+      if (startedLine) ctx.lineTo(X(endX), Y(mins.length));
+      // Dotted vertical tip marking where the last runner starts (forest entry).
+      if (dropTip && startedLine) {
+        ctx.moveTo(X(endX), Y(mins.length));
+        ctx.lineTo(X(endX), Y(0));
+      }
       ctx.stroke();
       ctx.restore();
     };
-    draw(s.starts, []);
-    draw(s.finishes, [5, 4]);
+    draw(s.starts, [], null, true);
+    draw(s.finishes, [5, 4], s.color + '22');
   });
 
   ctx.strokeStyle = '#c9d2dc';
@@ -2532,6 +2614,8 @@ function flowCards(flow, onCourseCount) {
     cardHtml(T('cStarters'), String(flow.starters)),
     cardHtml(T('cFinishers'), String(flow.finishers)),
     cardHtml(T('cDnf'), String(flow.dnf), onCourseCount ? esc(onCourseCount + ' ' + T('ocTitle').toLowerCase()) : null),
+    cardHtml(T('cDns'), String(flow.dns)),
+    cardHtml(T('cDsq'), String(flow.dsq)),
     cardHtml(T('cIntoForest'), durSec(flow.firstStart, flow.lastStart),
       esc(T('tFirstStart') + ' ' + c(flow.firstStart) + ' · ' + T('tLastStart') + ' ' + c(flow.lastStart))),
     cardHtml(T('cFirstResult'), durSec(flow.firstStart, flow.firstFinish),
@@ -2722,35 +2806,74 @@ function renderMultistage() {
 
 // One column of a two-race comparison: a compact header tag + the full
 // single-race analysis body (cards, flow, pace, schedule, warnings).
-function compareColHtml(event, tag) {
+// `variant` tints the column so the two races are told apart at a glance:
+// race A stays on the app-wide neutral blue, race B gets a warm red tint that
+// matches its color in the overlay flow chart.
+function compareColHtml(event, tag, variant) {
   const name = event.name || tag;
   const flowHtml = flowSection(event);
   let inner = flowHtml.html + '\n' + paceSection(event) + '\n' + scheduleSection(event) + '\n' + flowHtml.warnBox;
-  return '<div class="cmpcol"><div class="cmphdr"><span class="cmptag">' + esc(tag) + '</span>' +
+  return '<div class="cmpcol' + (variant === 'b' ? ' b' : '') + '"><div class="cmphdr"><span class="cmptag">' + esc(tag) + '</span>' +
     '<span class="cmpname">' + esc(name) + '</span></div>' + inner + '</div>';
 }
 
-// Combined pace comparison table (shared classes, A vs B pace + delta).
+// Combined pace comparison (shared classes, A vs B pace + delta). A short
+// summary line contrasts the two races' shared-class averages, then a table
+// lists per-class deltas with an up/down arrow marking which race is faster
+// (▼ for race A, ▲ for race B — lower min/km is better).
 function comparePaceSection(eventA, eventB) {
   const rows = comparePaceRows(eventA, eventB);
   if (!rows.length) return '';
+
   const rowsHtml = rows.map(r => {
     const faster = r.delta > 0 ? 'B' : 'A';
+    const arrow = r.delta === 0 ? '—' : (faster === 'A' ? '▼' : '▲');
+    const color = faster === 'A' ? '#2e5a8a' : '#e15759';
     return '<tr>' +
       '<td>' + esc(r.className) + '</td>' +
       '<td class="num">' + (r.paceA != null ? fmtTime(r.paceA) : '—') + ' <span class="pacetype">(' + r.runnersA + ')</span></td>' +
       '<td class="num">' + (r.paceB != null ? fmtTime(r.paceB) : '—') + ' <span class="pacetype">(' + r.runnersB + ')</span></td>' +
-      '<td class="num delta">' + (r.delta === 0 ? '0:00' : (r.delta > 0 ? '+' : '−') + fmtTime(Math.abs(r.delta))) +
-      ' <span class="cmpfast" style="color:' + (faster === 'A' ? '#2e5a8a' : '#e15759') + '">(' + faster + ')</span></td>' +
+      '<td class="num delta">' +
+      (r.delta === 0 ? '0:00' : (r.delta > 0 ? '+' : '−') + fmtTime(Math.abs(r.delta))) +
+      ' <span class="cmpfast" style="color:' + color + '">' + arrow + ' ' + faster + '</span></td>' +
       '</tr>';
   }).join('');
+
   return sectionHtml(T('secComparePace'),
     '<table><thead><tr>' +
     '<th>' + esc(T('hClass')) + '</th>' +
     '<th class="num">' + esc(T('raceA')) + ' · min/km</th>' +
     '<th class="num">' + esc(T('raceB')) + ' · min/km</th>' +
     '<th class="num delta">' + esc(T('hPaceDelta')) + '</th>' +
-    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>');
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<p class="cmpavg cmpleg">' + esc(T('cmpLegend')) + '</p>');
+}
+
+// One-line summary of the two races' shared-class average pace, naming BOTH
+// races with their averages (lower min/km is faster), so it's unambiguous which
+// side is quicker. Returns '' when no comparison can be made. Shown in the
+// compare header so it's visible right away.
+function compareAvgSummary(a, b) {
+  if (!a || !b) return '';
+  const rows = comparePaceRows(a, b);
+  const shared = rows.filter(r => r.paceA != null && r.paceB != null);
+  if (!shared.length) return '';
+  const avgA = shared.reduce((s, r) => s + r.paceA, 0) / shared.length;
+  const avgB = shared.reduce((s, r) => s + r.paceB, 0) / shared.length;
+  const n = shared.length;
+  const diff = Math.abs(avgA - avgB);
+  const aFaster = avgA < avgB;
+  if (diff < 0.05) {
+    return esc(T('cmpAvgSummary')) + ': ' + esc(fmtTime(avgA)) + ' ' + esc(T('cmpPerKm')) +
+      ' · ' + esc(n) + ' ' + esc(T('cmpClasses'));
+  }
+  return esc(a.name) + ' ' + esc(T('cmpPerKm')) +
+    ' ' + esc(fmtTime(avgA)) + (aFaster ? ' (▼)' : '') +
+    ' · ' + esc(b.name) + ' ' + esc(T('cmpPerKm')) +
+    ' ' + esc(fmtTime(avgB)) + (!aFaster ? ' (▲)' : '') +
+    ' — ' + esc(T('cmpDiff')) + ' ' + esc(fmtTime(diff)) + ' ' + esc(T('cmpPerKm')) +
+    ' (' + (aFaster ? esc(T('cmpLeftFaster')) : esc(T('cmpRightFaster'))) + ')' +
+    ' · ' + esc(n) + ' ' + esc(T('cmpClasses'));
 }
 
 // Combined flow overlay chart (both races' start/finish curves on a shared
@@ -2762,33 +2885,53 @@ function compareFlowSection(series) {
     '<span><span class="clsw" style="background:' + s.color + '"></span>' + esc(s.name) +
     ' — ' + esc(T('lStarted')) + ' (—) · ' + esc(T('hFin')) + ' (···)</span>'
   ).join('') + '</div>';
-  return sectionHtml(T('secCompareFlow') +
+  return sectionHtml(T('secCompareFlow'),
     '<div class="cmpbanner">' + esc(T('aRel')) + '</div>' + legend +
     chartCanvas({ type: 'flowcmp', id, series }));
 }
 
-// Full two-race comparison render: banner + pace table + overlay flow chart,
-// then the two per-race columns side by side.
+// Full two-race comparison render: banner + overlay flow chart, the two
+// per-race columns side by side, then the combined pace comparison at the end
+// (so the compact headline charts come first and the tall pace table doesn't
+// push them down the page).
 function renderCompare() {
   const a = state.compare.a;
   const b = state.compare.b;
   if (!a || !b) return '';
   const series = compareFlowSeries(a, b);
+  const avg = compareAvgSummary(a, b);
   const header = '<section class="evhead"><div><h2>' + esc(T('compareToggle')) + '</h2>' +
-    '<p>' + esc(a.name) + ' · ' + esc(b.name) + '</p></div></section>';
+    '<p>' + esc(a.name) + ' · ' + esc(b.name) + '</p>' +
+    (avg ? '<p class="cmpheadavg">' + avg + '</p>' : '') +
+    '</div></section>';
   const parts = [header];
+  parts.push(compareFlowSection(series));
+  parts.push('<div class="cmpwrap">' + compareColHtml(a, T('raceA'), 'a') + compareColHtml(b, T('raceB'), 'b') + '</div>');
   const pace = comparePaceSection(a, b);
   if (pace) parts.push(pace);
-  parts.push(compareFlowSection(series));
-  parts.push('<div class="cmpwrap">' + compareColHtml(a, T('raceA')) + compareColHtml(b, T('raceB')) + '</div>');
   return parts.join('\n');
 }
 
 function render() {
-  if (state.mode === 'compare' && state.compare.a && state.compare.b) {
-    const out = $('output');
-    if (out) { out.innerHTML = renderCompare(); paintCharts(); }
-    return;
+  if (state.mode === 'compare') {
+    if (state.compare.a && state.compare.b) {
+      const out = $('output');
+      if (out) { out.innerHTML = renderCompare(); paintCharts(); }
+      return;
+    }
+    const loaded = state.compare.a || state.compare.b;
+    if (loaded) {
+      let html;
+      if (isMultistageEvent(loaded)) html = renderMultistage();
+      else if (loaded.raceType === 'Relay') html = renderRelay(loaded);
+      else html = renderIndividual(loaded);
+      const out = $('output');
+      if (out) {
+        out.innerHTML = html;
+        paintCharts();
+      }
+      return;
+    }
   }
   const event = state.event;
   if (!event) return;
@@ -2932,18 +3075,43 @@ async function analyzeCompare(inputA, inputB) {
   state.mode = 'compare';
   state.compare.a = null;
   state.compare.b = null;
-  const [a, b] = await Promise.all([loadCompareOne('a', a0), loadCompareOne('b', b0)]);
+  let [a, b] = await Promise.all([loadCompareOne('a', a0), loadCompareOne('b', b0)]);
+  // Always put the newer (later-timestamp) event on the right (race B), so the
+  // comparison is consistent regardless of which way the slug/URLs were typed.
+  let sa0 = extractSlug(a0), sb0 = extractSlug(b0);
+  if (a && b) {
+    const ta = eventTimestamp(a), tb = eventTimestamp(b);
+    if (ta != null && tb != null && ta > tb) {
+      [a, b] = [b, a];
+      [sa0, sb0] = [sb0, sa0];
+      state.compare.a = a;
+      state.compare.b = b;
+    }
+  }
   if (typeof document !== 'undefined') {
     document.title = (a && a.name ? a.name : T('raceA')) + ' vs ' + (b && b.name ? b.name : T('raceB')) + ' – Kilpailuanalyysi';
   }
   const sb = $('shareBtn');
   if (sb) sb.style.display = (a && b) ? '' : 'none';
   if (a && b) {
-    const sa = extractSlug(a0), sbb = extractSlug(b0);
-    if (sa && sbb) setCompareShareHash(sa, sbb);
+    if (sa0 && sb0) setCompareShareHash(sa0, sb0);
+  }
+  const failures = [];
+  if (!a) failures.push(a0);
+  if (!b) failures.push(b0);
+  if (failures.length && typeof document !== 'undefined') {
+    const out = $('output');
+    if (out) {
+      out.innerHTML = '<div class="warnbox"><div class="wtitle">' + esc(T('errFetch')) + '</div>' +
+        '<div>' + esc(failures.join(', ')) + '</div></div>';
+    }
   }
   render();
-  setStatus(T('statusDone'), 'ok');
+  if (!failures.length) {
+    setStatus(T('statusDone'), 'ok');
+  } else {
+    setStatus(T('errFetch') + ': ' + failures.join(', '), 'err');
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2962,6 +3130,8 @@ function addFlowRows(rows, event) {
   rows.push([T('cStarters'), flow.starters]);
   rows.push([T('cFinishers'), flow.finishers]);
   rows.push([T('cDnf'), flow.dnf]);
+  rows.push([T('cDns'), flow.dns]);
+  rows.push([T('cDsq'), flow.dsq]);
   rows.push([T('cIntoForest'), sec(flow.firstStart, flow.lastStart)]);
   rows.push([T('cFirstResult'), sec(flow.firstStart, flow.firstFinish)]);
   rows.push([T('cResultsWait'), sec(flow.firstFinish, flow.lastFinish)]);
@@ -3068,15 +3238,20 @@ function wireUI() {
   setupScheduleInteractions();
   const fromHash = slugFromHash();
   if (fromHash) {
-    const parsed = parseHash(fromHash);
-    if (parsed && parsed.mode === 'compare' && parsed.a && parsed.b) {
-      setMode('compare');
-      if (sa) sa.value = parsed.a;
-      if (sbInp) sbInp.value = parsed.b;
-      analyzeCompare(parsed.a, parsed.b);
-    } else if (parsed && parsed.slug) {
-      if (slug) slug.value = parsed.slug;
-      analyze(parsed.slug);
+    try {
+      const parsed = parseHash(fromHash);
+      if (parsed && parsed.mode === 'compare' && parsed.a && parsed.b) {
+        setMode('compare');
+        if (sa) sa.value = parsed.a;
+        if (sbInp) sbInp.value = parsed.b;
+        analyzeCompare(parsed.a, parsed.b);
+      } else if (parsed && parsed.slug) {
+        if (slug) slug.value = parsed.slug;
+        analyze(parsed.slug);
+      }
+    } catch (e) {
+      console.error('Hash parse error:', e);
+      setStatus(T('errSlug'), 'err');
     }
   }
 }
