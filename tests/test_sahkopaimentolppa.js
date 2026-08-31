@@ -110,6 +110,7 @@ assert('custom font file input present', html.includes('id="fontFile"') && html.
 assert('custom font style override element', html.includes('id="custom-font-style"'));
 assert('custom font loaded via FontFace (ArrayBuffer from base64, no raw data URL)', html.includes('new FontFace(family, base64ToArrayBuffer(') && html.includes('document.fonts.add'));
 assert('custom font reset available', html.includes('resetCustomFont'));
+assert('STL mount link in sidebar', html.includes('stl/sahkopaimentolpanrastikiinnike.stl') && html.includes('3D-tulostus'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

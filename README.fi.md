@@ -395,6 +395,10 @@ verkkoa. Voit halutessasi valita paikallisen logotiedoston (sivupalkin
 tiedostonvalitsin), joka korvaa QR-koodin seuran logolla. Numerofontin voi
 myös korvata omalla tiedostolla (`.ttf/.otf/.woff/.woff2`) — se korvaa
 oletusfontin (Arial Narrow) ja pienenee automaattisesti mahtuakseen lapun.
+Näille lapuille on myös tarjolla **3D-tulostettu kiinnike** Emit-lukijalle:
+tulosta malli [`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
+ja kiinnitä Emit-lukija siihen ruuveilla ja muttereilla. Sivupalkissa on linkki
+STL:n lataamiseen tulostussivun yhteydessä.
 Toimii ilman
 riippuvuuksia suoraan `file://`-tiedostosta. Paina **"Tulosta /
 Tallenna A4-PDF"** -nappia ja käytä selaimen *Save as PDF* -toimintoa

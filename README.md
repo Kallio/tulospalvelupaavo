@@ -391,6 +391,10 @@ network. Optionally pick a local logo image (the file browser in the sidebar)
 to replace the QR with your club logo. You can also load your own number font
 (`.ttf/.otf/.woff/.woff2`) — it replaces the default Arial Narrow for the
 label digits and auto-shrinks to fit.
+These labels also pair with a **3D-printed mount** for the Emit reader:
+print the model [`stl/sahkopaimentolpanrastikiinnike.stl`](stl/sahkopaimentolpanrastikiinnike.stl)
+and bolt the Emit reader onto it with screws and nuts. A link to download the
+STL sits in the sidebar right by the print button.
 Offline — no
 dependencies, works straight from `file://`. Press the
 **"Tulosta / Tallenna A4-PDF"** button and use the browser's *Save as PDF*
