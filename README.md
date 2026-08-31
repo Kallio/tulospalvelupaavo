@@ -25,6 +25,7 @@ install, no server, no account: download the file (or just open it) and go.
 | ...with district/area info attached | [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts) |
 | Convert Purple Pen course files to IOF XML | [Purple Pen → IOF Converter](#purple-pen--iof-converter) |
 | Lay out kids' maps on A4 sheets for printing | [Map Merger](#map-merger) |
+| Print sähköpaimen plug control-code labels | [Sähköpaimen control-number printer](#sähköpaimen-control-number-printer) |
 | Show live results/splits on stream (OBS/vMix) | [OBS Broadcast Overlays](#obs-broadcast-overlays) |
 | Track points across a multi-event tournament | [Pokaalijahti WordPress Plugin](#pokaalijahti-wordpress-plugin) |
 | Format results for a press release / newspaper | [Press Results Formatter](#press-results-formatter) |
@@ -347,6 +348,52 @@ it works when opened straight from disk (`file://`).
   URL (e.g. `index.html?easteregg=1`), or by clicking the "2. Options"
   heading five times in quick succession (the same five clicks hide them
   again). They are not persisted — hidden again on the next load.
+
+</details>
+
+### Sähköpaimen Control-Number Printer
+
+File: [`sahkopaimentolpparastinnumero.html`](sahkopaimentolpparastinnumero.html)
+
+Need replacement A4 print sheets for the sähköpaimen (free-form electronic
+punch) plug control-code labels? Paste a list of code numbers (one per line)
+and get A4 pages ready to print — each number on its own 15&nbsp;cm × 6,7&nbsp;cm
+lappu, shown twice (one in each outer third, digits facing the 67&nbsp;mm short
+edge, the second flipped 180°) with two dotted fold lines at the third marks
+so the paper folds in two places and the number reads correctly from both
+ends of the folded plug.
+
+<details>
+<summary>Details</summary>
+
+Replaces the design-reference DOCX (`exampledata/sahkopaimentolpparastinnumero.docx`)
+with a browser-based generator that lays out control-code numbers at exact
+physical sizes. Each number becomes a **150 × 67 mm** bordered lappu (matching
+the DOCX "15cm × 6,7cm" part), rendered in **Arial Narrow 130 pt** with the
+number twice — once right-side-up and once rotated 180°, one at each end of
+the lappu. Each occurrence is rotated 90° so the digits run along the 67&nbsp;mm
+short edge (they face the edge, not the 150&nbsp;mm edges), and two thin dotted
+lines at the 1/3 and 2/3 marks divide the lappu into three panels, showing
+where to fold the paper in two places. The lappuset are arranged on
+A4 portrait sheets, **4 per page** in two stacked groups of two
+(a scissors gap separates the groups so cutting ruins at most two lappuset
+at once), so a list of N numbers produces
+ceil(N/4) pages filled top-to-bottom.
+
+The number font auto-shrinks to fit its half-lappu box, so any length of
+number stays on the label. The number per page is fixed at the 4-lappu
+maximum (the only sensible layout for a 210&nbsp;mm-wide sheet), and you can
+toggle whether to draw the solid border + two fold lines.
+The blank middle panel of every lappu shows a **QR code by default**
+(pre-embedded vector, no runtime encoder) pointing to
+`kallio.github.io/tulospalvelupaavo` — so it works fully offline with no
+network. Optionally pick a local logo image (the file browser in the sidebar)
+to replace the QR with your club logo.
+Offline — no
+dependencies, works straight from `file://`. Press the
+**"Tulosta / Tallenna A4-PDF"** button and use the browser's *Save as PDF*
+from the print dialog. The layout logic (`parseNumbers`, `chunkNumbers`,
+`partOffsetY`) is pure and Node-tested.
 
 </details>
 

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sähköpaimen — Tolpparastinumeroiden tulostus</title>
+<style>
+  /* ── Print: exact A4 pages, no browser margins ─────────────────── */
+  @page { size: A4 portrait; margin: 0; }
+  @media print {
+    body { background: #fff !important; margin: 0 !important; }
+    #setup { display: none !important; }
+    #toolbar { display: none !important; }
+    #main { margin: 0 !important; padding: 0 !important; }
+    #print-area { padding: 0 !important; margin: 0 !important; gap: 0 !important; }
+    .sheet { margin: 0 !important; box-shadow: none !important; break-after: page; }
+    .sheet-cap { display: none !important; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+  /* ─── Setup panel (sidebar, project style) ─── */
+  #setup {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 370px;
+    background: #1a1a2e; color: #eee; padding: 12px; z-index: 100;
+    display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+  }
+  .ps { background: #16213e; border-radius: 8px; padding: 10px 12px; }
+  .ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+  .ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+  .ps label:first-of-type { margin-top: 0; }
+  textarea {
+    width: 100%; min-height: 220px; padding: 6px 7px; resize: vertical;
+    background: #0f3460; border: 1px solid #334; border-radius: 4px;
+    color: #eee; font-size: 13px; font-family: Consolas, Menlo, monospace; line-height: 1.5;
+  }
+  .hint { font-size: 10.5px; color: #7d8aa0; margin-top: 3px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+  .bs { background: #27ae60; color: #fff; }
+  .bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+  .btn-sm { padding: 3px 8px; font-size: 11px; }
+  input[type="number"] {
+    width: 84px; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+    border-radius: 4px; color: #eee; font-size: 12px;
+  }
+  #summary { font-size: 12px; color: #9aa; min-height: 16px; }
+  #status { font-size: 11.5px; color: #7ec8e3; margin-top: 6px; min-height: 14px; }
+
+  /* ─── Print area ─── */
+  #main { padding: 16px; margin-left: 386px; }
+  #print-area { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+  /* Each sheet is exactly A4 portrait (210×297 mm). */
+  .sheet {
+    width: 210mm; height: 297mm;
+    background: #fff; position: relative;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .sheet-cap { font-size: 11px; color: #556; text-align: center; margin-bottom: 4px; }
+
+  /* ─── A single control-number part (150 × 67 mm), like the DOCX ─:
+   *   A bordered "lappu" that shows the number twice — one in the left half,
+   *   one in the right half — each rotated so its digits run up/down and
+   *   face the 67 mm (short) edge. The central dotted line is the fold/tear
+   *   guide: fold the paper there so the number shows outward from the plug.
+   */
+  .part {
+    position: absolute;
+    width: 150mm; height: 67mm;
+    font-family: 'Arial Narrow', Arial, sans-serif;
+  }
+  /* solid outer border (per part) */
+  .part::after {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    border: 0.35mm solid #000;
+  }
+  /* Two dotted fold lines (vertical) at 1/3 and 2/3 of the 150 mm length.
+   * They divide the lappu into three panels — two outer number panels and a
+   * blank middle — showing where to fold the paper (Z-fold in two places),
+   * so the number shows outward from both ends of the folded plug.
+   */
+  .part .fold {
+    position: absolute; top: 3mm; bottom: 3mm;
+    width: 0;
+    border-left: 0.2mm dotted #000;
+    pointer-events: none;
+  }
+  /* Each number area spans the full 67 mm height within one third of the
+   * 150 mm width (the outer panels). The digits run along the 67 mm
+   * dimension (rotated 90°), so they face the short edge; the right one is
+   * flipped 180° so it faces the other end.
+   */
+  .part .num {
+    position: absolute; top: 0; bottom: 0; width: 33.3333%;
+    display: flex; align-items: center; justify-content: center;
+    white-space: nowrap;
+    color: #000;
+  }
+  .part .num.left  { left: 0;  transform: rotate(90deg); }
+  .part .num.right { right: 0; transform: rotate(-90deg); }
+  /* Middle (blank) third panel: the fold guide shows where to Z-fold. Here we
+   * show the club logo (or the QR fallback) centered between the two dotted
+   * lines. Hidden when the user toggles borders off. */
+  .part .logo {
+    position: absolute; left: 50mm; right: 50mm; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; color: #000; text-align: center;
+  }
+  .part .logo img {
+    max-width: 100%; max-height: 100%;
+    width: auto; height: auto;
+  }
+  /* The QR SVG has only a viewBox, so give it an explicit square size in mm
+   * (fits the ~50 mm-wide middle panel) — otherwise browsers can't size an
+   * auto-height viewBox-only SVG and it would vanish. */
+  .part .logo svg {
+    width: 34mm; height: 34mm;
+    shape-rendering: crispEdges;
+  }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="ps">
+    <h3>Sähköpaimen · Tolpparastinumerot</h3>
+    <label for="nums">Rastinumerot (yksi per rivi)</label>
+    <textarea id="nums" spellcheck="false">032
+010
+124
+139</textarea>
+    <div class="hint">Yksi numero per rivi. Jokainen numero tulee omalle 15&nbsp;cm × 6,7&nbsp;cm lappulleen A4-arkille, teksti kohti 67&nbsp;mm:n reunaa. Lappu näyttää numeron kahdesti (oikeinpäin ja 180° käännettynä); kaksi katkoviivaa kolmasosien kohdalla näyttävät taittokohdat. Arkilla on 4 lappua 2+2-ryhminä; ryhmien välissä on saksilla leikattava rako, joten kerralla voi pilata korkeintaan kaksi lappua.</div>
+  </div>
+
+  <div class="ps">
+    <h3>Asetukset</h3>
+    <label for="logoFile">Logo keskimmäiseen lappuun (valinnainen)</label>
+    <input type="file" id="logoFile" accept="image/*">
+    <div class="hint">Oletuksena lapussa on QR-koodi osoitteeseen kallio.github.io/tulospalvelupaavo. Valitsemalla tiedoston saat sen tilalle. Tyhjä lomake nollaa oletuksen.</div>
+    <label class="condenses"><input type="checkbox" id="showBorders" checked> Näytä kehykset ja taitoviivat</label>
+  </div>
+
+  <div class="ps">
+    <h3>Yhteenveto</h3>
+    <div id="summary"></div>
+  </div>
+
+  <div class="ps">
+    <h3>Tulosta</h3>
+    <button class="bs" id="printBtn" style="width:100%;" type="button">Tulosta / Tallenna A4-PDF</button>
+    <div id="status"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="print-area"></div>
+</div>
+
+<script>
+'use strict';
+
+/* ── Layout constants (mm) ─────────────────────────────────────────── */
+var A4_W = 210, A4_H = 297;
+var PART_W = 150, PART_H = 67;   // "15cm x 6,7cm", matching the source DOCX
+var DEFAULT_PER_SHEET = 4;       // floor(A4_H / PART_H) = 4 vertical slots
+var CUT_GAP_MM = 10;             // scissors gap between the 2+2 part groups
+var GROUP_PARTS = 2;             // parts per group (top group, bottom group)
+var PART_LEFT = (A4_W - PART_W) / 2;          // centre the 150 mm part horizontally
+var TOP_MARGIN = (A4_H - DEFAULT_PER_SHEET * PART_H - CUT_GAP_MM) / 2; // centre the 2+2 block
+
+/* ── Pure helpers (Node-testable) ──────────────────────────────────── */
+
+/* parseNumbers(text) → array of trimmed, non-empty control numbers,
+ * preserving order. Accepts numbers on separate lines (and tolerates
+ * commas, spaces and repeats of punctuation between them). Numbers longer
+ * than 3 digits are dropped — a longer code won't fit on the 150×67 mm lappu. */
+function parseNumbers(text) {
+  if (!text) return [];
+  return String(text)
+    .split(/[\r\n,;]+/)
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean)
+    .filter(function (s) { return s.length <= 3; });
+}
+
+/* chunkNumbers(numbers, perSheet) → array of pages; every page holds up
+ * to perSheet numbers, filled top-to-bottom in the order given. A short
+ * final page keeps its partial rows (empty slots are rendered empty). */
+function chunkNumbers(numbers, perSheet) {
+  perSheet = Math.max(1, Math.floor(Number(perSheet)) || DEFAULT_PER_SHEET);
+  var out = [];
+  for (var i = 0; i < numbers.length; i += perSheet) {
+    out.push(numbers.slice(i, i + perSheet));
+  }
+  if (!out.length) out.push([]);
+  return out;
+}
+
+/* partOffsetY(index, perSheet, topMargin) → the top of the index-th part
+ * on its sheet, in mm. Parts are grouped 2+2 (top pair, bottom pair) with a
+ * scissors gap (CUT_GAP_MM) between the groups, so the sheet can be cut in
+ * two and ruin at most two parts at a time. Parts fill each group from the
+ * top down, in order. */
+function partOffsetY(index, perSheet, topMargin) {
+  perSheet = Math.max(1, Math.floor(Number(perSheet)) || DEFAULT_PER_SHEET);
+  var grouped = perSheet > GROUP_PARTS;
+  var gp = grouped ? GROUP_PARTS : perSheet; // parts in the first group
+  var tm = isFinite(topMargin) && topMargin >= 0 ? topMargin : TOP_MARGIN;
+  var group = Math.floor(index / gp);
+  var within = index % gp;
+  return tm + group * (gp * PART_H + CUT_GAP_MM) + within * PART_H;
+}
+
+/* ── DOM rendering ─────────────────────────────────────────────────── */
+
+var el = function (id) { return document.getElementById(id); };
+var state = { numbers: [], skipped: 0, showBorders: true, logoUri: '', logoOk: false };
+
+/* QR fallback: embedded vector for the fixed site URL, so the tool still
+ * works fully offline with zero dependencies even if the logo image can't
+ * load. viewBox matches segno's pixel grid (37×37); sized in mm via CSS. */
+var QR_SITE_URL = 'https://kallio.github.io/tulospalvelupaavo/';
+var QR_PATH = 'M2 2.5h7m1 0h1m1 0h1m1 0h2m1 0h1m1 0h3m1 0h1m1 0h1m2 0h7m-33 1h1m5 0h1m2 0h1m5 0h3m3 0h2m3 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m3 0h2m3 0h1m1 0h3m1 0h2m1 0h1m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m5 0h3m1 0h1m5 0h2m2 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m1 0h1m2 0h1m3 0h2m3 0h2m2 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m1 0h3m1 0h2m3 0h1m4 0h1m1 0h1m1 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-23 1h1m2 0h1m4 0h1m2 0h2m-22 1h7m1 0h6m2 0h1m5 0h2m2 0h2m3 0h1m-33 1h5m2 0h2m2 0h1m2 0h1m1 0h1m1 0h4m1 0h1m2 0h2m1 0h4m-33 1h1m2 0h4m1 0h2m2 0h3m3 0h1m1 0h2m2 0h1m3 0h1m1 0h2m-32 1h5m2 0h1m1 0h4m1 0h2m4 0h2m6 0h5m-33 1h1m3 0h3m2 0h1m2 0h1m2 0h1m2 0h1m3 0h4m2 0h2m1 0h2m-33 1h3m1 0h2m1 0h1m5 0h2m2 0h1m5 0h1m2 0h1m2 0h4m-33 1h1m1 0h2m1 0h2m3 0h2m1 0h2m1 0h1m3 0h1m1 0h1m2 0h2m1 0h1m1 0h2m-32 1h1m1 0h4m1 0h1m1 0h1m4 0h2m1 0h5m3 0h3m1 0h2m-31 1h1m1 0h5m2 0h2m1 0h1m6 0h2m1 0h1m1 0h2m1 0h3m2 0h1m-32 1h2m2 0h1m4 0h1m1 0h1m2 0h2m1 0h4m1 0h1m2 0h2m1 0h2m1 0h1m-29 1h4m2 0h1m2 0h2m1 0h1m4 0h1m2 0h1m2 0h2m1 0h1m-27 1h1m3 0h3m1 0h7m2 0h2m2 0h1m1 0h6m-32 1h1m2 0h1m1 0h1m1 0h2m3 0h1m1 0h5m2 0h4m2 0h2m1 0h2m-33 1h1m2 0h3m1 0h2m2 0h2m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m2 0h1m2 0h2m1 0h1m-33 1h1m1 0h2m2 0h1m2 0h3m2 0h2m4 0h1m1 0h1m1 0h1m1 0h1m1 0h4m-32 1h1m2 0h1m4 0h2m1 0h1m2 0h1m1 0h1m2 0h5m1 0h2m1 0h5m-33 1h1m1 0h1m1 0h1m1 0h1m2 0h2m1 0h3m1 0h1m2 0h1m2 0h1m1 0h5m3 0h1m-25 1h6m1 0h1m1 0h1m1 0h3m2 0h1m3 0h1m1 0h1m1 0h1m-33 1h7m1 0h1m1 0h1m1 0h2m3 0h1m3 0h1m1 0h2m1 0h1m1 0h1m1 0h2m-32 1h1m5 0h1m1 0h1m2 0h1m1 0h3m2 0h1m1 0h5m3 0h4m-32 1h1m1 0h3m1 0h1m1 0h2m3 0h2m3 0h1m3 0h1m1 0h6m2 0h1m-33 1h1m1 0h3m1 0h1m1 0h3m2 0h2m1 0h1m2 0h2m1 0h4m2 0h2m2 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m1 0h3m2 0h1m5 0h1m2 0h1m1 0h2m2 0h1m-31 1h1m5 0h1m1 0h1m3 0h2m4 0h6m1 0h2m1 0h3m-31 1h7m2 0h1m2 0h7m1 0h1m1 0h3m2 0h1m3 0h1';
+
+function makeQR() {
+  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 37 37');
+  var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', QR_PATH);
+  // segno emits the modules as STROKED horizontal line segments, so the path
+  // must be stroked (with a 1-unit width = one module) — filling it draws
+  // nothing and the QR would be invisible.
+  p.setAttribute('stroke', '#000');
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke-width', '1');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'QR ' + QR_SITE_URL);
+  svg.appendChild(p);
+  return svg;
+}
+
+/* Read the optional local logo file as a data URL. With no file selected
+ * (the default) the embedded QR is shown, so it works offline everywhere.
+ * Re-renders once the result is known. */
+function loadLogo() {
+  var f = el('logoFile').files && el('logoFile').files[0];
+  if (!f) {
+    state.logoUri = '';
+    state.logoOk = false;
+    renderAll();
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function () {
+    state.logoUri = reader.result;
+    state.logoOk = true;
+    renderAll();
+  };
+  reader.onerror = function () { renderAll(); };
+  reader.readAsDataURL(f);
+}
+
+function renderStatus() {
+  var n = state.numbers.length;
+  var sheets = chunkNumbers(state.numbers, DEFAULT_PER_SHEET).length;
+  var msg = n + ' lappua · ' + sheets + ' A4-arkkia';
+  if (state.skipped > 0) msg += ' · ' + state.skipped + ' hylättiin (yli 3 merkkiä)';
+  el('summary').textContent = msg;
+}
+
+/* Shrink a number's font until it fits inside its third-panel box. The text
+ * is rotated 90° (digits run along the 67 mm edge), so the unrotated text
+ * WIDTH becomes the on-screen height (bounded by PART_H) and the unrotated
+ * height the on-screen width (bounded by a third of PART_W). */
+function fitFont(span, maxWmm, maxHmm) {
+  var size = 130; // pt, from the source DOCX (Arial Narrow 130pt)
+  span.style.fontSize = size + 'pt';
+  if (typeof span.offsetWidth !== 'number') return; // test stub / non-rendered
+  if (!span.offsetWidth) return;
+  var mmPerPt = 0.352778;
+  var scale = Math.min(maxWmm / (span.offsetWidth * mmPerPt), maxHmm / ((span.offsetHeight || span.offsetWidth * 0.35) * mmPerPt));
+  if (scale < 1) span.style.fontSize = (size * scale) + 'pt';
+}
+
+function buildNumberCell(number, mmLeft, leftSlot) {
+  var span = document.createElement('span');
+  span.className = 'num ' + (leftSlot ? 'left' : 'right');
+  span.textContent = number;
+  // After the 90° rotation the unrotated width (digit string) bounds the
+  // 67 mm height and the unrotated height bounds the ~50 mm third panel.
+  fitFont(span, PART_H - 4, PART_W / 3 - 6);
+  return span;
+}
+
+function buildPart(number, index) {
+  var part = document.createElement('div');
+  part.className = 'part';
+  part.style.left = PART_LEFT + 'mm';
+  part.style.top = partOffsetY(index, DEFAULT_PER_SHEET) + 'mm';
+  if (state.showBorders) {
+    [PART_W / 3, (2 * PART_W) / 3].forEach(function (x) {
+      var fold = document.createElement('div');
+      fold.className = 'fold';
+      fold.style.left = x + 'mm';
+      part.appendChild(fold);
+    });
+  }
+  part.appendChild(buildNumberCell(number, PART_LEFT, true));
+  part.appendChild(buildNumberCell(number, PART_LEFT, false));
+  part.appendChild(buildLogo());
+  return part;
+}
+
+function buildLogo() {
+  var box = document.createElement('div');
+  box.className = 'logo';
+  if (state.logoOk) {
+    var img = document.createElement('img');
+    img.src = state.logoUri;
+    img.alt = 'logo';
+    box.appendChild(img);
+  } else {
+    box.appendChild(makeQR());
+  }
+  return box;
+}
+
+function renderAll() {
+  var area = el('print-area');
+  area.innerHTML = '';
+  var pages = chunkNumbers(state.numbers, DEFAULT_PER_SHEET);
+  pages.forEach(function (numbers, pi) {
+    var cap = document.createElement('div');
+    cap.className = 'sheet-cap';
+    cap.textContent = 'A4 ' + (pi + 1) + '/' + pages.length;
+    var sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    numbers.forEach(function (num, ni) {
+      sheet.appendChild(buildPart(num, ni));
+    });
+    area.appendChild(cap);
+    area.appendChild(sheet);
+  });
+  renderStatus();
+}
+
+function update() {
+  var raw = String(el('nums').value || '').split(/[\r\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  state.skipped = raw.filter(function (s) { return s.length > 3; }).length;
+  state.numbers = parseNumbers(el('nums').value);
+  loadLogo();
+}
+
+/* ── Expose pure functions for Node tests ─────────────────────────── */
+window.__sahkopaimentolppa = {
+  parseNumbers: parseNumbers,
+  chunkNumbers: chunkNumbers,
+  partOffsetY: partOffsetY,
+  A4_W: A4_W, A4_H: A4_H, PART_W: PART_W, PART_H: PART_H,
+  DEFAULT_PER_SHEET: DEFAULT_PER_SHEET,
+  CUT_GAP_MM: CUT_GAP_MM, GROUP_PARTS: GROUP_PARTS, TOP_MARGIN: TOP_MARGIN,
+};
+
+function init() {
+  el('nums').addEventListener('input', update);
+  el('logoFile').addEventListener('change', loadLogo);
+  el('showBorders').addEventListener('change', function () {
+    state.showBorders = el('showBorders').checked;
+    renderAll();
+  });
+  el('printBtn').addEventListener('click', function () { window.print(); });
+  update();
+}
+
+init();
+</script>
+</body>
+</html>

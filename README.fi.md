@@ -22,6 +22,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 | ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
 | Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
 | Lasten kartat A4-arkeiksi painoon | [Map Merger](#map-merger) |
+| Sähköpaimen-tulppien rastinumerolaput A4:lle | [Sähköpaimen rastinumerotulostin](#sähköpaimen-rastinumerotulostin) |
 | Live-tulokset/väliajat streamiin (OBS/vMix) | [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat) |
 | Pisteseurannan moniosaiselle sarjalle | [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen) |
 | Tulokset lehdistötiedotteeseen | [Lehdistötulokset](#lehdistötulokset) |
@@ -356,6 +357,47 @@ ja toimii myös suoraan levyltä avattuna (`file://`).
   `index.html?easteregg=1`) tai klikkaamalla "2. Asetukset" -otsikkoa viisi
   kertaa nopeasti (sama viiden klikkauksen sarja piilottaa ne uudelleen).
   Valintaa ei säilytetä — asetukset ovat seuraavalla latauksella taas piilossa.
+
+</details>
+
+### Sähköpaimen rastinumerotulostin
+
+Tiedosto: [`sahkopaimentolpparastinnumero.html`](sahkopaimentolpparastinnumero.html)
+
+Tarvitsetko A4-arkit sähköpaimen-tulppien rastinumerolappujen tulostukseen?
+Liitä lista numeroista (yksi per rivi) ja saat valmiit A4-sivut tulostettavaksi —
+jokainen numero omalle 15&nbsp;cm × 6,7&nbsp;cm lappulleen, numero kaksi kertaa
+(oikeinpäin ja 180° käännettynä), jotta se luetaan tulpan kummastakin päästä.
+<details>
+<summary>Lisätiedot</summary>
+
+Korvaa suunnittelu-DOCX:n (`exampledata/sahkopaimentolpparastinnumero.docx`)
+selainpohjaisella generaattorilla, joka asettelee rastinumerot tarkkaan
+fyysiseen kokoon. Jokainen numero tulee **150 × 67 mm**:n reunustetulle
+lappulleen (DOCX:n "15cm × 6,7cm" -koko), fonttina **Arial Narrow 130 pt**,
+numero kahtena kappaleena — oikeinpäin ja 180° käännettynä, laapun kummassakin
+päässä. Kumpikin numero on käännetty 90°, joten numerot ovat kohti 67&nbsp;mm:n
+reunaa (eivät 150&nbsp;mm:n reunoja), ja kaksi ohutta katkoviivaa kolmasosien
+kohdalla jakavat laapun kolmeen osaan näyttäen taiton kahdessa paikassa.
+Lappuset asetellaan A4-pystyarkeille, **4 per sivu** kahdessa pinossa,
+joissa kummassakin on kaksi lappua (pinojen välissä on saksilla leikattava
+rako, joten kerralla voi pilata korkeintaan kaksi lappua), joten N numeroa
+tuottaa ceil(N/4) sivua täytettynä ylhäältä alas.
+
+Numeron fontti pienenee automaattisesti mahtuakseen laapunpuolikkaaseen, joten
+minkä tahansa pituinen numero pysyy lapussa. Lappujen määrä per sivu on
+kiinnitetty 4:n (210&nbsp;mm:n levyiselle arkille ainoa järkevä asettelu), ja
+voit valita näytetäänkö kehys + kaksi taitokatkoviivaa.
+Jokaisen lapun tyhjässä keskimmäisessä ruudussa on oletuksena **QR-koodi**
+(esikäännetty vektorigrafiikka, ei ajonaikaista koodaajaa) osoitteeseen
+`kallio.github.io/tulospalvelupaavo` — toimii täysin myös offline ilman
+verkkoa. Voit halutessasi valita paikallisen logotiedoston (sivupalkin
+tiedostonvalitsin), joka korvaa QR-koodin seuran logolla.
+Toimii ilman
+riippuvuuksia suoraan `file://`-tiedostosta. Paina **"Tulosta /
+Tallenna A4-PDF"** -nappia ja käytä selaimen *Save as PDF* -toimintoa
+tulostusikkunassa. Asettelulogiikka (`parseNumbers`, `chunkNumbers`,
+`partOffsetY`) on puhdasta ja Node-testattu.
 
 </details>
 
