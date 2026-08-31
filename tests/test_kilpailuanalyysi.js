@@ -269,7 +269,7 @@ try {
       eventFlow, classPaces, classFlowSeries, finishPeak, stepEvents,
       legendInner, axisToggle, effectiveClasses, combineSelected, clearCombines, rebuildLegendItems,
       buildCSV, toCSV, addFlowRows, analyze, render, setLang, T,
-      runnerRows, statusConst: STATUS_OK, CLASS_PALETTE, paceSection, paintPace, drawFlowChart,
+      runnerRows, statusConst: STATUS_OK, CLASS_PALETTE, paceSection, paintPace, drawFlowChart, sortPacesGrouped,
       flowWarnings, droppedWarnings, onCourseWarnings, orphanWarnings, massStartWarnings, warnLabel, warnBoxHtml, flowSection, tsInWindow, initials,
       isDoubleTapSecond, dblTapMs: DBL_TAP_MS,
       parseClassName, compareClassNames, classSortKey, autoDetectGroups, scheduleData,
@@ -794,10 +794,51 @@ assert('cmp: A delta B−A = −186', aRow.delta === -186, String(aRow.delta));
 assert('cmp: runners carried', aRow.runnersA === 10 && aRow.runnersB === 2, JSON.stringify(aRow));
 assert('cmp: B delta = 4000m lap so 600−800 = −200', cmpPaces.find(r => r.className === 'B').delta === -200, String(cmpPaces.find(r => r.className === 'B').delta));
 
+// compare pace rows should be grouped H (men) → D (women) → open, by age —
+// NOT scrambled by pace delta — so which race is faster is easy to scan.
+const mkClassEv = (begin, name, classes) => ({
+  id: name + '-' + begin, name, begin, raceType: 'Individual', eventKind: 'Event',
+  courseClasses: classes.map(c => ({ id: c, name: c, type: 'Class', courses: [] })),
+  courses: classes.map(c => ({ id: 'c-' + c, name: c, distance: 3000, controls: [] })),
+  results: classes.map((c, i) => ({ id: c + i, classId: c, courseId: 'c-' + c, status: 'Ok', time: 600, startTime: begin })),
+});
+const evA = mkClassEv('2026-03-21T08:00:00.000Z', 'KisaA', ['D12', 'H14', 'Avoin', 'H10']);
+const evB = mkClassEv('2026-04-02T08:00:00.000Z', 'KisaB', ['D12', 'H14', 'Avoin', 'H10']);
+const groupedNames = P.comparePaceRows(evA, evB).map(r => r.className);
+assert('cmp: pace rows grouped H then D then open',
+  groupedNames.join(',') === 'H10,H14,D12,Avoin', groupedNames.join(','));
+
+// The per-race "Average pace by class" chart in a compare column must use the
+// same grouped order, while the single-race view keeps its pace-sorted order.
+const groupedPaces = P.classPaces(evA);
+P.sortPacesGrouped(groupedPaces);
+assert('cmp: pace chart sorted H → D → open in compare',
+  groupedPaces.map(p => p.className).join(',') === 'H10,H14,D12,Avoin',
+  groupedPaces.map(p => p.className).join(','));
+// Distinct paces: classPaces orders by pace; sortPacesGrouped reorders to H→D.
+const evPaces = { id: 'p1', name: 'P', begin: '2026-03-21T08:00:00.000Z', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: ['H12', 'D12', 'H10', 'Avoin'].map(c => ({ id: c, name: c, type: 'Class', courses: [] })),
+  courses: ['H12', 'D12', 'H10', 'Avoin'].map(c => ({ id: 'c-' + c, name: c, distance: 3000, controls: [] })),
+  results: [
+    { id: 'r1', classId: 'H10', courseId: 'c-H10', status: 'Ok', time: 1200 },  // slowest → last by pace
+    { id: 'r2', classId: 'H12', courseId: 'c-H12', status: 'Ok', time: 900 },
+    { id: 'r3', classId: 'D12', courseId: 'c-D12', status: 'Ok', time: 600 },  // fastest → first by pace
+    { id: 'r4', classId: 'Avoin', courseId: 'c-Avoin', status: 'Ok', time: 700 },
+  ] };
+const rawOrder = P.classPaces(evPaces).map(p => p.className);
+const groupedOrder = [...P.classPaces(evPaces)];
+P.sortPacesGrouped(groupedOrder);
+assert('cmp: compare chart grouped differs from pace order',
+  rawOrder.join(',') !== groupedOrder.map(p => p.className).join(',') &&
+  groupedOrder.map(p => p.className).join(',') === 'H10,H12,D12,Avoin',
+  'raw=' + rawOrder.join(',') + ' grouped=' + groupedOrder.map(p => p.className).join(','));
+
 const paceSec = P.comparePaceSection(indEvent, cmpEvent);
 assert('cmp: pace section has header', paceSec.includes('Keskivauhti vertailu'));
 assert('cmp: pace section lists A with both paces', paceSec.includes('>A<') && paceSec.includes('5:16') && paceSec.includes('2:10'), paceSec.slice(0, 400));
-assert('cmp: pace section shows delta marker', paceSec.includes('▼ A') || paceSec.includes('▲ B'), paceSec);
+assert('cmp: pace section shows delta marker', paceSec.includes('▼') || paceSec.includes('▲'), paceSec);
+assert('cmp: pace section names both races in header',
+  paceSec.includes('Testirastit 2026') && paceSec.includes('Toinen kisa 2026'), paceSec);
 assert('cmp: pace section has legend', paceSec.includes('cmpavg') && paceSec.includes('cmpLegend') || paceSec.includes('cmpavg cmpleg'));
 
 const avgSummary = P.compareAvgSummary(indEvent, cmpEvent);
@@ -813,8 +854,8 @@ const flowSec = P.compareFlowSection(cmpSeries);
 assert('cmp: flow section has combined chart', flowSec.includes('Läpimenon vertailu') && flowSec.includes('data-chart-id') && flowSec.includes('chartwrap'));
 assert('cmp: flow section legend names both', flowSec.includes('Testirastit 2026') && flowSec.includes('Toinen kisa 2026'));
 
-const colHtml = P.compareColHtml(indEvent, 'Kisa A');
-assert('cmp: column has tag + name', colHtml.includes('cmptag') && colHtml.includes('>Kisa A<') && colHtml.includes('Testirastit 2026'));
+const colHtml = P.compareColHtml(indEvent, 'a');
+assert('cmp: column header names the event (no A/B tag)', colHtml.includes('Testirastit 2026') && !colHtml.includes('Kisa A') && !colHtml.includes('cmptag'), colHtml);
 assert('cmp: column includes cards + flow + pace', colHtml.includes('Kaikki metsässä') && colHtml.includes('Kisapäivän kulku') && colHtml.includes('Keskivauhti sarjoittain'));
 assert('cmp: column keeps runner names out', !colHtml.includes('Matti Meikäläinen'));
 
@@ -922,6 +963,9 @@ assert('cmp: parseHash empty', P.parseHash('') === null);
   assert('compare: mode is compare', S.mode() === 'compare');
   const cOut = document.getElementById('output').innerHTML;
   assert('compare: end-to-end renders wrap + compare sections', cOut.includes('cmpwrap') && cOut.includes('Läpimenon vertailu') && cOut.includes('Keskivauhti vertailu'), String(cOut.length));
+  assert('compare: document title names both races + comparison',
+    document.title.includes('Testirastit 2026') && document.title.includes('vs') && document.title.includes('Kisojen vertailu'),
+    document.title);
 
   // ── fresh load from compare hash (wireUI branch) ──
   // A recipient opens a shared #slugA%7CslugB URL; after parseHash the page
