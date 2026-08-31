@@ -261,13 +261,18 @@ try {
       flowWarnings, droppedWarnings, onCourseWarnings, orphanWarnings, massStartWarnings, warnLabel, warnBoxHtml, flowSection, tsInWindow, initials,
       isDoubleTapSecond, dblTapMs: DBL_TAP_MS,
       parseClassName, compareClassNames, classSortKey, autoDetectGroups, scheduleData,
+      compareFlowSeries, comparePaceRows, comparePaceSection, compareFlowSection,
+      compareColHtml, renderCompare, setMode, parseHash, analyzeCompare,
     };
     global.__state = {
       event: () => state.event,
       stageEvents: () => state.stageEvents,
+      compare: () => state.compare,
+      mode: () => state.mode,
       lang: () => lang,
       setLang: l => setLang(l),
       setEvent: e => { state.event = e; },
+      setCompareMode: m => { state.mode = m; },
     };
   `);
 } catch (e) { threw = e; }
@@ -699,6 +704,84 @@ P.setLang('en');
 assert('lang: schGroup en exists', P.T('schGroup') === 'Grouping');
 P.setLang('fi');
 
+// ── two-race comparison ──────────────────────────────────────────────────
+// A second individual event sharing class names with `indEvent` (A, B) but at
+// different lengths/pace, so shared-class pace deltas can be computed.
+const cmpEvent = {
+  id: 'e-cmp', name: 'Toinen kisa 2026', begin: '2026-04-02T08:00:00.000Z',
+  address: 'Testitie 2', raceType: 'Individual', eventKind: 'Event', sport: 'OL',
+  organisation: { id: 'o2', name: 'Other Club' },
+  courseClasses: [
+    { id: 'ca', name: 'A', type: 'Class', courses: [{ id: 'co1', legs: 1 }] },
+    { id: 'cb', name: 'B', type: 'Class', courses: [{ id: 'co2', legs: 1 }] },
+    { id: 'cc', name: 'C', type: 'Class', courses: [{ id: 'co3', legs: 1 }] },
+  ],
+  courses: [
+    { id: 'co1', name: 'A', distance: 5000, controls: [] },
+    { id: 'co2', name: 'B', distance: 4000, controls: [] },
+    { id: 'co3', name: 'C', distance: 3000, controls: [] },
+  ],
+  results: [
+    // class A: same 600s time but on a 5000m course → faster min/km than indEvent's 3325m
+    { id: 'cr1', classId: 'ca', courseId: 'co1', bibNumber: 101, name: 'A1', club: 'X', status: 'Ok', time: 600, position: 1, startTime: '2026-04-02T08:00:00.000Z' },
+    { id: 'cr2', classId: 'ca', courseId: 'co1', bibNumber: 102, name: 'A2', club: 'X', status: 'Ok', time: 700, position: 2, startTime: '2026-04-02T08:02:00.000Z' },
+    // class B: only B2-style slow runner, same as indEvent B
+    { id: 'cr3', classId: 'cb', courseId: 'co2', bibNumber: 103, name: 'B1', club: 'Y', status: 'Ok', time: 2400, position: 1, startTime: '2026-04-02T08:04:00.000Z' },
+    // class C: only in event B
+    { id: 'cr4', classId: 'cc', courseId: 'co3', bibNumber: 104, name: 'C1', club: 'Z', status: 'Ok', time: 900, position: 1, startTime: '2026-04-02T08:06:00.000Z' },
+  ],
+};
+
+const cmpSeries = P.compareFlowSeries(indEvent, cmpEvent);
+assert('cmp: flow series has 2 entries', cmpSeries.length === 2, String(cmpSeries.length));
+assert('cmp: both start at relative 0', cmpSeries[0].starts[0] === 0 && cmpSeries[1].starts[0] === 0);
+assert('cmp: series names from events', cmpSeries[0].name === 'Testirastit 2026' && cmpSeries[1].name === 'Toinen kisa 2026');
+assert('cmp: series keys a,b', cmpSeries[0].key === 'a' && cmpSeries[1].key === 'b');
+assert('cmp: distinct colors', cmpSeries[0].color !== cmpSeries[1].color);
+assert('cmp: relative finishes preserved (A first finish 10 min)', cmpSeries[0].finishes[0] === 10);
+assert('cmp: finishes sorted', cmpSeries[1].finishes.every((m, i) => i === 0 || m >= cmpSeries[1].finishes[i - 1]));
+
+const cmpPaces = P.comparePaceRows(indEvent, cmpEvent);
+const classNamesP = cmpPaces.map(r => r.className).sort();
+assert('cmp: pace rows only shared classes (A,B)', classNamesP.join(',') === 'A,B', classNamesP.join(','));
+const aRow = cmpPaces.find(r => r.className === 'A');
+assert('cmp: A paceA 316 s/km', aRow.paceA === 316, String(aRow.paceA));
+assert('cmp: A paceB 130 s/km (avg of 120/140)', aRow.paceB === 130, String(aRow.paceB));
+assert('cmp: A delta B−A = −186', aRow.delta === -186, String(aRow.delta));
+assert('cmp: runners carried', aRow.runnersA === 10 && aRow.runnersB === 2, JSON.stringify(aRow));
+assert('cmp: B delta = 4000m lap so 600−800 = −200', cmpPaces.find(r => r.className === 'B').delta === -200, String(cmpPaces.find(r => r.className === 'B').delta));
+
+const paceSec = P.comparePaceSection(indEvent, cmpEvent);
+assert('cmp: pace section has header', paceSec.includes('Keskivauhti vertailu'));
+assert('cmp: pace section lists A with both paces', paceSec.includes('>A<') && paceSec.includes('5:16') && paceSec.includes('2:10'), paceSec.slice(0, 400));
+assert('cmp: pace section shows delta marker', paceSec.includes('(A)') || paceSec.includes('(B)'));
+
+const flowSec = P.compareFlowSection(cmpSeries);
+assert('cmp: flow section has combined chart', flowSec.includes('Virtaus vertailu') && flowSec.includes('data-chart-id') && flowSec.includes('chartwrap'));
+assert('cmp: flow section legend names both', flowSec.includes('Testirastit 2026') && flowSec.includes('Toinen kisa 2026'));
+
+const colHtml = P.compareColHtml(indEvent, 'Kisa A');
+assert('cmp: column has tag + name', colHtml.includes('cmptag') && colHtml.includes('>Kisa A<') && colHtml.includes('Testirastit 2026'));
+assert('cmp: column includes cards + flow + pace', colHtml.includes('Kaikki metsässä') && colHtml.includes('Kisapäivän kulku') && colHtml.includes('Keskivauhti sarjoittain'));
+assert('cmp: column keeps runner names out', !colHtml.includes('Matti Meikäläinen'));
+
+S.setCompareMode('compare');
+S.compare().a = indEvent;
+S.compare().b = cmpEvent;
+P.render();
+const cmpOut = document.getElementById('output').innerHTML;
+assert('cmp: render wraps two columns', cmpOut.includes('cmpwrap') && (cmpOut.match(/cmpcol/g) || []).length === 2, String((cmpOut.match(/cmpcol/g) || []).length));
+assert('cmp: render has pace + flow compare sections', cmpOut.includes('Keskivauhti vertailu') && cmpOut.includes('Virtaus vertailu'));
+assert('cmp: 7 canvases (1 compare-flow + 2×(flow+pace+schedule))', (cmpOut.match(/<canvas/g) || []).length === 7, String((cmpOut.match(/<canvas/g) || []).length));
+S.setCompareMode('single');
+S.compare().a = null;
+S.compare().b = null;
+S.setEvent(null);
+
+assert('cmp: parseHash single', JSON.stringify(P.parseHash('hyvinkaan-talvirastit-2026')) === JSON.stringify({ mode: 'single', slug: 'hyvinkaan-talvirastit-2026' }));
+assert('cmp: parseHash compare', JSON.stringify(P.parseHash('a-slug|b-slug')) === JSON.stringify({ mode: 'compare', a: 'a-slug', b: 'b-slug' }));
+assert('cmp: parseHash empty', P.parseHash('') === null);
+
 // ── fetch flow: slug → tRPC → REST → render ──
 (async () => {
   await P.analyze('hyvinkaan-talvirastit-2026');
@@ -752,6 +835,13 @@ P.setLang('fi');
   const mOut = document.getElementById('output').innerHTML;
   assert('flow: multistage rendered', mOut.includes('Päivä 1') && mOut.includes('Päivä 2'));
   assert('flow: multistage flow+pace+schedule canvas per stage', (mOut.match(/<canvas/g) || []).length === 6, String((mOut.match(/<canvas/g) || []).length));
+
+  // compare end-to-end: slug inputs resolve to indEvent via the mock fetch
+  await P.analyzeCompare('race-a-slug', 'race-b-slug');
+  assert('compare: end-to-end both events loaded', S.compare().a && S.compare().b, JSON.stringify([S.compare().a && S.compare().a.name, S.compare().b && S.compare().b.name]));
+  assert('compare: mode is compare', S.mode() === 'compare');
+  const cOut = document.getElementById('output').innerHTML;
+  assert('compare: end-to-end renders wrap + compare sections', cOut.includes('cmpwrap') && cOut.includes('Virtaus vertailu') && cOut.includes('Keskivauhti vertailu'), String(cOut.length));
 
   console.log('passed ' + pass + ' failed ' + fail);
   if (fail) process.exit(1);

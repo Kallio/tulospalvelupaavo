@@ -82,6 +82,16 @@
   }
   .urlbar input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(46, 90, 138, 0.12); }
   .urlbar input::placeholder { color: var(--muted); font-family: 'Segoe UI', Arial, sans-serif; font-size: 12.5px; }
+  .urlbar .cfield { display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+  .urlbar .cfield label { font-size: 11px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+  .urlbar .cfield input { width: 100%; min-width: 0; }
+  .urlbar:hover .cfield input { border-color: var(--border); }
+  @media (max-width: 640px) {
+    .urlbar#compareUrlbar { flex-direction: column; align-items: stretch; }
+    .urlbar#compareUrlbar .cfield label { flex-basis: auto; }
+  }
+  .btn-hdr-active { background: var(--accent); color: #fff; }
+  .btn-hdr-active:hover { background: var(--accent-hover); }
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 8px 14px; border-radius: var(--radius);
@@ -192,6 +202,24 @@
   .stagehead { margin: 26px 0 12px; padding-top: 14px; border-top: 2px dashed var(--border); }
   .stagehead h3 { font-size: 15px; color: var(--primary); }
 
+  /* Two-race side-by-side compare layout */
+  .cmpwrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .cmpcol { min-width: 0; }
+  .cmpcol .evhead { margin-bottom: 12px; }
+  @media (max-width: 900px) { .cmpwrap { grid-template-columns: 1fr; } }
+  .cmphdr { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .cmphdr .cmptag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: #fff; background: var(--primary); border-radius: 5px; padding: 2px 7px; }
+  .cmphdr .cmpname { font-size: 14px; font-weight: 700; color: var(--primary); }
+  .cmpbanner { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .cmplegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .cmplegend .clsw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+  .pacetype { text-transform: uppercase; letter-spacing: 0.6px; font-size: 10px; color: var(--muted); }
+
+  /* compare pace table deltas */
+  .cmpfast { font-weight: 700; }
+  td.delta, th.delta { text-align: right; }
+
   .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
   .schsummary { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
   .schcontrols { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -243,13 +271,26 @@
     <button id="shareBtn" class="btn-hdr btn-hdr-sec" type="button" style="display:none;"></button>
     <button id="printBtn" class="btn-hdr btn-hdr-sec" type="button"></button>
     <button id="csvBtn" class="btn-hdr btn-hdr-sec" type="button" style="display:none;"></button>
+    <button id="compareToggleBtn" class="btn-hdr btn-hdr-sec" type="button" title=""></button>
     <button id="langBtn" class="btn-hdr btn-hdr-accent" type="button">EN</button>
   </div>
 </header>
 
-<div class="urlbar">
+<div class="urlbar" id="urlbarSingle">
   <input id="slugInput" type="text" spellcheck="false" autocomplete="off" placeholder="">
   <button id="analyzeBtn" class="btn btn-primary" type="button"></button>
+</div>
+
+<div class="urlbar" id="compareUrlbar" style="display:none;">
+  <div class="cfield">
+    <label id="labelA" for="slugInputA"></label>
+    <input id="slugInputA" type="text" spellcheck="false" autocomplete="off" placeholder="">
+  </div>
+  <div class="cfield">
+    <label id="labelB" for="slugInputB"></label>
+    <input id="slugInputB" type="text" spellcheck="false" autocomplete="off" placeholder="">
+  </div>
+  <button id="compareBtn" class="btn btn-primary" type="button"></button>
 </div>
 
 <div id="status" class="status"></div>
@@ -265,6 +306,18 @@ const LANGS = {
   fi: {
     inputPlaceholder: 'Navisport-kisan URL tai slug (esim. navisport.com/events/hyvinkaan-talvirastit-2026)',
     btnAnalyze: 'Analysoi',
+    btnCompare: 'Vertaa',
+    compareToggle: 'Vertaa kisoja',
+    compareToggleOn: 'Yksittäinen kisa',
+    raceA: 'Kisa A',
+    raceB: 'Kisa B',
+    compareLoadingA: 'Ladataan kisa A',
+    compareLoadingB: 'Ladataan kisa B',
+    errCompareNeedTwo: 'Anna molemmat kissat (A ja B) ennen vertailua',
+    secCompareFlow: 'Virtaus vertailu',
+    secComparePace: 'Keskivauhti vertailu',
+    hPaceDelta: 'Δ min/km',
+    hPaceFaster: 'Nopeampi',
     btnCsv: 'Lataa CSV',
     btnPrint: 'Tulosta',
     btnShare: 'Jaa',
@@ -347,6 +400,18 @@ const LANGS = {
     btnCsv: 'Download CSV',
     btnPrint: 'Print',
     btnShare: 'Share',
+    btnCompare: 'Compare',
+    compareToggle: 'Compare races',
+    compareToggleOn: 'Single race',
+    raceA: 'Race A',
+    raceB: 'Race B',
+    compareLoadingA: 'Loading race A',
+    compareLoadingB: 'Loading race B',
+    errCompareNeedTwo: 'Provide both races (A and B) before comparing',
+    secCompareFlow: 'Flow comparison',
+    secComparePace: 'Pace comparison',
+    hPaceDelta: 'Δ min/km',
+    hPaceFaster: 'Faster',
     shareCopied: 'Link copied to clipboard',
     statusLoading: 'Loading and analyzing',
     statusDone: 'Done',
@@ -433,7 +498,11 @@ let lang = 'fi';
   } catch (e) {}
 })();
 
-const state = { event: null, stageEvents: [] };
+const state = {
+  event: null, stageEvents: [],
+  mode: 'single',
+  compare: { a: null, b: null },
+};
 
 // ════════════════════════════════════════════════════════════════════
 //  Tiny helpers
@@ -454,6 +523,8 @@ function setLang(l) {
     ['csvBtn', T('btnCsv')],
     ['printBtn', T('btnPrint')],
     ['shareBtn', T('btnShare')],
+    ['compareToggleBtn', T('compareToggle')],
+    ['compareBtn', T('btnCompare')],
   ];
   for (const [id, txt] of els) {
     const el = $(id);
@@ -461,7 +532,13 @@ function setLang(l) {
   }
   const inp = $('slugInput');
   if (inp) inp.placeholder = T('inputPlaceholder');
-  if (state.event) render();
+  const ra = $('slugInputA');
+  if (ra) ra.placeholder = T('inputPlaceholder');
+  const rb = $('slugInputB');
+  if (rb) rb.placeholder = T('inputPlaceholder');
+  setMode(state.mode);
+  if (state.compare.a) render();
+  else if (state.event) render();
 }
 
 function esc(s) {
@@ -1053,6 +1130,58 @@ function classPaces(event) {
     fastestSec: Math.round(Math.min(...paces)),
     runners: paces.length,
   })).sort((a, b) => a.paceSec - b.paceSec);
+}
+
+// ── Two-race comparison helpers ──────────────────────────────────────────
+// Cumulative started/finished series per race, expressed in minutes relative
+// to each race's own first start (so two races are comparable on a shared
+// relative axis regardless of their different wall-clock schedules/durations).
+// Returns one descriptor per race for the overlay flow chart.
+function compareFlowSeries(eventA, eventB) {
+  const mk = (event, color, i) => {
+    const flow = eventFlow(event);
+    const series = {
+      key: i === 0 ? 'a' : 'b',
+      name: event.name || (i === 0 ? T('raceA') : T('raceB')),
+      color,
+      starts: flow.startMinutes.slice().sort((x, y) => x - y),
+      finishes: flow.finishMinutes.slice().sort((x, y) => x - y),
+      firstStart: flow.firstStart,
+      clockBase: flow.firstStart != null ? flow.firstStart : flow.firstFinish,
+      peak: null,
+    };
+    const pk = finishPeak(series.finishes);
+    series.peak = pk && series.finishes.length ? pk : null;
+    return series;
+  };
+  return [mk(eventA, '#2e5a8a', 0), mk(eventB, '#e15759', 1)];
+}
+
+// Shared-class pace comparison between two races. Returns rows for classes
+// present in BOTH races, each with paceA/paceB in seconds-per-km and the
+// signed delta (B − A), sorted by largest |delta| first so the most striking
+// middle-vs-long differences surface at the top.
+function comparePaceRows(eventA, eventB) {
+  const pa = classPaces(eventA);
+  const pb = classPaces(eventB);
+  const b = {};
+  pb.forEach(x => { b[x.className] = x; });
+  const rows = [];
+  pa.forEach(a => {
+    if (a.className in b) {
+      const bv = b[a.className];
+      rows.push({
+        className: a.className,
+        paceA: a.paceSec,
+        paceB: bv.paceSec,
+        delta: bv.paceSec - a.paceSec,
+        runnersA: a.runners,
+        runnersB: bv.runners,
+      });
+    }
+  });
+  rows.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+  return rows;
 }
 
 // Per-class start windows derived from actual start timestamps. Detects
@@ -2152,9 +2281,176 @@ function paintCharts() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       paintSchedule(ctx, w, h, cfg);
       attachScheduleTip(c);
+    } else if (cfg.type === 'flowcmp') {
+      cfg._el = c; cfg._w = w; cfg._h = h; cfg._dpr = dpr;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintFlowCompare(ctx, w, h, cfg);
+      attachFlowCompareTip(c);
     }
   }
 }
+
+// Combined two-race flow overlay: for each race draws its cumulative start
+// and finish step-curves (minutes relative to that race's own first start) on
+// a shared axis, with the finishing window of the busiest 5-min bin shaded.
+function paintFlowCompare(ctx, w, h, cfg) {
+  ctx.clearRect(0, 0, w, h);
+  const series = cfg.series || [];
+  if (!series.length) return;
+  const padL = 46, padR = 10, padT = 8, padB = 24;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+
+  const allFinish = [];
+  let xMax = 0;
+  series.forEach(s => {
+    if (s.starts.length) xMax = Math.max(xMax, s.starts[s.starts.length - 1]);
+    if (s.finishes.length) xMax = Math.max(xMax, s.finishes[s.finishes.length - 1]);
+    s.finishes.forEach(m => { if (isFinite(m)) allFinish.push(m); });
+  });
+  let yMax = 0;
+  series.forEach(s => yMax = Math.max(yMax, s.starts.length, s.finishes.length));
+  yMax = Math.max(yMax, 1);
+  xMax = Math.max(xMax, 1);
+  const spanX = xMax;
+  const X = m => padL + (m / spanX) * pw;
+  const Y = n => padT + ph - (n / yMax) * ph;
+
+  // y-axis ticks
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const yTicks = 4;
+  for (let i = 0; i <= yTicks; i++) {
+    const val = Math.round(yMax * i / yTicks);
+    const y = Y(val);
+    ctx.strokeStyle = '#e4e9f0';
+    ctx.fillStyle = '#8a97a6';
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillText(String(val), padL - 5, y);
+  }
+
+  // x-axis ticks (shared relative minutes)
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const step = niceStep(spanX);
+  for (let m = 0; m <= xMax + 0.01; m += step) {
+    const x = X(m);
+    ctx.strokeStyle = '#eef2f6';
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+    ctx.fillStyle = '#8a97a6';
+    ctx.fillText(fmtMin(m), x, h - 14);
+  }
+
+  // peak shading for whichever race has the busiest window — use the union
+  // is complex, so shade the busiest single-race window among the two.
+  let gPeak = null;
+  series.forEach(s => { if (s.peak && (!gPeak || s.peak.count > gPeak.count)) gPeak = s.peak; });
+  if (gPeak && gPeak.count > 0) {
+    const x0 = X(gPeak.from);
+    const x1 = X(gPeak.to);
+    if (x1 > x0) {
+      ctx.fillStyle = 'rgba(230,126,34,0.14)';
+      ctx.fillRect(x0, padT, x1 - x0, ph);
+      const lbl = T('pPeak') + ' ' + fmtMin(gPeak.from) + '–' + fmtMin(gPeak.to) + ' · ' + gPeak.count;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      const tw = ctx.measureText(lbl).width || 130;
+      const lx = Math.max(padL, Math.min(x0 + 4, w - padR - tw - 8));
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillRect(lx, padT + 3, tw + 8, 15);
+      ctx.fillStyle = '#b0560f';
+      ctx.fillText(lbl, lx + 4, padT + 5);
+    }
+  }
+
+  const stepCurve = (mins) => {
+    const pts = [{ x: 0, y: 0 }];
+    let n = 0;
+    for (const v of mins) {
+      pts.push({ x: v, y: n }); n++;
+      pts.push({ x: v, y: n });
+    }
+    return pts;
+  };
+
+  series.forEach(s => {
+    const draw = (mins, dash) => {
+      const pts = stepCurve(mins);
+      ctx.save();
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash(dash || []);
+      ctx.beginPath();
+      let started = false;
+      for (const p of pts) {
+        if (p.x > xMax) break;
+        const x = X(p.x), y = Y(p.y);
+        if (!started) { ctx.moveTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
+      }
+      if (started) ctx.lineTo(X(xMax), Y(mins.length));
+      ctx.stroke();
+      ctx.restore();
+    };
+    draw(s.starts, []);
+    draw(s.finishes, [5, 4]);
+  });
+
+  ctx.strokeStyle = '#c9d2dc';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(padL, padT + ph); ctx.lineTo(w - padR, padT + ph); ctx.stroke();
+
+  cfg._cmpMap = { padL, padR, padT, padB, pw, spanX, xMax, yMax, h };
+}
+
+// Hit-tests hover position on the compare overlay and shows per-race finishing
+// counts for the 5-min window under the cursor.
+function attachFlowCompareTip(c) {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
+  if (!tip) return;
+  const cfgOf = () => chartStore[c.dataset.chartId];
+  const show = (clientX, clientY) => {
+    const cfg = cfgOf();
+    if (!cfg || !cfg._cmpMap) { tip.hidden = true; return; }
+    const s = cfg._cmpMap;
+    const rect = c.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    if (px < s.padL || px > rect.width - s.padR || py < s.padT || py > rect.height - s.padB) {
+      tip.hidden = true; return;
+    }
+    const m = ((px - s.padL) / s.pw) * s.spanX;
+    const from = Math.floor(m / 5) * 5, to = from + 5;
+    const parts = ['<b>' + esc(T('lWindow')) + ' ' + fmtMin(from) + '–' + fmtMin(to) + '</b>'];
+    cfg.series.forEach(sr => {
+      const fin = sr.finishes.filter(v => v >= from && v < to).length;
+      const st = sr.starts.filter(v => v >= from && v < to).length;
+      parts.push('<span class="tipcls"><span class="sw" style="background:' + sr.color + '"></span>' +
+        esc(sr.name) + ' · ' + esc(T('lFinishing')) + ' ' + fin + ' · ' + esc(T('lStarting')) + ' ' + st + '</span>');
+    });
+    tip.innerHTML = parts.join('<br>');
+    tip.hidden = false;
+    const wrap = c.parentElement;
+    const wr = wrap.getBoundingClientRect();
+    const ww = wrap.clientWidth || rect.width;
+    tip.style.left = Math.max(0, Math.min(clientX - wr.left + 14, ww - 220)) + 'px';
+    let ty = clientY - wr.top - (tip.offsetHeight || 0) - 10;
+    if (ty < 2) ty = clientY - wr.top + 16;
+    tip.style.top = ty + 'px';
+  };
+  c.addEventListener('mousemove', (e) => show(e.clientX, e.clientY));
+  c.addEventListener('mouseleave', () => { tip.hidden = true; });
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) show(t.clientX, t.clientY);
+  }, { passive: true });
+  c.addEventListener('touchend', () => { tip.hidden = true; }, { passive: true });
+  c.addEventListener('touchcancel', () => { tip.hidden = true; }, { passive: true });
+}
+
 
 // ════════════════════════════════════════════════════════════════════
 //  Rendering
@@ -2307,9 +2603,22 @@ function flowSection(event) {
   return { html: parts.join('\n'), warnBox };
 }
 
-function renderIndividual(event) {
+// Body of an individual/relay analysis (header + cards + flow + pace +
+// schedule + warnings), reused both for the single-race view and for each
+// column of a two-race comparison. `Relay` and individual render the same
+// set of panels here (header, flow, pace, schedule), so one shared body
+// suffices; only the header text differs by race type via renderHeader.
+function renderRaceBody(event) {
   const flow = flowSection(event);
   return renderHeader(event) + '\n' + flow.html + '\n' + paceSection(event) + '\n' + scheduleSection(event) + '\n' + flow.warnBox;
+}
+
+function renderIndividual(event) {
+  return renderRaceBody(event);
+}
+
+function renderRelay(event) {
+  return renderRaceBody(event);
 }
 
 function paceRefsLegend(refs) {
@@ -2392,12 +2701,6 @@ function scheduleSection(event) {
     '<div class="charttip" data-tip-for="' + id + '" hidden></div></div>');
 }
 
-function renderRelay(event) {
-  const flow = flowSection(event);
-  const parts = [renderHeader(event), flow.html, paceSection(event), scheduleSection(event), flow.warnBox];
-  return parts.join('\n');
-}
-
 function renderMultistage() {
   const stages = state.stageEvents;
   const out = [renderHeader(state.event)];
@@ -2417,7 +2720,76 @@ function renderMultistage() {
   return out.join('\n');
 }
 
+// One column of a two-race comparison: a compact header tag + the full
+// single-race analysis body (cards, flow, pace, schedule, warnings).
+function compareColHtml(event, tag) {
+  const name = event.name || tag;
+  const flowHtml = flowSection(event);
+  let inner = flowHtml.html + '\n' + paceSection(event) + '\n' + scheduleSection(event) + '\n' + flowHtml.warnBox;
+  return '<div class="cmpcol"><div class="cmphdr"><span class="cmptag">' + esc(tag) + '</span>' +
+    '<span class="cmpname">' + esc(name) + '</span></div>' + inner + '</div>';
+}
+
+// Combined pace comparison table (shared classes, A vs B pace + delta).
+function comparePaceSection(eventA, eventB) {
+  const rows = comparePaceRows(eventA, eventB);
+  if (!rows.length) return '';
+  const rowsHtml = rows.map(r => {
+    const faster = r.delta > 0 ? 'B' : 'A';
+    return '<tr>' +
+      '<td>' + esc(r.className) + '</td>' +
+      '<td class="num">' + (r.paceA != null ? fmtTime(r.paceA) : '—') + ' <span class="pacetype">(' + r.runnersA + ')</span></td>' +
+      '<td class="num">' + (r.paceB != null ? fmtTime(r.paceB) : '—') + ' <span class="pacetype">(' + r.runnersB + ')</span></td>' +
+      '<td class="num delta">' + (r.delta === 0 ? '0:00' : (r.delta > 0 ? '+' : '−') + fmtTime(Math.abs(r.delta))) +
+      ' <span class="cmpfast" style="color:' + (faster === 'A' ? '#2e5a8a' : '#e15759') + '">(' + faster + ')</span></td>' +
+      '</tr>';
+  }).join('');
+  return sectionHtml(T('secComparePace'),
+    '<table><thead><tr>' +
+    '<th>' + esc(T('hClass')) + '</th>' +
+    '<th class="num">' + esc(T('raceA')) + ' · min/km</th>' +
+    '<th class="num">' + esc(T('raceB')) + ' · min/km</th>' +
+    '<th class="num delta">' + esc(T('hPaceDelta')) + '</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>');
+}
+
+// Combined flow overlay chart (both races' start/finish curves on a shared
+// relative axis) plus its legend.
+function compareFlowSection(series) {
+  const id = 'ch' + (++chartSeq);
+  chartStore[id] = { type: 'flowcmp', id, series };
+  const legend = '<div class="cmplegend">' + series.map(s =>
+    '<span><span class="clsw" style="background:' + s.color + '"></span>' + esc(s.name) +
+    ' — ' + esc(T('lStarted')) + ' (—) · ' + esc(T('hFin')) + ' (···)</span>'
+  ).join('') + '</div>';
+  return sectionHtml(T('secCompareFlow') +
+    '<div class="cmpbanner">' + esc(T('aRel')) + '</div>' + legend +
+    chartCanvas({ type: 'flowcmp', id, series }));
+}
+
+// Full two-race comparison render: banner + pace table + overlay flow chart,
+// then the two per-race columns side by side.
+function renderCompare() {
+  const a = state.compare.a;
+  const b = state.compare.b;
+  if (!a || !b) return '';
+  const series = compareFlowSeries(a, b);
+  const header = '<section class="evhead"><div><h2>' + esc(T('compareToggle')) + '</h2>' +
+    '<p>' + esc(a.name) + ' · ' + esc(b.name) + '</p></div></section>';
+  const parts = [header];
+  const pace = comparePaceSection(a, b);
+  if (pace) parts.push(pace);
+  parts.push(compareFlowSection(series));
+  parts.push('<div class="cmpwrap">' + compareColHtml(a, T('raceA')) + compareColHtml(b, T('raceB')) + '</div>');
+  return parts.join('\n');
+}
+
 function render() {
+  if (state.mode === 'compare' && state.compare.a && state.compare.b) {
+    const out = $('output');
+    if (out) { out.innerHTML = renderCompare(); paintCharts(); }
+    return;
+  }
   const event = state.event;
   if (!event) return;
   let html;
@@ -2497,6 +2869,81 @@ async function analyze(inputOverride) {
     setStatus(T('errFetch') + ': ' + e.message, 'err');
     console.error(e);
   }
+}
+
+// Switch between single-race and compare input UI (both urlbars stay in the
+// DOM; we just show/hide and repopulate placeholders/labels).
+function setMode(mode) {
+  const valid = mode === 'compare' ? mode : 'single';
+  state.mode = valid;
+  const single = $('urlbarSingle');
+  const cmp = $('compareUrlbar');
+  if (single) single.style.display = valid === 'compare' ? 'none' : '';
+  if (cmp) cmp.style.display = valid === 'compare' ? '' : 'none';
+  const tbtn = $('compareToggleBtn');
+  if (tbtn) {
+    tbtn.textContent = valid === 'compare' ? T('compareToggleOn') : T('compareToggle');
+    tbtn.classList.toggle('btn-hdr-active', valid === 'compare');
+  }
+  const lblA = $('labelA');
+  if (lblA) lblA.textContent = T('raceA');
+  const lblB = $('labelB');
+  if (lblB) lblB.textContent = T('raceB');
+}
+
+// Parse the current URL hash. Returns { mode, slug } for a single race or
+// { mode:'compare', a, b } for a compare pair.
+function parseHash(hashVal) {
+  const h = hashVal != null ? hashVal : slugFromHash();
+  if (!h) return null;
+  const parts = h.split('|');
+  if (parts.length >= 2) return { mode: 'compare', a: parts[0], b: parts[1] };
+  return { mode: 'single', slug: parts[0] };
+}
+
+function setCompareShareHash(a, b) {
+  if (typeof history === 'undefined' || typeof location === 'undefined') return;
+  const enc = encodeURIComponent(a + '|' + b);
+  if (location.hash.slice(1) !== enc) {
+    history.replaceState(null, '', location.pathname + location.search + '#' + enc);
+  }
+}
+
+// Load both compare inputs by race label (A or B), allow partial success.
+async function loadCompareOne(slot, input) {
+  const id = input.trim();
+  if (!id) return null;
+  try {
+    const ev = await fetchEvent(id);
+    state.compare[slot] = ev;
+    return ev;
+  } catch (e) {
+    setStatus((slot === 'a' ? T('compareLoadingA') : T('compareLoadingB')) + ' — ' + T('errFetch') + ': ' + e.message, 'err');
+    console.error(e);
+    return null;
+  }
+}
+
+async function analyzeCompare(inputA, inputB) {
+  const a0 = (inputA != null ? inputA : $('slugInputA') ? $('slugInputA').value : '').trim();
+  const b0 = (inputB != null ? inputB : $('slugInputB') ? $('slugInputB').value : '').trim();
+  if (!a0 || !b0) { setStatus(T('errCompareNeedTwo'), 'err'); return; }
+  setStatus(T('statusLoading') + ' …', 'ok');
+  state.mode = 'compare';
+  state.compare.a = null;
+  state.compare.b = null;
+  const [a, b] = await Promise.all([loadCompareOne('a', a0), loadCompareOne('b', b0)]);
+  if (typeof document !== 'undefined') {
+    document.title = (a && a.name ? a.name : T('raceA')) + ' vs ' + (b && b.name ? b.name : T('raceB')) + ' – Kilpailuanalyysi';
+  }
+  const sb = $('shareBtn');
+  if (sb) sb.style.display = (a && b) ? '' : 'none';
+  if (a && b) {
+    const sa = extractSlug(a0), sbb = extractSlug(b0);
+    if (sa && sbb) setCompareShareHash(sa, sbb);
+  }
+  render();
+  setStatus(T('statusDone'), 'ok');
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2606,15 +3053,31 @@ function wireUI() {
   if (cb) cb.addEventListener('click', exportCSV);
   const sb = $('shareBtn');
   if (sb) sb.addEventListener('click', shareLink);
+  const tbtn = $('compareToggleBtn');
+  if (tbtn) tbtn.addEventListener('click', () => setMode(state.mode === 'compare' ? 'single' : 'compare'));
+  const cbBtn = $('compareBtn');
+  if (cbBtn) cbBtn.addEventListener('click', () => { analyzeCompare(); });
+  const sa = $('slugInputA');
+  if (sa) sa.addEventListener('keydown', e => { if (e.key === 'Enter') analyzeCompare(); });
+  const sbInp = $('slugInputB');
+  if (sbInp) sbInp.addEventListener('keydown', e => { if (e.key === 'Enter') analyzeCompare(); });
   if (typeof window !== 'undefined' && window.addEventListener) {
-    window.addEventListener('resize', () => { if (state.event) paintCharts(); });
+    window.addEventListener('resize', () => { if (state.event || (state.compare.a || state.compare.b)) paintCharts(); });
   }
   setupChartInteractions();
   setupScheduleInteractions();
   const fromHash = slugFromHash();
   if (fromHash) {
-    if (slug) slug.value = fromHash;
-    analyze(fromHash);
+    const parsed = parseHash(fromHash);
+    if (parsed && parsed.mode === 'compare' && parsed.a && parsed.b) {
+      setMode('compare');
+      if (sa) sa.value = parsed.a;
+      if (sbInp) sbInp.value = parsed.b;
+      analyzeCompare(parsed.a, parsed.b);
+    } else if (parsed && parsed.slug) {
+      if (slug) slug.value = parsed.slug;
+      analyze(parsed.slug);
+    }
   }
 }
 

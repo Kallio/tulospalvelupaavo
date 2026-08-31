@@ -424,6 +424,17 @@ exchange/restart markers for relays and a highlighted peak finishing window)
 and a per-class pace comparison chart against reference paces; timeline
 series can be combined for comparison. Flags likely-wrong results (excluded
 results, competitors still shown as on-course) in a separate warnings panel.
+
+A **compare mode** (top-bar "Compare races" toggle) loads two events side by
+side: each race gets its own column with the usual cards, flow, pace and
+schedule panels, plus a combined overlay flow chart (both races' start/finish
+curves on a shared relative-time axis, aligned at each race's first start) and
+a combined per-class pace table (min/km for shared classes, with the delta and
+which race is faster). Because the overlay is relative to each race's own first
+start, an interval middle-distance race and a long-distance race are directly
+comparable in shape. Enter two slugs/URLs (e.g. a UUID and a `/tapahtumat/...`
+URL) — the compare link is also shareable (`#slugA|slugB`).
+
 Exports the full report as CSV, prints cleanly, and can generate a shareable
 link that reloads the same analysis. UI available in Finnish and English.
 
