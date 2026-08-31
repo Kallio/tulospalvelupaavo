@@ -22,7 +22,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 | ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
 | Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
 | Lasten kartat A4-arkeiksi painoon | [Map Merger](#map-merger) |
-| Sähköpaimen-tulppien rastinumerolaput A4:lle | [Sähköpaimen rastinumerotulostin](#sähköpaimen-rastinumerotulostin) |
+| Sähköpaimen-tolppien rastinumerolaput A4:lle | [Sähköpaimen rastinumerotulostin](#sähköpaimen-rastinumerotulostin) |
 | Live-tulokset/väliajat streamiin (OBS/vMix) | [OBS-lähetysgrafiikat](#obs-lähetysgrafiikat) |
 | Pisteseurannan moniosaiselle sarjalle | [Pokaalijahti WordPress -liitännäinen](#pokaalijahti-wordpress--liitännäinen) |
 | Tulokset lehdistötiedotteeseen | [Lehdistötulokset](#lehdistötulokset) |
