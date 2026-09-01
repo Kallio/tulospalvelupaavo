@@ -162,6 +162,8 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
       <button class="bg" onclick="fillGaps()">Täytä aukot</button>
     </div>
     <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet/parit ensin (muuten vahvuus ensin)</label>
+    <label style="display:block;font-size:10.5px;color:#9aa;margin:6px 0 2px;">Jätä pois generoinnista:</label>
+    <div id="genFilters" class="row" style="margin-top:0;"></div>
     <label style="font-size:11px;color:#7ec8e3;">Ikäsarjat: kolme osuutta, ei joukkuevaatimuksia (ainoa kova sääntö: kilpailuvuonna vähintään 14 v). Veteraanisarjat: kolme osuutta, joukkueen ikäsumma ja jäsenten ikäraja tarkistetaan; työkalu päättää parhaan sarjan automaattisesti.</label>
     </div>
   </div>
@@ -337,6 +339,46 @@ function parsePool(text) {
 
 function ageOf(r) {
   return (r.birthYear != null) ? (S.compYear - r.birthYear) : null;
+}
+
+// Ikäryhmä, johon juoksija kuuluu sukupuolesta riippumatta (käytetään
+// ryhmä-suodattimiin). 21+ → 'open'. Tuntematon ikä → null.
+function ageGroupOf(r) {
+  const age = ageOf(r);
+  if (age == null) return null;
+  if (age <= 16) return 'u16';
+  if (age <= 18) return 'u18';
+  if (age <= 20) return 'u20';
+  return 'open';
+}
+
+// Onko juoksija rajattu pois generoinnista aktiivisten suodattimien mukaan?
+// Sukupuoli-suodattimet (N/M) ja ikäryhmä-suodattimet (u16/u18/u20/open)
+// vaikuttavat OR-periaatteella: riittää, että jokin pätee.
+function isExcluded(r) {
+  const f = S.genFilters || {};
+  if (r.gender && f[r.gender]) return true; // f.N / f.M
+  const grp = ageGroupOf(r);
+  if (grp && f[grp]) return true;           // f.u16 / f.u18 / f.u20 / f.open
+  return false;
+}
+
+// Renders the exclusion checkboxes; called on init and restore so the state
+// (also persisted) is reflected in the UI.
+function renderGenFilters() {
+  const wrap = getEl('genFilters');
+  const specs = [
+    ['N', 'Naiset (D)'], ['M', 'Miehet (H)'],
+    ['u16', 'Alle 16'], ['u18', '17–18 v'], ['u20', '19–20 v'], ['open', 'Avoin 21+'],
+  ];
+  wrap.innerHTML = specs.map(([key, label]) =>
+    `<label class="chk"><input type="checkbox" data-gf="${key}" style="width:auto;" ${S.genFilters[key] ? 'checked' : ''} onchange="toggleGenFilter('${key}', this.checked)"> ${label}</label>`
+  ).join('');
+}
+
+function toggleGenFilter(key, on) {
+  S.genFilters[key] = !!on;
+  autosave();
 }
 
 // Ei-estävät varoitukset: alle liiton ikärajan olevat (sallittu
@@ -713,9 +755,9 @@ function generateAll() {
   S.runners = parsed;
   selectedIdx.clear();
 
-  const ageRunners = S.runners.filter(r => r.kind === 'age' && !r.kipea);
-  const vetM = S.runners.filter(r => r.kind === 'vet' && r.gender === 'M' && !r.kipea);
-  const vetD = S.runners.filter(r => r.kind === 'vet' && r.gender === 'N' && !r.kipea);
+  const ageRunners = S.runners.filter(r => r.kind === 'age' && !r.kipea && !isExcluded(r));
+  const vetM = S.runners.filter(r => r.kind === 'vet' && r.gender === 'M' && !r.kipea && !isExcluded(r));
+  const vetD = S.runners.filter(r => r.kind === 'vet' && r.gender === 'N' && !r.kipea && !isExcluded(r));
 
   const ageGroups = groupAgeSeries(ageRunners);
   const vetResM = assignVeteranSeries(vetM, VETERAN_ORDER_H);
@@ -1041,6 +1083,7 @@ const S = {
   runners: [], teams: [], teamSarja: [],
   klubi: 'Seura', firstNum: 1, compYear: new Date().getFullYear(), toiveFirst: true,
   poolText: '', showPool: true, poolSort: 'order', poolDir: 1,
+  genFilters: { N: false, M: false, u16: false, u18: false, u20: false, open: false },
 };
 
 function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
@@ -1091,7 +1134,7 @@ function serializeState() {
   return {
     v: 1,
     klubi: S.klubi, firstNum: S.firstNum, compYear: S.compYear, toiveFirst: S.toiveFirst, poolText: S.poolText,
-    showPool: S.showPool, poolSort: S.poolSort, poolDir: S.poolDir,
+    showPool: S.showPool, poolSort: S.poolSort, poolDir: S.poolDir, genFilters: Object.assign({}, S.genFilters),
     runners: S.runners.map(r => ({ nimi: r.nimi, kind: r.kind, sarja: r.sarja, gender: r.gender, birthYear: r.birthYear, toive: r.toive, pari: r.pari, aloitus: r.aloitus, keski: r.keski, lopetus: r.lopetus, kipea: r.kipea })),
     teams: S.teams.map(t => t.map(r => r ? S.runners.indexOf(r) : null)),
     teamSarja: S.teamSarja,
@@ -1108,6 +1151,7 @@ function restoreState(data) {
   S.showPool = data.showPool !== false;
   S.poolSort = data.poolSort || 'order';
   S.poolDir = data.poolDir || 1;
+  S.genFilters = Object.assign({ N: false, M: false, u16: false, u18: false, u20: false, open: false }, data.genFilters || {});
   S.runners = (data.runners || []).map(d => ({
     nimi: d.nimi, kind: d.kind, sarja: d.sarja || null, gender: d.gender || null,
     birthYear: d.birthYear != null ? d.birthYear : null,
@@ -1120,6 +1164,7 @@ function restoreState(data) {
   getEl('compYear').value = S.compYear;
   getEl('toiveFirst').checked = S.toiveFirst;
   getEl('poolText').value = S.poolText;
+  renderGenFilters();
   return true;
 }
 
@@ -1520,6 +1565,7 @@ function loadExamplePool(count) {
       if (raw) { if (restoreState(JSON.parse(raw))) { renderAll(); return; } }
     } catch (e) {}
   }
+  renderGenFilters();
   renderAll();
 })();
 </script>

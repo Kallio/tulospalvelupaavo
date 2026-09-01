@@ -412,6 +412,68 @@ assert('LEG_NAMES: aloitus / toinen osuus / ankkuri', JSON.stringify(__LEG_NAMES
   assert('vetInOpenClass: only applies to H21/D21, not veteran classes themselves', !vetInOpenClass(vet, 'H45'));
   assert('vetInOpenClass: unknown age not flagged', !vetInOpenClass(parsePool('H21:Tuntematon')[0], 'H21'));
 }
+
+// ── Generation exclusion filters (remove all Ladies/Men/under-21 etc.) ──
+{
+  const mk = (age, gender) => parsePool(`X:${CY - age}:${gender}`)[0];
+  const reset = () => { for (const k of ['N','M','u16','u18','u20','open']) S.genFilters[k] = false; };
+
+  reset();
+  const sunny = mk(17, 'M');
+  assert('ageGroupOf: 17yo → u18', ageGroupOf(sunny) === 'u18');
+  assert('ageGroupOf: 15yo → u16', ageGroupOf(mk(15, 'N')) === 'u16');
+  assert('ageGroupOf: 20yo → u20', ageGroupOf(mk(20, 'N')) === 'u20');
+  assert('ageGroupOf: 25yo → open', ageGroupOf(mk(25, 'M')) === 'open');
+  assert('ageGroupOf: no birth year → null', ageGroupOf(parsePool('H21:Tuntematon')[0]) === null);
+
+  assert('isExcluded: nothing set → not excluded', !isExcluded(sunny));
+  S.genFilters.M = true;
+  assert('isExcluded: gender filter M excludes a male', isExcluded(sunny));
+  S.genFilters.M = false;
+  S.genFilters.u18 = true;
+  assert('isExcluded: age-group u18 excludes a 17yo', isExcluded(sunny));
+  S.genFilters.u18 = false;
+  assert('isExcluded: no filters → not excluded (again)', !isExcluded(sunny));
+  S.genFilters.N = true;
+  assert('isExcluded: lady filter excludes a woman, not the man', isExcluded(mk(24, 'N')) && !isExcluded(sunny));
+  reset();
+
+  // generateAll must honor the filters: exclude all women → only men's teams.
+  S.compYear = CY;
+  getEl('poolText').value = [
+    `H21:Mies1:${CY - 25}`, `H21:Mies2:${CY - 25}`, `H21:Mies3:${CY - 25}`,
+    `H21:Nain1:${CY - 25}`, `H21:Nain2:${CY - 25}`, `H21:Nain3:${CY - 25}`,
+    `D21:Nain4:${CY - 25}`, `D21:Nain5:${CY - 25}`, `D21:Nain6:${CY - 25}`,
+  ].join('\n');
+  getEl('klubi').value = 'Suodatintesti';
+  getEl('compYear').value = CY;
+  getEl('toiveFirst').checked = true;
+  S.genFilters.N = true; // exclude all ladies
+  generateAll();
+  // Every generated team should be men-only.
+  const allMen = S.teams.every(t => t.filter(Boolean).every(r => r.gender !== 'N'));
+  assert('generateAll: excluding ladies yields only men-only teams', allMen, JSON.stringify(S.teams.map(t => t.map(r => r && (r.nimi + '/' + r.gender)))));
+  reset();
+
+  // Under-21 exclusion: remove all youth (H16/H18/H20), leaving only open H21.
+  S.compYear = CY;
+  getEl('poolText').value = [
+    `H21:A:${CY - 25}`, `H21:B:${CY - 25}`, `H21:C:${CY - 25}`,
+    `H18:D:${CY - 17}`, `H18:E:${CY - 17}`, `H18:F:${CY - 17}`,
+  ].join('\n');
+  S.genFilters.u18 = true; // exclude 17-18 year olds
+  generateAll();
+  const teamSarjas = S.teamSarja.slice();
+  assert('generateAll: excluding u18 removes youth teams', !teamSarjas.includes('H18'), JSON.stringify(teamSarjas));
+  assert('generateAll: excluding u18 keeps the open H21 team', teamSarjas.includes('H21'), JSON.stringify(teamSarjas));
+  reset();
+
+  // toggleGenFilter persists to state.
+  toggleGenFilter('open', true);
+  assert('toggleGenFilter: sets the flag', S.genFilters.open === true);
+  toggleGenFilter('open', false);
+  assert('toggleGenFilter: clears the flag', S.genFilters.open === false);
+}
 {
   S.compYear = CY;
   const a = parsePool(`H21:A:${CY - 25}`)[0], b = parsePool(`H21:B:${CY - 40}`)[0], c = parsePool(`H21:C:${CY - 25}`)[0];
