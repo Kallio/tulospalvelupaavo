@@ -140,8 +140,8 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
   <div class="ps">
     <h3 class="step-hdr" onclick="toggleStep('pool')"><span class="step-toggle" id="stepTogglePool">▾</span> 1. Juoksijapooli</h3>
     <div class="ps-body" id="psBodyPool">
-    <label>Ikäsarjat (H21/H20/H18/H16/D21/D20/D18/D16): <code>Sarja:Nimi:Syntymävuosi[:Pari]</code>. Veteraanit (H35–H80/D35–D70, sarja päätellään iästä): <code>Nimi:Syntymävuosi:Sukupuoli[:Toivesarja][:Pari]</code>. Ryhmät (Pari) voi muodostaa myös alla olevasta listasta valitsemalla.</label>
-    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa:1995&#10;H16:Korhonen Ilmari:2010&#10;Virtanen Matti:1975:M:H45:vets-a&#10;Lehtonen Ari:1974:M::vets-a"></textarea>
+    <label>Ikäsarjat (H21/H20/H18/H16/D21/D20/D18/D16): <code>Sarja:Nimi:Syntymävuosi[:Pari]</code> (luokka voi olla myös toisena: <code>Nimi:Sarja:Syntymävuosi</code>). Nuori ilman sarjaa: <code>Nimi:Syntymävuosi:Sukupuoli</code> päättelee ikäsarjan iästä (≤16→16, 17–18→18, 19–20→20). Veteraanit (H35–H80/D35–D70, sarja päätellään iästä): <code>Nimi:Syntymävuosi:Sukupuoli[:Toivesarja][:Pari]</code>. Ryhmät (Pari) voi muodostaa myös alla olevasta listasta valitsemalla.</label>
+    <textarea id="poolText" rows="9" placeholder="H21:Kauppi Vesa:1995&#10;H16:Korhonen Ilmari:2010&#10;Korhonen Ilmari:2010:M&#10;Virtanen Matti:1975:M:H45:vets-a&#10;Lehtonen Ari:1974:M::vets-a"></textarea>
     <div class="row">
       <button class="bg btn-sm" onclick="loadExamplePool(30)">Esimerkkipooli (30)</button>
       <button class="bg btn-sm" onclick="loadExamplePool(60)">(60)</button>
@@ -251,36 +251,77 @@ function parseGender(tok) {
   return null;
 }
 
-// Rivimuodot:
-//  1) "Sarja:Nimi:Syntymävuosi[:Pari]" — ikäsarja on ilmoitettu suoraan, joten
-//     sillä ei ole toivesarjaa (kuuluu jo täsmälleen yhteen sarjaan).
+// Ikäsarjan päätteleminen syntymävuodesta nuorille juoksijoille, joilla ei ole
+// omaa sarjaa: ikä kilpailuvuonna ≤16 → H16/D16, 17–18 → H18/D18, 19–20 →
+// H20/D20. 21+ palauttaa null eli jää veteraanipolulle (ei pääteltyä nuorten
+// sarjaa; aikuisikäiset käsitellään kuten ennenkin).
+function deriveAgeSarja(age, gender) {
+  if (age == null || !gender) return null;
+  const prefix = gender === 'N' ? 'D' : 'H';
+  let n;
+  if (age <= 16) n = 16;
+  else if (age <= 18) n = 18;
+  else if (age <= 20) n = 20;
+  else return null;
+  return prefix + n;
+}
+
+// Rivimuodot (erotin ":"):
+//  1) "Sarja:Nimi:Syntymävuosi[:Pari]" — ikäsarja ilmoitettu suoraan. Luokka
+//     voi olla ensimmäinen TAI toinen sarake ("Nimi:Sarja:Syntymävuosi").
 //  2) "Nimi:Syntymävuosi:Sukupuoli[:Toivesarja][:Pari]" — veteraaniehdokas,
 //     sarja päätellään iästä (assignVeteranSeries); Toivesarja on valinnainen
-//     toive siitä, mihin omista kelpaavista veteraanisarjoista haluaisi
-//     mieluiten (esim. "H45"), kunnioitetaan parhaan kyvyn mukaan.
+//     toive siitä, mihin omista kelpaavista veteraanisarjoista haluaisi.
+//  3) Nuori "Nimi:Syntymävuosi:Sukupuoli" — sarjaa ei ole annettu, mutta
+//     syntymävuodesta päätellään ikäsarja (deriveAgeSarja), jos ikä ≤20.
 function parsePool(text) {
   const out = [];
   const seen = new Set();
+  const year = S.compYear;
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
     const parts = line.split(':').map(s => s.trim());
     let nimi, sarja = null, gender, kind, birthYear = null, toive = null, pari = null;
-    const ageSarja = normalizeAgeSarja(parts[0]);
-    if (ageSarja) {
-      sarja = ageSarja; nimi = parts[1]; kind = 'age';
-      gender = ageSarja[0] === 'H' ? 'M' : 'N';
+
+    // Etsitään eksplisiittinen ikäsarja ensimmäisestä TAI toisesta sarakkeesta.
+    let ageSarjaIdx = -1;
+    for (let i = 0; i < parts.length && i < 2; i++) {
+      const as = normalizeAgeSarja(parts[i]);
+      if (as) { ageSarjaIdx = i; sarja = as; break; }
+    }
+
+    if (ageSarjaIdx !== -1) {
+      kind = 'age';
+      gender = sarja[0] === 'H' ? 'M' : 'N';
+      const rest = parts.filter((_, i) => i !== ageSarjaIdx);
+      let yearIdx = -1;
+      for (let i = 0; i < rest.length; i++) {
+        if (/^\d{4}$/.test(rest[i])) { yearIdx = i; break; }
+      }
+      if (yearIdx !== -1) birthYear = parseInt(rest[yearIdx], 10);
+      const nameCands = rest.filter((_, i) => i !== yearIdx);
+      nimi = nameCands[0] || '';
       if (!nimi) continue;
-      birthYear = /^\d{4}$/.test(parts[2] || '') ? parseInt(parts[2], 10) : null;
-      pari = parts[3] || null;
-    } else if (parts.length >= 3 && /^\d{4}$/.test(parts[1]) && parseGender(parts[2])) {
-      nimi = parts[0]; kind = 'vet';
+      pari = parts.length >= 4 ? parts[3] : null;
+    } else if (parts.length >= 2 && /^\d{4}$/.test(parts[1])) {
+      // Ei eksplisiittistä sarjaa; syntymävuosi (ja mahdollisesti sukupuoli).
+      nimi = parts[0];
       birthYear = parseInt(parts[1], 10);
-      gender = parseGender(parts[2]);
-      const wantTok = String(parts[3] || '').trim().toUpperCase();
-      const wantGender = gender === 'M' ? 'H' : 'D';
-      toive = (isVeteranSarja(wantTok) && wantTok[0] === wantGender) ? wantTok : null;
-      pari = parts[4] || null;
+      const g = parts.length >= 3 ? parseGender(parts[2]) : null;
+      const derived = g ? deriveAgeSarja(year - birthYear, g) : null;
+      if (derived) {
+        kind = 'age'; sarja = derived; gender = g;
+        pari = parts[3] || null;
+      } else if (g) {
+        kind = 'vet'; gender = g;
+        const wantTok = String(parts[3] || '').trim().toUpperCase();
+        const wantGender = g === 'M' ? 'H' : 'D';
+        toive = (isVeteranSarja(wantTok) && wantTok[0] === wantGender) ? wantTok : null;
+        pari = parts[4] || null;
+      } else {
+        continue;
+      }
     } else {
       continue;
     }

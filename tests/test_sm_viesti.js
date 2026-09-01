@@ -91,6 +91,29 @@ assert('parsePool age: case-insensitive tag', parsePool(`h21:Nimi:${CY - 25}`)[0
 assert('parsePool: dedups identical lines', parsePool(`Virtanen Matti:${CY - 40}:M\nVirtanen Matti:${CY - 40}:M`).length === 1);
 assert('parsePool: blank lines skipped', parsePool('\n\n  \n').length === 0);
 
+// ── Ikäsarja päätellään syntymävuodesta, kun sarjaa ei ole annettu ──
+{
+  assert('deriveAgeSarja: <=16 → 16', deriveAgeSarja(16, 'M') === 'H16' && deriveAgeSarja(15, 'N') === 'D16');
+  assert('deriveAgeSarja: 17-18 → 18', deriveAgeSarja(17, 'M') === 'H18' && deriveAgeSarja(18, 'N') === 'D18');
+  assert('deriveAgeSarja: 19-20 → 20', deriveAgeSarja(19, 'M') === 'H20' && deriveAgeSarja(20, 'N') === 'D20');
+  assert('deriveAgeSarja: 21+ → null (vet path)', deriveAgeSarja(21, 'M') === null && deriveAgeSarja(40, 'N') === null);
+  assert('deriveAgeSarja: missing age/gender → null', deriveAgeSarja(null, 'M') === null && deriveAgeSarja(17, null) === null);
+
+  const r = parsePool(`Nuori Juoksiia:${CY - 17}:M`)[0];
+  assert('parsePool no-class youth: derives H18 age-class', r && r.kind === 'age' && r.sarja === 'H18' && r.gender === 'M', JSON.stringify(r));
+
+  const rd = parsePool(`Nuori II:${CY - 20}:N`)[0];
+  assert('parsePool no-class youth: derives D20 for 20yo woman', rd && rd.kind === 'age' && rd.sarja === 'D20', JSON.stringify(rd));
+
+  // Adult (21+) without a class stays on the veteran path (kind=vet), not ikäsarja.
+  const a = parsePool(`Aikuinen:${CY - 40}:M`)[0];
+  assert('parsePool no-class adult: stays veteran (not ikäsarja)', a && a.kind === 'vet' && a.sarja === null, JSON.stringify(a));
+
+  // Explicit class in the SECOND column ("Nimi:Sarja:Syntymävuosi") still maps.
+  const idx1 = parsePool(`Korhonen:${'H20'}:${CY - 19}`)[0];
+  assert('parsePool: class in second column maps ikäsarja', idx1 && idx1.sarja === 'H20' && idx1.kind === 'age' && idx1.nimi === 'Korhonen', JSON.stringify(idx1));
+}
+
 // ── ageOf / computeWarnings ──
 {
   S.compYear = CY;
