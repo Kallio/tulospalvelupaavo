@@ -486,5 +486,31 @@ assert('LEG_NAMES: aloitus / toinen osuus / ankkuri', JSON.stringify(__LEG_NAMES
   assert('renderTeams: veteran-in-open runner gets the 35+ badge', out.includes('vetbadge') && out.includes('35+'), out);
 }
 
+// ── Team class selection: eligible class dropdown (e.g. H55 vs H45 vs H21) ──
+{
+  const mkVet = (name, age) => parsePool(`${name}:${CY - age}:M`)[0];
+  // Three veterans: ages 55+58+59 = 172 → satisfies H55 (minSum 170),
+  // H45 (130), H35 (105), and always open H21; but NOT H60 (minSum 190).
+  const a = mkVet('A', 55), b = mkVet('B', 58), c = mkVet('C', 59);
+  S.runners = [a, b, c];
+  S.teams = [[a, b, c]];
+  S.teamSarja = ['H45'];
+  const elig = teamEligibleSarjat(0);
+  assert('teamEligibleSarjat: includes the current class first', elig[0] === 'H45', JSON.stringify(elig));
+  assert('teamEligibleSarjat: lists harder satisfied veteran classes (H55)', elig.includes('H55'), JSON.stringify(elig));
+  assert('teamEligibleSarjat: lists easier satisfied veteran classes (H35)', elig.includes('H35'), JSON.stringify(elig));
+  assert('teamEligibleSarjat: always offers open class (H21)', elig.includes('H21'), JSON.stringify(elig));
+  assert('teamEligibleSarjat: no impossible class included (H60 needs sum≥190)', !elig.includes('H60'), JSON.stringify(elig));
+
+  // open-class eligibility: a veteran team can run in the open H21 class.
+  assert('memberEligible: veteran (55yo) eligible for open H21', memberEligible(a, 'H21'));
+  assert('memberEligible: female runner not eligible for open H21', !memberEligible(parsePool(`X:${CY - 40}:N`)[0], 'H21'));
+
+  // setTeamSarja reassigns and re-renders.
+  setTeamSarja(0, 'H21');
+  assert('setTeamSarja: moves the team into open class', S.teamSarja[0] === 'H21');
+  assert('setTeamSarja: team now validates in the open class', validateTeam(S.teams[0], S.teamSarja[0]).length === 0);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -415,7 +415,40 @@ function memberEligible(r, sarja) {
     if (age == null) return false;
     return age >= rule.minAge;
   }
+  // Avoin H21/D21: kelpaa kuka tahansa vastaavan sukupuolen juoksija
+  // (mukaan lukien veteraani-ikäiset — ks. vetInOpenClass).
+  if (sarja === 'H21' || sarja === 'D21') {
+    return r.gender === (sarja === 'H21' ? 'M' : 'N');
+  }
   return r.sarja === sarja;
+}
+
+// Kaikki sarjat, joihin annettu (täysi) joukkue voidaan sijoittaa. Veteraani-
+// joukkuetta voidaan liikuttaa sen täyttämien veteraanisarjojen välillä ja
+// myös avoimeen H21/D21-sarjaan. Palauttaa järjestyksen: nykyinen sarja ensin.
+function teamEligibleSarjat(t) {
+  const members = S.teams[t].filter(Boolean);
+  const current = S.teamSarja[t];
+  if (members.length !== 3) return [current];
+  const gender = members[0].gender;
+  const list = [];
+  const vetOrder = gender === 'N' ? VETERAN_ORDER_D : VETERAN_ORDER_H;
+  for (const sarja of vetOrder) {
+    if (teamRequirements(members, sarja).length === 0) list.push(sarja);
+  }
+  list.push(gender === 'N' ? 'D21' : 'H21');
+  if (members.every(r => r.kind === 'age')) {
+    for (const sarja of AGE_SARJAT) {
+      if (teamRequirements(members, sarja).length === 0) list.push(sarja);
+    }
+  }
+  return [current].concat(list.filter(s => s !== current));
+}
+
+function setTeamSarja(t, sarja) {
+  S.teamSarja[t] = sarja;
+  autosave();
+  renderAll();
 }
 
 function teamRequirements(members, sarja) {
@@ -1372,7 +1405,10 @@ function renderTeams() {
     const sum = team.reduce((s, r) => s + strengthOf(r), 0);
     const col = TEAM_COLORS[t % TEAM_COLORS.length];
     html += `<div class="team-col">` +
-      `<div class="team-hdr" style="background:${col}"><div class="tname">${esc(teamLabel(t))} <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
+      `<div class="team-hdr" style="background:${col}"><div class="tname">` +
+      `<select class="team-sarja" style="width:auto;padding:1px 4px;font-size:11px;font-weight:bold;color:#1a2a4a;border:none;border-radius:3px;" onchange="setTeamSarja(${t}, this.value)">` +
+      teamEligibleSarjat(t).map(s => `<option value="${s}" ${s === sarja ? 'selected' : ''}>${s}</option>`).join('') +
+      `</select> <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
       `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/3</div>` +
       (probs.length ? `<div class="problems">${probs.map(esc).join('<br>')}</div>` : '') +
       `</div>`;
