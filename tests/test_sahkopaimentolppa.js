@@ -39,6 +39,52 @@ assert('A4 = 210×297mm', P.A4_W === 210 && P.A4_H === 297);
 assert('part = 150×67mm (15cm × 6,7cm)', P.PART_W === 150 && P.PART_H === 67);
 assert('4 parts per A4 by default', P.DEFAULT_PER_SHEET === 4);
 
+// ── fitFont: number auto-shrinks to stay inside the 150×67mm box, measured
+//    against the containing .part (scale-invariant; independent of DPR/zoom).
+//    The 90° rotation means unrotated width → on-screen height (PART_H) and
+//    unrotated height → on-screen width (PART_W/3). px→mm uses the part, which
+//    is exactly PART_W×PART_H mm, so a px part width of 566.93 is 150mm
+//    (96dpi: 150mm = 566.93px) and the span px map to real mm correctly.
+{
+  // A part drawn at CSS 150mm on a 96dpi screen is 566.93px wide, 253.23px tall.
+  const PX_PER_MM = 96 / 25.4;           // 3.7795 px per CSS mm
+  const partWpx = P.PART_W * PX_PER_MM;  // 566.93
+  const partHpx = P.PART_H * PX_PER_MM;  // 253.23
+  function makePartEl() {
+    return { className: 'part', offsetWidth: partWpx, offsetHeight: partHpx };
+  }
+  // Span stub: closest() → part, text laid out at a given px size.
+  function makeSpan(partEl, numPx) {
+    return {
+      className: 'num left', textContent: '123',
+      offsetWidth: numPx, offsetHeight: Math.round(numPx * 0.6),
+      style: {},
+      closest(sel) { return sel === '.part' ? partEl : null; },
+    };
+  }
+
+  // Number whose unrotated width maps to exactly 60mm (fits, PART_H-4=63).
+  const spanFits = makeSpan(makePartEl(), 60 * PX_PER_MM);
+  P.fitFont(spanFits, P.PART_H - 4, P.PART_W / 3 - 6);
+  assert('fitFont keeps 130pt when the number already fits', spanFits.style.fontSize === '130pt', spanFits.style.fontSize);
+
+  // Number whose unrotated width maps to 90mm (>PART_H-4=63) → must shrink.
+  const spanOverflow = makeSpan(makePartEl(), 90 * PX_PER_MM);
+  P.fitFont(spanOverflow, P.PART_H - 4, P.PART_W / 3 - 6);
+  const shrunkPt = parseFloat(spanOverflow.style.fontSize);
+  assert('fitFont shrinks a wide number below 130pt', shrunkPt < 130 && shrunkPt > 0, spanOverflow.style.fontSize);
+  // After shrinking, the width in mm must land within PART_H-4.
+  const fittedMm = (spanOverflow.offsetWidth * shrunkPt / 130) * (P.PART_W / partWpx);
+  assert('fitFont shrinks into the 67mm box', fittedMm <= P.PART_H - 4 + 0.01, fittedMm + 'mm');
+
+  // A span with no attached part (offsetWidth 0 / closest null) must not crash
+  // and must leave the font at the base size.
+  const detachedSpan = makeSpan(null, 0);
+  detachedSpan.closest = () => null;
+  P.fitFont(detachedSpan, P.PART_H - 4, P.PART_W / 3 - 6);
+  assert('fitFont leaves base size when not laid out', detachedSpan.style.fontSize === '130pt');
+}
+
 // ── parseNumbers ──
 assert('parse: empty → []', P.parseNumbers('') === null || JSON.stringify(P.parseNumbers('')) === '[]');
 assert('parse: whitespace only → []', JSON.stringify(P.parseNumbers('   \n  \n')) === '[]');
@@ -88,13 +134,13 @@ assert('two dotted fold lines per part (thirds)', html.includes('.part .fold') &
 assert('title typo: tolppa not töppä', html.includes('olppa') && !html.includes('öppä') && html.includes('Tolpparastinumero'));
 assert('Arial Narrow font used', html.includes("'Arial Narrow'"));
 assert('condensed fallback list for Windows (Arial Narrow may be missing)', html.includes('Roboto Condensed') && html.includes('Liberation Sans Narrow') && html.includes("'Helvetica Neue Condensed'"));
-assert('130pt font size base', html.includes('130'));
+assert('130pt font size base', html.includes('BASE_FONT_PT = 130'));
 assert('4-part fixed default', html.includes('DEFAULT_PER_SHEET = 4'));
 assert('@page size A4 portrait', html.includes('@page { size: A4 portrait'));
 assert('print resets #main sidebar offset (fixes right-side clipping)', /#main \{ margin: 0 !important; padding: 0 !important; \}/.test(html));
 assert('print hides sheet captions', /\.sheet-cap \{ display: none !important; \}/.test(html));
 assert('parts absolutely positioned in mm', html.includes("PART_LEFT + 'mm'") && html.includes("partOffsetY(index, DEFAULT_PER_SHEET) + 'mm'"));
-assert('two number cells per part', /buildNumberCell\(number, PART_LEFT, true\)/ .test(html) && /buildNumberCell\(number, PART_LEFT, false\)/.test(html));
+assert('two number cells per part', /buildNumberCell\(number, true\)/.test(html) && /buildNumberCell\(number, false\)/.test(html));
 assert('logo file input present', html.includes('id="logoFile"') && html.includes('type="file"'));
 assert('QR is the default (no remote logo dependency)', !html.includes('logoUrl') && !html.includes('espoonsuunta.fi'));
 assert('QR fallback URL', html.includes('QR_SITE_URL = ' + "'https://kallio.github.io/tulospalvelupaavo/'"));

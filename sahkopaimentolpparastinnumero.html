@@ -354,28 +354,55 @@ function renderStatus() {
   el('summary').textContent = msg;
 }
 
-/* Shrink a number's font until it fits inside its third-panel box. The text
- * is rotated 90° (digits run along the 67 mm edge), so the unrotated text
- * WIDTH becomes the on-screen height (bounded by PART_H) and the unrotated
- * height the on-screen width (bounded by a third of PART_W). */
-function fitFont(span, maxWmm, maxHmm) {
-  var size = 130; // pt, from the source DOCX (Arial Narrow 130pt)
-  span.style.fontSize = size + 'pt';
-  if (typeof span.offsetWidth !== 'number') return; // test stub / non-rendered
-  if (!span.offsetWidth) return;
-  var mmPerPt = 0.352778;
-  var scale = Math.min(maxWmm / (span.offsetWidth * mmPerPt), maxHmm / ((span.offsetHeight || span.offsetWidth * 0.35) * mmPerPt));
-  if (scale < 1) span.style.fontSize = (size * scale) + 'pt';
+/* Convert a laid-out element's on-screen px size into CSS mm, scale-invariantly,
+ * by comparing it against the containing .part (which is exactly 150×67 mm).
+ * This is immune to browser zoom / device-pixel-ratio, which is what makes the
+ * old fixed px→mm constant wrong on mobile and Windows. Returns {w, h} in mm. */
+function partMm(span) {
+  var part = span.closest && span.closest('.part');
+  var partWpx = part && part.offsetWidth;
+  var partHpx = part && part.offsetHeight;
+  if (!partWpx || !partHpx) return null; // not laid out
+  var pxPerMmW = partWpx / PART_W;
+  var pxPerMmH = partHpx / PART_H;
+  return {
+    w: span.offsetWidth / pxPerMmW,
+    h: span.offsetHeight / pxPerMmH
+  };
 }
 
-function buildNumberCell(number, mmLeft, leftSlot) {
+var BASE_FONT_PT = 130; // pt, matching the source DOCX (Arial Narrow 130pt)
+
+/* Shrink a number's font until it fits its third-panel box. The text is
+ * rotated 90° (digits run along the 67 mm edge), so the unrotated text WIDTH
+ * becomes the on-screen height (bounded by PART_H) and the unrotated height
+ * the on-screen width (bounded by a third of PART_W). Must run on a span that
+ * is already attached to the document so offsetWidth/Height are real. */
+function fitFont(span, maxWmm, maxHmm) {
+  span.style.fontSize = BASE_FONT_PT + 'pt';
+  if (typeof span.offsetWidth !== 'number') return; // test stub / non-rendered
+  var m = partMm(span);
+  if (!m || !m.w || !m.h) return; // not laid out — leave at base size
+  var scale = Math.min(maxWmm / m.w, maxHmm / m.h);
+  if (scale < 1) span.style.fontSize = (BASE_FONT_PT * scale) + 'pt';
+}
+
+function buildNumberCell(number, leftSlot) {
   var span = document.createElement('span');
   span.className = 'num ' + (leftSlot ? 'left' : 'right');
   span.textContent = number;
-  // After the 90° rotation the unrotated width (digit string) bounds the
-  // 67 mm height and the unrotated height bounds the ~50 mm third panel.
-  fitFont(span, PART_H - 4, PART_W / 3 - 6);
   return span;
+}
+
+/* After every render, re-measure all now-attached number cells and shrink any
+ * that overflow their third panel. Each sheet is in the DOM before this runs,
+ * so synchronous offsetWidth reads trigger layout and return real sizes. */
+function fitParts() {
+  var spans = document.querySelectorAll && document.querySelectorAll('.part .num');
+  if (!spans) return;
+  for (var i = 0; i < spans.length; i++) {
+    fitFont(spans[i], PART_H - 4, PART_W / 3 - 6);
+  }
 }
 
 function buildPart(number, index) {
@@ -391,8 +418,8 @@ function buildPart(number, index) {
       part.appendChild(fold);
     });
   }
-  part.appendChild(buildNumberCell(number, PART_LEFT, true));
-  part.appendChild(buildNumberCell(number, PART_LEFT, false));
+  part.appendChild(buildNumberCell(number, true));
+  part.appendChild(buildNumberCell(number, false));
   part.appendChild(buildLogo());
   return part;
 }
@@ -427,6 +454,7 @@ function renderAll() {
     area.appendChild(cap);
     area.appendChild(sheet);
   });
+  fitParts();
   renderStatus();
 }
 
@@ -442,6 +470,7 @@ window.__sahkopaimentolppa = {
   parseNumbers: parseNumbers,
   chunkNumbers: chunkNumbers,
   partOffsetY: partOffsetY,
+  fitFont: fitFont,
   A4_W: A4_W, A4_H: A4_H, PART_W: PART_W, PART_H: PART_H,
   DEFAULT_PER_SHEET: DEFAULT_PER_SHEET,
   CUT_GAP_MM: CUT_GAP_MM, GROUP_PARTS: GROUP_PARTS, TOP_MARGIN: TOP_MARGIN,
