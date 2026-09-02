@@ -147,6 +147,11 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
       <button class="bg btn-sm" onclick="loadExamplePool(60)">(60)</button>
       <label class="chk"><input type="file" id="poolFile" accept=".csv,.txt" style="width:auto;"> Tiedosto</label>
     </div>
+    <label style="margin-top:6px;">Lisää varamies pooliin (lisätään tekstin loppuun; osallistuu seuraavaan generointiin):</label>
+    <div class="row">
+      <input id="varasText" type="text" placeholder="H21:Kauppi Vesa:1995  tai  Virtanen Matti:1975:M" style="flex:1;" onkeydown="if(event.key==='Enter'){addVaramies();return false;}">
+      <button class="bg btn-sm" onclick="addVaramies()">Lisää varamies</button>
+    </div>
     <label>Seura</label>
     <input id="klubi" type="text" value="Angelniemen Ankkuri">
     <label>Kilpailuvuosi (iän laskentaan)</label>
@@ -316,11 +321,19 @@ function parsePool(text) {
         kind = 'age'; sarja = derived; gender = g;
         pari = parts[3] || null;
       } else if (g) {
-        kind = 'vet'; gender = g;
-        const wantTok = String(parts[3] || '').trim().toUpperCase();
-        const wantGender = g === 'M' ? 'H' : 'D';
-        toive = (isVeteranSarja(wantTok) && wantTok[0] === wantGender) ? wantTok : null;
-        pari = parts[4] || null;
+        const age = year - birthYear;
+        if (age != null && age < OPEN_CLASS_VET_AGE) {
+          // Aikuinen (21–34) ilman omaa sarjaa → avoin pääsarja H21/D21,
+          // johon hän kuuluu nuorten sarjojen ja veteraanisarjojen sijaan.
+          kind = 'age'; sarja = (g === 'N' ? 'D21' : 'H21'); gender = g;
+          pari = parts[3] || null;
+        } else {
+          kind = 'vet'; gender = g;
+          const wantTok = String(parts[3] || '').trim().toUpperCase();
+          const wantGender = g === 'M' ? 'H' : 'D';
+          toive = (isVeteranSarja(wantTok) && wantTok[0] === wantGender) ? wantTok : null;
+          pari = parts[4] || null;
+        }
       } else {
         continue;
       }
@@ -332,7 +345,7 @@ function parsePool(text) {
     const key = kind + ':' + (sarja || '') + ':' + nimi;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ nimi, kind, sarja, gender, birthYear, toive, pari, aloitus: 0, keski: 0, lopetus: 0, kipea: false });
+    out.push({ nimi, kind, sarja, gender, birthYear, toive, pari, aloitus: 5, keski: 5, lopetus: 5, kipea: false });
   }
   return out;
 }
@@ -780,6 +793,26 @@ function syncPool() {
 
 function readPool() { syncPool(); }
 
+// Lisää yksi juoksija pooliin (varamies) ilman että koko tekstimuokkausta tai
+// uudelleengenerointia tarvitaan. Rivi parsitaan varmistuksen vuoksi, liitetään
+// pooli-tekstin loppuun ja synkataan — muut juoksijat ja heidän pistesäätimensä
+// säilyvät (ks. mergePoolState). Osallistuu seuraavaan "Generoi joukkueet" -kutsuun.
+function addVaramies() {
+  readInputs();
+  const el = getEl('varasText');
+  const text = (el ? el.value : '').trim();
+  if (!text) { showWarn('Kirjoita juoksija ensin.'); return; }
+  if (!parsePool(text).length) {
+    showError('Ei tunnistettu juoksijaa — käytä muotoa Sarja:Nimi:Syntymävuosi, Nimi:Syntymävuosi:Sukupuoli tai Nimi:Sarja:Syntymävuosi.');
+    return;
+  }
+  let cur = getEl('poolText').value.replace(/\s+$/, '');
+  getEl('poolText').value = (cur ? cur + '\n' : '') + text;
+  if (el) el.value = '';
+  syncPool();
+  showInfo('Varamies lisätty pooliin.');
+}
+
 function generateAll() {
   readInputs();
   const parsed = parsePool(S.poolText);
@@ -1123,6 +1156,7 @@ function q(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
 function csvCell(v) { const s = String(v); return /^[=+\-@]/.test(s) ? q("'" + s) : q(s); }
 
 function toCSV() {
+  readInputs(); // varmista, että Seura-kentän (ja muiden) nykyiset arvot ovat S:ssä
   if (!S.teams.length) return '';
   const base = ['Kilpailunumero', 'Sarja', 'Joukkueen nimi', 'Kansalaisuus', 'Seura'];
   const header = base.map(q);
@@ -1406,7 +1440,7 @@ function renderTeams() {
     const col = TEAM_COLORS[t % TEAM_COLORS.length];
     html += `<div class="team-col">` +
       `<div class="team-hdr" style="background:${col}"><div class="tname">` +
-      `<select class="team-sarja" style="width:auto;padding:1px 4px;font-size:11px;font-weight:bold;color:#1a2a4a;border:none;border-radius:3px;" onchange="setTeamSarja(${t}, this.value)">` +
+      `<select class="team-sarja" style="width:auto;padding:1px 4px;font-size:11px;font-weight:bold;color:#ffffff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.4);border-radius:3px;" onchange="setTeamSarja(${t}, this.value)">` +
       teamEligibleSarjat(t).map(s => `<option value="${s}" ${s === sarja ? 'selected' : ''}>${s}</option>`).join('') +
       `</select> <span class="status ${probs.length ? 'err' : 'ok'}">${probs.length ? 'RIIKKI' : 'OK'}</span></div>` +
       `<div class="tmeta">vahvuus ${sum.toFixed(1)} · ${team.filter(Boolean).length}/3</div>` +
@@ -1595,6 +1629,7 @@ function loadExamplePool(count) {
     document.addEventListener('dragend', clearDropHighlight);
   }
   getEl('compYear').value = S.compYear;
+  readInputs(); // ota DOM:n oletusarvot (mm. Seura) S:ään myös ilman tallennettua tilaa
   if (typeof localStorage !== 'undefined') {
     try {
       const raw = localStorage.getItem('sm_viesti_state_v1');

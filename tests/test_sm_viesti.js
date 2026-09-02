@@ -114,6 +114,41 @@ assert('parsePool: blank lines skipped', parsePool('\n\n  \n').length === 0);
   assert('parsePool: class in second column maps ikäsarja', idx1 && idx1.sarja === 'H20' && idx1.kind === 'age' && idx1.nimi === 'Korhonen', JSON.stringify(idx1));
 }
 
+// ── parsePool: no-class adult (21-34) → open H21/D21 ──
+{
+  S.compYear = CY;
+  // User's exact example: "Mero Dominika:2001:Nainen" → age 25 → D21 open
+  const dom = parsePool(`Mero Dominika:${CY - 25}:Nainen`)[0];
+  assert('parsePool: Nainen with no class → kind=age, sarja=D21', dom && dom.kind === 'age' && dom.sarja === 'D21', JSON.stringify(dom));
+  assert('parsePool: Nainen with no class → gender=N', dom && dom.gender === 'N', JSON.stringify(dom));
+  assert('parsePool: Nainen with no class → can form team (eligible for D21)', memberEligible(dom, 'D21'), JSON.stringify(dom));
+
+  const mies = parsePool(`Aikuinen:${CY - 28}:Mies`)[0];
+  assert('parsePool: Mies with no class → kind=age, sarja=H21', mies && mies.kind === 'age' && mies.sarja === 'H21', JSON.stringify(mies));
+  assert('parsePool: Mies with no class → gender=M', mies && mies.gender === 'M', JSON.stringify(mies));
+  assert('parsePool: Mies with no class → eligible for H21', memberEligible(mies, 'H21'), JSON.stringify(mies));
+
+  // Still: 35+ without a class → veteran path (not open class).
+  const vet = parsePool(`Vanha:${CY - 40}:N`)[0];
+  assert('parsePool: 35+ no class → still veteran (not open class)', vet && vet.kind === 'vet' && vet.sarja === null, JSON.stringify(vet));
+}
+
+// ── parsePool: generateAll actually forms an open-class team from no-class runners ──
+{
+  S.compYear = CY;
+  S.klubi = 'Testiseura';
+  getEl('poolText').value = [
+    `Mero Dominika:${CY - 25}:Nainen`,
+    `Toinen:${CY - 30}:Nainen`,
+    `Kolmas:${CY - 28}:Nainen`,
+  ].join('\n');
+  getEl('klubi').value = 'Testiseura';
+  getEl('compYear').value = CY;
+  getEl('toiveFirst').checked = true;
+  generateAll();
+  assert('generateAll: 3 no-class women form one D21 team', S.teams.length === 1 && S.teamSarja[0] === 'D21', JSON.stringify(S.teamSarja));
+}
+
 // ── ageOf / computeWarnings ──
 {
   S.compYear = CY;
@@ -296,6 +331,25 @@ assert('teamRequirements: age-based series has no composition requirement', team
   assert('toCSV: header mentions Sarja and 3 legs', rows[0].includes('Sarja') && rows[0].includes('Nimi-1') && rows[0].includes('Nimi-3'));
   assert('toCSV: one data row per team', rows.length === 2);
   assert('toCSV: sarja column has actual series code', rows[1][1] === 'H21', JSON.stringify(rows[1]));
+}
+
+// ── Club name propagates from the DOM input to CSV/JSON without regenerate ──
+{
+  S.compYear = CY;
+  const a = parsePool(`H21:A:${CY - 25}`)[0], b = parsePool(`H21:B:${CY - 25}`)[0], c = parsePool(`H21:C:${CY - 25}`)[0];
+  S.runners = [a, b, c];
+  S.teams = [[a, b, c]];
+  S.teamSarja = ['H21'];
+  S.klubi = 'Stale';
+  getEl('klubi').value = 'Ajokki Jämsä';
+  getEl('compYear').value = CY;
+  getEl('toiveFirst').checked = true;
+  const csv = toCSV();
+  const rows2 = parseCSV(csv.replace(/^﻿/, ''), ',');
+  assert('club: toCSV adopts the club input value (Seura column)', rows2[1][4] === 'Ajokki Jämsä', JSON.stringify(rows2[1]));
+  assert('club: team name embeds the fresh club name', rows2[1][2].includes('Ajokki Jämsä'), rows2[1][2]);
+  const st = serializeState();
+  assert('club: JSON export carries the club name', st.klubi === 'Ajokki Jämsä', String(st.klubi));
 }
 
 // ── renderTeams: grouped into 4 sections (ikäsarjat/veteraanit × H/D) ──
@@ -510,6 +564,60 @@ assert('LEG_NAMES: aloitus / toinen osuus / ankkuri', JSON.stringify(__LEG_NAMES
   setTeamSarja(0, 'H21');
   assert('setTeamSarja: moves the team into open class', S.teamSarja[0] === 'H21');
   assert('setTeamSarja: team now validates in the open class', validateTeam(S.teams[0], S.teamSarja[0]).length === 0);
+}
+
+// ── parsePool: default credibility 50% (each per-leg score = 5) ──
+{
+  S.compYear = CY;
+  const r = parsePool(`H21:Default:${CY - 25}`)[0];
+  assert('parsePool: default per-leg scores are 5 (50% credibility)',
+    r.aloitus === 5 && r.keski === 5 && r.lopetus === 5,
+    JSON.stringify({ aloitus: r.aloitus, keski: r.keski, lopetus: r.lopetus }));
+  assert('parsePool: default strengthOf is 5.0', strengthOf(r) === 5, String(strengthOf(r)));
+  const vet = parsePool(`VetDefault:${CY - 40}:M`)[0];
+  assert('parsePool: veteran default scores are also 5', vet.aloitus === 5 && vet.keski === 5 && vet.lopetus === 5);
+}
+
+// ── addVaramies: quick-add one runner to the pool without full edit ──
+{
+  S.compYear = CY;
+  getEl('poolText').value = `H21:Old:${CY - 25}`;
+  getEl('klubi').value = 'Testiseura';
+  getEl('compYear').value = CY;
+  getEl('toiveFirst').checked = true;
+  const old = parsePool(`H21:Old:${CY - 25}`)[0];
+  old.aloitus = 9; old.keski = 9; old.lopetus = 9;
+  S.runners = [old];
+  S.teams = []; S.teamSarja = [];
+
+  getEl('varasText').value = `H16:New:${CY - 10}`;
+  addVaramies();
+
+  assert('addVaramies: appends new runner line to pool text',
+    getEl('poolText').value.includes(`H16:New:${CY - 10}`), getEl('poolText').value);
+  assert('addVaramies: keeps the existing line in pool text',
+    getEl('poolText').value.includes(`H21:Old:${CY - 25}`), getEl('poolText').value);
+  assert('addVaramies: pool now holds 2 runners after sync', S.runners.length === 2, String(S.runners.length));
+  const oldAfter = S.runners.find(x => x.nimi === 'Old');
+  assert('addVaramies: existing runner scores preserved across the sync',
+    oldAfter && oldAfter.aloitus === 9, JSON.stringify(oldAfter && { aloitus: oldAfter.aloitus }));
+  const newAfter = S.runners.find(x => x.nimi === 'New');
+  assert('addVaramies: new runner parsed and gets its class',
+    newAfter && newAfter.sarja === 'H16' && newAfter.kind === 'age', JSON.stringify(newAfter));
+  assert('addVaramies: new runner has default 50% score',
+    newAfter && newAfter.aloitus === 5 && newAfter.keski === 5 && newAfter.lopetus === 5,
+    JSON.stringify(newAfter && { a: newAfter.aloitus, k: newAfter.keski, l: newAfter.lopetus }));
+}
+
+// ── addVaramies: rejects a non-parsable line without touching the pool ──
+{
+  const before = getEl('poolText').value;
+  const beforeCount = S.runners.length;
+  getEl('varasText').value = 'not a runner';
+  addVaramies();
+  assert('addVaramies: unparseable input leaves pool text unchanged', getEl('poolText').value === before, getEl('poolText').value);
+  assert('addVaramies: unparseable input leaves runners unchanged', S.runners.length === beforeCount, String(S.runners.length));
+  getEl('varasText').value = '';
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
