@@ -127,6 +127,20 @@
   .evhead p { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
   .evlogo { max-height: 48px; max-width: 130px; object-fit: contain; margin-left: auto; }
 
+  .card.weather { border-left: 3px solid #3498db; }
+  .card.weather .num { font-size: 17px; }
+  .card.wxfallback { flex-basis: 220px; }
+  .wxretry { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+  .wxretry input.wxplace {
+    flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px; font-family: inherit;
+    border: 1px solid var(--border); border-radius: 6px; color: var(--fg); background: var(--bg);
+  }
+  .wxretry .wxbtn {
+    padding: 6px 10px; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+    background: var(--primary); color: #fff; border: none; border-radius: 6px; white-space: nowrap;
+  }
+  .wxretry .wxbtn:hover { background: var(--primary-light); }
+
   .cards {
     /* flex, not grid: with an uneven card count grid's auto-fit leaves the
        last row's leftover columns empty (a blank gap at the edge on mobile,
@@ -424,6 +438,15 @@ const LANGS = {
     ocStatus: 'vielä radalla kisan päättymisen jälkeen',
     wOrphan: 'orpo tuloks (ei joukkuetta)',
     wMassDev: 'poikkeaa yhteislähdöstä',
+    cTemp: 'Lämpötila',
+    cPrecip: 'Sade',
+    cWind: 'Tuuli',
+    cConditions: 'Sää',
+    wSourceFmi: 'Lähde: FMI',
+    wSourceOwm: 'Lähde: Open-Meteo',
+    wNoData: 'Ei säätietoja',
+    wPlaceInput: 'Kirjoita paikka (esim. Hyvinkää)',
+    wFetchBtn: 'Hae sää',
   },
   en: {
     inputPlaceholder: 'Navisport event URL or slug (e.g. navisport.com/events/hyvinkaan-talvirastit-2026)',
@@ -531,6 +554,15 @@ const LANGS = {
     ocStatus: 'still on course after the event ended',
     wOrphan: 'orphaned result (no team)',
     wMassDev: 'deviates from mass start',
+    cTemp: 'Temperature',
+    cPrecip: 'Precipitation',
+    cWind: 'Wind',
+    cConditions: 'Conditions',
+    wSourceFmi: 'Source: FMI',
+    wSourceOwm: 'Source: Open-Meteo',
+    wNoData: 'No weather information available',
+    wPlaceInput: 'Enter a place (e.g. Hyvinkää)',
+    wFetchBtn: 'Fetch weather',
   },
 };
 
@@ -1401,6 +1433,301 @@ function scheduleData(event, groups) {
   });
 
   return { classes, maxLanes, base: tMin, waveCount, rowCount, starts: sortedStarts };
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Weather (FMI primary, Open-Meteo fallback)
+// ════════════════════════════════════════════════════════════════════
+const WMO_TEXT = {
+  fi: {
+    0: 'Selkeää', 1: 'Enimmäkseen selkeää', 2: 'Puolipilveä', 3: 'Pilvinen',
+    45: 'Sumuista', 48: 'Sumuista',
+    51: 'Heikkoa tihkua', 53: 'Kohtalaista tihkua', 55: 'Tiheää tihkua',
+    56: 'Jäätävää tihkua', 57: 'Jäätävää tihkua',
+    61: 'Vähäistä vesisadetta', 63: 'Kohtalaista vesisadetta', 65: 'Runsasta vesisadetta',
+    66: 'Jäätävää vesisadetta', 67: 'Jäätävää vesisadetta',
+    71: 'Vähäistä lumisadetta', 73: 'Kohtalaista lumisadetta', 75: 'Runsasta lumisadetta',
+    77: 'Lumirakeita',
+    80: 'Vähäisiä sadekuuroja', 81: 'Kohtalisia sadekuuroja', 82: 'Voimakkaita sadekuuroja',
+    85: 'Vähäisiä lumikuuroja', 86: 'Voimakkaita lumikuuroja',
+    95: 'Ukkosta', 96: 'Ukkosta ja raekuuroja', 99: 'Ukkosta ja voimakkaita raekuuroja',
+  },
+  en: {
+    0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Depositing rime fog',
+    51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+    56: 'Freezing drizzle', 57: 'Dense freezing drizzle',
+    61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+    66: 'Light freezing rain', 67: 'Heavy freezing rain',
+    71: 'Slight snowfall', 73: 'Moderate snowfall', 75: 'Heavy snowfall',
+    77: 'Snow grains',
+    80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+    85: 'Slight snow showers', 86: 'Heavy snow showers',
+    95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
+  },
+};
+
+function weatherCodeToText(code) {
+  if (code == null) return '';
+  const c = Math.round(code);
+  return (WMO_TEXT[lang] || WMO_TEXT.fi)[c] || (WMO_TEXT.fi)[c] || '';
+}
+
+// Derive a WMO-like weather code from FMI observation parameters
+function deriveWeatherCodeFromFmi(hourly) {
+  if (!hourly || !hourly.length) return null;
+  let maxPrecip = 0, hasSnow = false, hasThunder = false;
+  for (const h of hourly) {
+    if (h.precip != null && h.precip > maxPrecip) maxPrecip = h.precip;
+    if (h.snow != null && h.snow > 0.1) hasSnow = true;
+  }
+  if (hasThunder) return 95;
+  if (hasSnow) {
+    if (maxPrecip > 4) return 75;
+    if (maxPrecip > 1) return 73;
+    return 71;
+  }
+  if (maxPrecip > 4) return 65;
+  if (maxPrecip > 1) return 63;
+  if (maxPrecip > 0.1) return 61;
+  return 3;
+}
+
+function parseFmiXml(xmlText) {
+  if (typeof DOMParser === 'undefined') return null;
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (doc.querySelector('parsererror')) return null;
+  const members = doc.querySelectorAll('wfs\\:member, member');
+  const series = {};
+  for (const m of members) {
+    const prop = m.querySelector('om\\:observedProperty, observedProperty');
+    if (!prop) continue;
+    const href = prop.getAttribute('xlink:href') || '';
+    const paramMatch = href.match(/[?&]param=([^&]+)/);
+    const param = paramMatch ? paramMatch[1] : '';
+    if (!param) continue;
+    const points = m.querySelectorAll('wml2\\:MeasurementTVP, MeasurementTVP');
+    const vals = [];
+    for (const p of points) {
+      const t = p.querySelector('wml2\\:time, time');
+      const v = p.querySelector('wml2\\:value, value');
+      if (t && v) {
+        const num = parseFloat(v.textContent);
+        if (!isNaN(num)) vals.push(num);
+      }
+    }
+    if (vals.length) series[param] = vals;
+    // Extract station name on first member (look for the codeSpace=.../name element)
+    if (!series._station) {
+      const nameEls = m.querySelectorAll('gml\\:name');
+      for (const ne of nameEls) {
+        const cs = ne.getAttribute('codeSpace') || '';
+        if (cs.indexOf('locationcode/name') !== -1) {
+          const t = (ne.textContent || '').trim();
+          if (t) { series._station = t; break; }
+        }
+      }
+    }
+  }
+  return series;
+}
+
+function aggregateFmiDaily(series) {
+  if (!series) return null;
+  const temps = series.t2m || [];
+  const winds = series.ws_10min || series.ws_1dmax || [];
+  const precips = series.r_1h || [];
+  const snows = series.snow_aws || [];
+  if (!temps.length && !winds.length && !precips.length) return null;
+  const tempMax = temps.length ? Math.max.apply(null, temps) : null;
+  const tempMin = temps.length ? Math.min.apply(null, temps) : null;
+  const windMax = winds.length ? Math.max.apply(null, winds) : null;
+  const precipSum = precips.length ? precips.reduce(function(s, v) { return s + v; }, 0) : null;
+  // FMI wind (ws_10min) is already in m/s; keep it as m/s for display.
+  const windMaxMs = windMax != null ? Math.round(windMax * 10) / 10 : null;
+  // Build hourly precip+wind objects for weather code derivation
+  const hourly = [];
+  const len = Math.max(precips.length, snows.length);
+  for (let i = 0; i < len; i++) {
+    hourly.push({ precip: precips[i] || 0, snow: snows[i] || 0 });
+  }
+  return {
+    tempMax: tempMax != null ? Math.round(tempMax * 10) / 10 : null,
+    tempMin: tempMin != null ? Math.round(tempMin * 10) / 10 : null,
+    precipSum: precipSum != null ? Math.round(precipSum * 10) / 10 : null,
+    windMax: windMaxMs,
+    weatherCode: deriveWeatherCodeFromFmi(hourly),
+    source: 'fmi',
+    stationName: series._station || null,
+  };
+}
+
+async function fetchWeatherFmi(address, date) {
+  if (!address || !date) return null;
+  try {
+    const url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature' +
+      '&storedquery_id=fmi::observations::weather::timevaluepair' +
+      '&place=' + encodeURIComponent(address) +
+      '&starttime=' + date + 'T00:00:00Z' +
+      '&endtime=' + date + 'T23:59:59Z' +
+      '&parameters=t2m,ws_10min,r_1h,snow_aws' +
+      '&maxlocations=1&timezone=Europe/Helsinki';
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const text = await res.text();
+    const series = parseFmiXml(text);
+    return aggregateFmiDaily(series);
+  } catch (e) {
+    console.warn('FMI weather fetch failed:', e);
+    return null;
+  }
+}
+
+async function fetchWeatherOpenMeteo(address, date) {
+  if (!address || !date) return null;
+  try {
+    // Geocode
+    const geoUrl = 'https://geocoding-api.open-meteo.com/v1/search?name=' +
+      encodeURIComponent(address) + '&count=1&language=fi&countryCode=FI';
+    const geoRes = await fetch(geoUrl);
+    if (!geoRes.ok) return null;
+    const geoData = await geoRes.json();
+    if (!geoData.results || !geoData.results.length) return null;
+    const lat = geoData.results[0].latitude;
+    const lon = geoData.results[0].longitude;
+    // Weather
+    const wxUrl = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + lat +
+      '&longitude=' + lon +
+      '&start_date=' + date + '&end_date=' + date +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,' +
+      'wind_speed_10m_max,wind_gusts_10m_max,weather_code' +
+      '&wind_speed_unit=ms&timezone=Europe/Helsinki';
+    const wxRes = await fetch(wxUrl);
+    if (!wxRes.ok) return null;
+    const wxData = await wxRes.json();
+    const d = wxData.daily;
+    if (!d || !d.time || !d.time.length) return null;
+    return {
+      tempMax: d.temperature_2m_max[0],
+      tempMin: d.temperature_2m_min[0],
+      precipSum: d.precipitation_sum[0],
+      windMax: d.wind_speed_10m_max[0],
+      weatherCode: d.weather_code[0],
+      source: 'open-meteo',
+      stationName: null,
+    };
+  } catch (e) {
+    console.warn('Open-Meteo weather fetch failed:', e);
+    return null;
+  }
+}
+
+// Extract a Finnish locality hint from a street address like
+// "Störsvikintie 165a, 02490 siuntio" -> "siuntio". Takes the text after the
+// last comma (if any) and strips a leading Finnish postal code (5 digits),
+// since neither FMI nor Open-Meteo resolves bare street addresses well.
+function localityFromAddress(address) {
+  if (!address) return '';
+  const parts = String(address).split(',');
+  const last = (parts[parts.length - 1] || '').trim();
+  if (!last) return '';
+  const m = last.match(/^\s*\d{5}\s*(.*)$/);
+  return (m ? m[1] : last).trim();
+}
+
+// Try FMI first, falling back to Open-Meteo for a single place string.
+async function fetchWeatherForPlace(address, date) {
+  const fmi = await fetchWeatherFmi(address, date);
+  if (fmi && (fmi.tempMax != null || fmi.tempMin != null || fmi.precipSum != null)) return fmi;
+  return fetchWeatherOpenMeteo(address, date);
+}
+
+async function fetchWeatherForEvent(event, placeOverride) {
+  if (!event) return null;
+  const address = (placeOverride != null && String(placeOverride).trim())
+    ? String(placeOverride).trim()
+    : (event.address || '');
+  if (!address) return null;
+  const begin = event.begin;
+  if (!begin) return null;
+  const date = begin.substring(0, 10); // YYYY-MM-DD
+  // Try the full address first; if it is a street address, fall back to the
+  // extracted Finnish locality (e.g. "siuntio") which both APIs resolve.
+  const w = await fetchWeatherForPlace(address, date);
+  if (w) return w;
+  const loc = localityFromAddress(address);
+  if (loc && loc.toLowerCase() !== address.toLowerCase()) return fetchWeatherForPlace(loc, date);
+  return null;
+}
+
+// Render the weather cards for an event. When no weather could be fetched,
+// `event` is supplied to render a fallback card letting the user type a place
+// and retry (wired via delegated events on the output container). Returns an
+// array of card HTML strings.
+function weatherCards(weather, event) {
+  if (!weather) {
+    if (!event) return [];
+    const place = event._weatherPlace || event.address || '';
+    const input = '<div class="wxretry" data-wx-retry="1">' +
+      '<input type="text" class="wxplace" value="' + escAttr(place) +
+      '" placeholder="' + escAttr(T('wPlaceInput')) + '" data-wx-input="1">' +
+      '<button type="button" class="wxbtn" data-wx-btn="1">' + esc(T('wFetchBtn')) + '</button>' +
+      '</div>';
+    return ['<div class="card weather wxfallback" data-wx-key="' + escAttr(wxKeyFor(event)) + '">' +
+      '<h4>' + esc(T('cConditions')) + '</h4>' +
+      '<span class="num">' + esc(T('wNoData')) + '</span>' +
+      input + '</div>'];
+  }
+  const src = weather.source === 'fmi' ? T('wSourceFmi') : T('wSourceOwm');
+  const cards = [];
+  if (weather.tempMax != null || weather.tempMin != null) {
+    const val = weather.tempMax != null ? weather.tempMax + '°C' : '—';
+    const sub = (weather.tempMin != null && weather.tempMax != null)
+      ? weather.tempMin + '°C – ' + weather.tempMax + '°C' : null;
+    cards.push(cardHtml(T('cTemp'), val, sub));
+  }
+  if (weather.precipSum != null) {
+    cards.push(cardHtml(T('cPrecip'), weather.precipSum + ' mm', null));
+  }
+  if (weather.windMax != null) {
+    cards.push(cardHtml(T('cWind'), weather.windMax + ' m/s', null));
+  }
+  if (weather.weatherCode != null) {
+    const txt = weatherCodeToText(weather.weatherCode);
+    cards.push(cardHtml(T('cConditions'), txt || '—', src));
+  }
+  // Add weather class to each card
+  return cards.map(function(c) { return c.replace('class="card"', 'class="card weather"'); });
+}
+
+// Stable identity for an event so the fallback card's retry can resolve which
+// event to update after re-rendering.
+function wxKeyFor(event) {
+  if (!event) return '';
+  if (event === state.event) return 'main';
+  if (state.compare.a && event === state.compare.a) return 'a';
+  if (state.compare.b && event === state.compare.b) return 'b';
+  if (state.stageEvents.indexOf(event) !== -1) return 'main';
+  return 'main';
+}
+
+function eventForWxKey(key) {
+  if (key === 'a') return state.compare.a;
+  if (key === 'b') return state.compare.b;
+  return state.event;
+}
+
+async function refreshWeather(key, place) {
+  const event = eventForWxKey(key);
+  if (!event) return;
+  event._weatherPlace = (place != null && String(place).trim()) ? String(place).trim() : null;
+  let wx = await fetchWeatherForEvent(event, event._weatherPlace || event.address);
+  event._weather = wx;
+  // Multistage: propagate to stages
+  if (wx && state.stageEvents.length && event === state.event) {
+    for (let i = 0; i < state.stageEvents.length; i++) state.stageEvents[i]._weather = wx;
+  }
+  render();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2629,7 +2956,7 @@ function durSec(a, b) {
   return (a != null && b != null) ? fmtTime(Math.round((b - a) / 1000)) : '—';
 }
 
-function flowCards(flow, onCourseCount) {
+function flowCards(flow, onCourseCount, event) {
   const c = t => t != null ? fmtClock(t) : '—';
   const cards = [
     cardHtml(T('cStarters'), String(flow.starters)),
@@ -2655,6 +2982,8 @@ function flowCards(flow, onCourseCount) {
     cards.push(cardHtml(T('cPeak'),
       fmtClock(base + pk.from * 60000) + '–' + fmtClock(base + pk.to * 60000) + ' · ' + pk.count));
   }
+  const wx = weatherCards(event ? event._weather : null, event);
+  for (let i = 0; i < wx.length; i++) cards.push(wx[i]);
   return cards;
 }
 
@@ -2679,7 +3008,7 @@ function flowSection(event) {
   const flow = eventFlow(event);
   const onCourse = onCourseWarnings(event);
   const warnBox = excludedBoxHtml(event, onCourse);
-  const parts = ['<div class="cards">' + flowCards(flow, onCourse.length).join('') + '</div>'];
+  const parts = ['<div class="cards">' + flowCards(flow, onCourse.length, event).join('') + '</div>'];
   if (!flow.starters && !flow.finishers) {
     parts.push('<p class="empty">' + T('noTimeline') + '</p>');
     return { html: parts.join('\n'), warnBox };
@@ -3035,6 +3364,8 @@ async function analyze(inputOverride) {
     if (id) setShareHash(id);
     const sb = $('shareBtn');
     if (sb) sb.style.display = '';
+    // Fetch weather and stages in parallel
+    const weatherPromise = fetchWeatherForEvent(event);
     if (isMultistageEvent(event)) {
       const stages = event.events || [];
       for (let i = 0; i < stages.length; i++) {
@@ -3046,6 +3377,13 @@ async function analyze(inputOverride) {
         } catch (e) {
           console.warn('Stage load failed:', stages[i].id, e);
         }
+      }
+    }
+    event._weather = await weatherPromise;
+    // Multistage: apply parent event's weather to each stage
+    if (event._weather && state.stageEvents.length) {
+      for (let i = 0; i < state.stageEvents.length; i++) {
+        state.stageEvents[i]._weather = event._weather;
       }
     }
     render();
@@ -3150,6 +3488,13 @@ async function analyzeCompare(inputA, inputB) {
         '<div>' + esc(failures.join(', ')) + '</div></div>';
     }
   }
+  // Fetch weather for both events in parallel
+  const [wx_a, wx_b] = await Promise.all([
+    a ? fetchWeatherForEvent(a) : Promise.resolve(null),
+    b ? fetchWeatherForEvent(b) : Promise.resolve(null),
+  ]);
+  if (a) a._weather = wx_a;
+  if (b) b._weather = wx_b;
   render();
   if (!failures.length) {
     setStatus(T('statusDone'), 'ok');
@@ -3275,6 +3620,30 @@ function wireUI() {
   if (sa) sa.addEventListener('keydown', e => { if (e.key === 'Enter') analyzeCompare(); });
   const sbInp = $('slugInputB');
   if (sbInp) sbInp.addEventListener('keydown', e => { if (e.key === 'Enter') analyzeCompare(); });
+  const out = $('output');
+  if (out) {
+    const doWx = (key, btn) => {
+      const card = btn && btn.closest ? btn.closest('.wxfallback') : null;
+      const input = card && card.querySelector ? card.querySelector('[data-wx-input]') : null;
+      const place = input ? input.value : '';
+      refreshWeather(key, place);
+    };
+    out.addEventListener('click', e => {
+      const btn = e.target && e.target.closest ? e.target.closest('[data-wx-btn]') : null;
+      if (!btn) return;
+      const card = btn.closest ? btn.closest('[data-wx-key]') : null;
+      if (!card) return;
+      doWx(card.getAttribute('data-wx-key'), btn);
+    });
+    out.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const input = e.target && e.target.closest ? e.target.closest('[data-wx-input]') : null;
+      if (!input) return;
+      const card = input.closest ? input.closest('[data-wx-key]') : null;
+      if (!card) return;
+      doWx(card.getAttribute('data-wx-key'), input);
+    });
+  }
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('resize', () => { if (state.event || (state.compare.a || state.compare.b)) paintCharts(); });
   }

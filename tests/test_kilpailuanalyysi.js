@@ -276,6 +276,8 @@ try {
       compareFlowSeries, comparePaceRows, comparePaceSection, compareFlowSection,
       compareColHtml, renderCompare, setMode, parseHash, analyzeCompare,
       compareAvgSummary, flowCards,
+      weatherCards, weatherCodeToText, deriveWeatherCodeFromFmi, wxKeyFor, eventForWxKey,
+      localityFromAddress,
       slugFromHash, setCompareShareHash, setShareHash,
     };
     global.__state = {
@@ -672,7 +674,74 @@ P.setLang('en');
 assert('lang: T en', P.T('btnAnalyze') === 'Analyze');
 assert('lang: langBtn label EN→FI', document.getElementById('langBtn').textContent === 'FI');
 P.setLang('fi');
-assert('lang: back to fi', S.lang() === 'fi' && P.T('secFlow') === 'Kisapäivän kulku');
+
+// ── weather: WMO code mapping (fi) ──
+assert('weather: code 3 fi = Pilvinen', P.weatherCodeToText(3) === 'Pilvinen', P.weatherCodeToText(3));
+assert('weather: code 61 fi = Vähäistä vesisadetta', P.weatherCodeToText(61) === 'Vähäistä vesisadetta', P.weatherCodeToText(61));
+assert('weather: code 95 fi = Ukkosta', P.weatherCodeToText(95) === 'Ukkosta', P.weatherCodeToText(95));
+assert('weather: code null → empty', P.weatherCodeToText(null) === '');
+P.setLang('en');
+assert('weather: code 3 en = Overcast', P.weatherCodeToText(3) === 'Overcast', P.weatherCodeToText(3));
+P.setLang('fi');
+
+// ── weather: deriveWeatherCodeFromFmi ──
+assert('weather: dry → overcast (3)', P.deriveWeatherCodeFromFmi([{precip:0,snow:0}]) === 3);
+assert('weather: light rain → 63', P.deriveWeatherCodeFromFmi([{precip:1.5,snow:0}]) === 63);
+assert('weather: heavy rain → 65', P.deriveWeatherCodeFromFmi([{precip:5,snow:0}]) === 65);
+assert('weather: light snow → 71', P.deriveWeatherCodeFromFmi([{precip:0.5,snow:2}]) === 71);
+assert('weather: empty → null', P.deriveWeatherCodeFromFmi([]) === null);
+
+// ── weather: weatherCards integration into flowCards ──
+const wx = { tempMax: -7.8, tempMin: -26.6, precipSum: 2.3, windMax: 25, weatherCode: 63, source: 'fmi', stationName: 'Testiasema' };
+const wxEvent = { _weather: wx, address: 'Hyvinkää', begin: '2024-01-15T10:00:00Z' };
+const wxCards = P.weatherCards(wx, wxEvent);
+assert('weather: 4 cards rendered', wxCards.length === 4, String(wxCards.length));
+assert('weather: cards carry weather class', wxCards.every(c => c.includes('card weather')), wxCards.join(' '));
+assert('weather: temp card shows max', wxCards.join(' ').includes('-7.8°C'));
+assert('weather: wind card m/s', wxCards.join(' ').includes('25 m/s'));
+assert('weather: precip mm', wxCards.join(' ').includes('2.3 mm'));
+assert('weather: conditions text', wxCards.join(' ').includes('Kohtalaista vesisadetta'));
+assert('weather: source attr fi', wxCards.join(' ').includes('Lähde: FMI'));
+// weather cards appended to flow cards
+const wflowCards = P.flowCards(sflow, 0, wxEvent);
+assert('weather: appended after flow cards', wflowCards.length === sCards.length + 4, String(wflowCards.length) + ' vs ' + sCards.length);
+// no weather → no extra cards
+assert('weather: null weather → no cards', P.flowCards(sflow, 0, null).length === sCards.length);
+
+// ── weather: fallback card when fetch fails ──
+const noWx = { address: 'Ei Paikkaa', begin: '2024-01-15T10:00:00Z' };
+const fallbackCards = P.weatherCards(null, noWx);
+assert('weather: fallback renders one card', fallbackCards.length === 1, String(fallbackCards.length));
+const fbHtml = fallbackCards[0];
+assert('weather: fallback shows no-data text', fbHtml.includes('Ei säätietoja'), fbHtml.slice(0, 160));
+assert('weather: fallback carries wxfallback class', fbHtml.includes('wxfallback'), fbHtml.slice(0, 160));
+assert('weather: fallback has place input pre-filled with address', fbHtml.includes('Ei Paikkaa'), fbHtml.slice(0, 200));
+assert('weather: fallback has fetch button', fbHtml.includes('Hae sää'), fbHtml.slice(0, 200));
+assert('weather: fallback has data-wx-key attribute', fbHtml.includes('data-wx-key'), fbHtml.slice(0, 200));
+// flowCards appends the fallback card when event has no weather
+const flowNoWx = P.flowCards(sflow, 0, noWx);
+assert('weather: flowCards appends fallback', flowNoWx.length === sCards.length + 1, String(flowNoWx.length));
+// fallback uses a manual place override when present
+const manual = { address: 'Ei Paikkaa', _weatherPlace: 'Jokioinen', begin: '2024-01-15T10:00:00Z' };
+assert('weather: fallback prefers _weatherPlace', P.weatherCards(null, manual)[0].includes('Jokioinen'), P.weatherCards(null, manual)[0].slice(0, 200));
+// fallback without any event → no cards
+assert('weather: no event, no weather → no cards', P.weatherCards(null, null).length === 0);
+assert('weather: undefined weather, no event → no cards', P.weatherCards(undefined).length === 0);
+
+// ── weather: wxKeyFor resolves owning event ──
+const keyEvt = { id: 'key1' };
+S.setEvent(keyEvt);
+assert('weather: main event key', P.wxKeyFor(keyEvt) === 'main', P.wxKeyFor(keyEvt));
+assert('weather: unknown event falls back to main', P.wxKeyFor({}) === 'main', P.wxKeyFor({}));
+assert('weather: null event → empty', P.wxKeyFor(null) === '', P.wxKeyFor(null));
+assert('weather: main key resolves to event', P.eventForWxKey('main') === keyEvt);
+
+// ── weather: locality extraction from Finnish street addresses ──
+assert('weather: street+postcode+locality → locality', P.localityFromAddress('Störsvikintie 165a, 02490 siuntio') === 'siuntio');
+assert('weather: postcode+locality → locality', P.localityFromAddress('02490 Siuntio') === 'Siuntio');
+assert('weather: plain locality unchanged', P.localityFromAddress('Hyvinkää') === 'Hyvinkää');
+assert('weather: locality without postcode', P.localityFromAddress('Rantatie 3, Espoo') === 'Espoo');
+assert('weather: empty → empty', P.localityFromAddress('') === '' && P.localityFromAddress(null) === '');
 
 // ── mobile tap-zoom guard (double-tap must never zoom the chart page) ──
 const tapNow = 2000000;
