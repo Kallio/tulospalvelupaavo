@@ -56,6 +56,9 @@ const src = { a: 1, b: { c: [1, 2] } };
 const cpy = P.deepClone(src);
 assert('deepClone: equal + not same ref', JSON.stringify(cpy) === JSON.stringify(src) && cpy !== src && cpy.b !== src.b);
 
+// ── CSS: Sticker Sheet settings box must not span the whole panel in top layout ──
+assert('css: sticker settings box capped in top layout', html.includes('body:not(.sidebar-mode) #setup-panel > .ps:last-child'));
+
 // ── parseCSV ──
 assert('csv: simple', JSON.stringify(P.parseCSV('a,b\n1,2')) === JSON.stringify([['a', 'b'], ['1', '2']]));
 assert('csv: quoted comma', JSON.stringify(P.parseCSV('"a,b",c\n')) === JSON.stringify([['a,b', 'c']]));
