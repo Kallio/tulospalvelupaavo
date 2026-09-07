@@ -574,7 +574,7 @@ function generateCSV(assignments, fillEmpty) {
     for (let b = 0; b < blocks.length; b++) {
       const blk = blocks[b];
       cells.push(q(' '.repeat(b + 1)));
-      cells.push(q(blk.nimi), q(''), q(''), q(blk.osuus), q(blk.alaosuus), q(''), q(''));
+      cells.push(q(blk.nimi || (fillEmpty ? 'VAC' : '')), q(''), q(''), q(blk.osuus), q(blk.alaosuus), q(''), q(''));
     }
     lines.push(cells.join(','));
   }
@@ -596,7 +596,7 @@ function verifyOutput(csv) {
       const nimi = (r[baseIdx] || '').trim();
       if (!nimi) break;
       const osuus = (r[baseIdx + 3] || '').trim();
-      if (!osuus) missing++;
+      if (!osuus && nimi !== 'VAC') missing++;
       checked++;
     }
   }
