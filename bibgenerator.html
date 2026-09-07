@@ -824,7 +824,7 @@ function getFilteredEntries() {
 // Barcode value shared between the bib card and the sticker sheet.
 function getBarcodeValue(team, runner) {
   const isSingle = !runner.osuus;
-  const showAlao = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const showAlao = !!runner.alaosuus;
   const classPrefix = team.sarja ? sanitizeForBarcode(classPrefixMap[team.sarja] ?? '') : '';
   const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
   if (isSingle) return bcBase;
@@ -884,7 +884,7 @@ function generateBibs() {
 
 function createBib(team, runner) {
   const isSingle   = !runner.osuus;
-  const showAlao   = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const showAlao   = !!runner.alaosuus;
   const sponsorImgs = sponsorLogos
     .map((s, i) => sponsorApplies(s, runner.osuus) ? { src: s.src, slot: SPONSOR_SLOT(i) } : null)
     .filter(Boolean);
@@ -2122,7 +2122,20 @@ function navLoadRelay(json) {
   }
 
   csvTeams = Object.values(teamMap);
-  csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
+  csvTeams.forEach(t => {
+    t.runners.sort((a,b) => +a.osuus - +b.osuus);
+    // Parallel legs: Navisport reports only the leg number, so a leg that
+    // appears several times in a team is assigned subleg numbers 1..n in the
+    // order the runners were returned (which matches registration order).
+    const counts = {};
+    t.runners.forEach(r => { if (r.osuus) counts[r.osuus] = (counts[r.osuus] || 0) + 1; });
+    const idx = {};
+    t.runners.forEach(r => {
+      if (!r.osuus) { r.alaosuus = ''; return; }
+      idx[r.osuus] = (idx[r.osuus] || 0) + 1;
+      r.alaosuus = counts[r.osuus] > 1 ? String(idx[r.osuus]) : '';
+    });
+  });
   sortTeams();
   return { skipped };
 }

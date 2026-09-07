@@ -113,7 +113,7 @@ S.setClassPrefixMap({});
 assert('bc: no prefix → num', P.getBarcodeValue(t101, { osuus: '', alaosuus: '' }) === '101');
 S.setClassPrefixMap({ H21: 'H21' });
 assert('bc: relay osuus', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '' }) === 'H21-101-1');
-assert('bc: alaosuus same as osuus → 2-part', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }) === 'H21-101-1');
+assert('bc: alaosuus equal to osuus → 3-part (parallel leg)', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }) === 'H21-101-1-1', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }));
 assert('bc: alaosuus different → 3-part', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1A' }) === 'H21-101-1-1A', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1A' }));
 assert('bc: no prefix relay', P.getBarcodeValue({ kilpailunumero: '101', sarja: '' }, { osuus: '2', alaosuus: '' }) === '101-2');
 
@@ -201,6 +201,25 @@ assert('relay parent: sarja from runner classId', teamA.sarja === 'Naisten', tea
 assert('relay parent: two runners sorted', teamA.runners.length === 2 && teamA.runners.map(r => r.osuus).join(',') === '1,2');
 assert('relay parent: orphaned runner skipped', relayParentResult.skipped === 1, relayParentResult.skipped);
 
+// ── navLoadRelay: parallel legs derive subleg numbers (leg 2 × 3) ──
+P.navLoadRelay({
+  courseClasses: [{ id: 'c1', name: 'H14' }],
+  results: [
+    { resultType: 'Team', id: 't1', bibNumber: 100, name: 'Espoon Suunta 1', classId: 'c1' },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 3 },
+  ],
+});
+const par = S.csvTeams();
+assert('relay parallel: one team', par.length === 1, String(par.length));
+assert('relay parallel: leg 1 no subleg', par[0].runners[0].alaosuus === '', par[0].runners[0].alaosuus);
+assert('relay parallel: leg 2 sublegs 1,2,3', par[0].runners.slice(1, 4).map(r => r.alaosuus).join(',') === '1,2,3', par[0].runners.map(r => r.alaosuus).join(','));
+assert('relay parallel: leg 3 no subleg', par[0].runners[4].alaosuus === '', par[0].runners[4].alaosuus);
+assert('relay parallel: osuus sequence', par[0].runners.map(r => r.osuus).join(',') === '1,2,2,2,3', par[0].runners.map(r => r.osuus).join(','));
+
 // ── makePosDiv ──
 const d1 = P.makePosDiv(S.layout(), 'numberArea');
 assert('makePosDiv: position + size', d1.dataset.lk === 'numberArea' && d1.style.left === '50%' && d1.style.top === '25%' && d1.style.width === '90%' && d1.style.fontSize === '42mm');
@@ -218,6 +237,16 @@ assert('createBib: leg color applied', numArea && numArea.style.background === '
 const bcDiv = card.children.find(c => c.dataset.lk === 'barcode');
 assert('createBib: barcode data-val', bcDiv && bcDiv.innerHTML.includes('data-val="H21-101-1"'), bcDiv && bcDiv.innerHTML);
 assert('createBib: teamInfo for relay', card.children.some(c => c.dataset.lk === 'teamInfo'));
+
+// parallel leg: subleg equal to leg number must still be shown ("100 2-2")
+// (esc() mangles text to '' in the DOM stub, so we assert on the non-breaking
+// hyphen separator that proveAlao produced, plus the barcode data-val)
+S.setClassPrefixMap({});
+const cardPar = P.createBib({ kilpailunumero: '100', sarja: 'H21', joukkue: 'Team A' }, { nimi: 'Astra', osuus: '2', alaosuus: '2', rata: '', lahtöaika: '' });
+const numAreaPar = cardPar.children.find(c => c.dataset.lk === 'numberArea');
+assert('createBib parallel: subleg separator rendered', numAreaPar.innerHTML.includes('&#8209;'), numAreaPar && numAreaPar.innerHTML);
+assert('createBib parallel: barcode has subleg', cardPar.children.find(c => c.dataset.lk === 'barcode').innerHTML.includes('data-val="100-2-2"'));
+S.setClassPrefixMap({ H21: 'H21' });
 
 // single runner: no leg color, runnerInfo present, no teamInfo
 S.setClassPrefixMap({ H21: 'H21' });
