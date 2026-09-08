@@ -174,6 +174,14 @@
   canvas.chart { display: block; max-width: 100%; touch-action: pan-y; }
   .chartwrap { position: relative; }
   .chartcap { margin: 4px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+  .cpcodes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cpcodes code {
+    user-select: all; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    background: rgba(127, 143, 160, 0.14); border: 1px solid var(--border); border-radius: 6px;
+    padding: 3px 8px; color: var(--text); max-width: 100%; overflow-wrap: anywhere;
+  }
+  .cpcopybtn { padding: 3px 10px; font-size: 11px; border-radius: 6px; }
+  .btn.cpcopybtn { line-height: 1.4; }
   .pacerefs { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 4px 0 0; }
   .pacerefs .prswatch { display: inline-block; width: 14px; height: 0; margin-right: 5px; border-top: 2px dashed #c46a2a; vertical-align: middle; }
   .charttip {
@@ -212,6 +220,10 @@
   td { padding: 7px 10px; border-bottom: 1px solid #edf1f5; white-space: nowrap; }
   tr:hover td { background: #f7fafc; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .subdim { display: block; font-size: 10px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .delaytbl td.bard, .delaytbl th.bard { padding-left: 0; }
+  .barbg { background: #eef2f6; border-radius: 4px; height: 10px; width: 110px; overflow: hidden; }
+  .barfill { background: #2e5a8a; height: 100%; border-radius: 4px; opacity: 0.85; }
 
   .stagehead { margin: 26px 0 12px; padding-top: 14px; border-top: 2px dashed var(--border); }
   .stagehead h3 { font-size: 15px; color: var(--primary); }
@@ -447,6 +459,28 @@ const LANGS = {
     wNoData: 'Ei säätietoja',
     wPlaceInput: 'Kirjoita paikka (esim. Hyvinkää)',
     wFetchBtn: 'Hae sää',
+    cDelay: 'Lähtöviive',
+    secDelay: 'Lähtöviiveet',
+    hDelaySec: 'Viive (s)',
+    hTeams: 'Joukkueet',
+    hMedian: 'Mediaani',
+    hMin: 'Min',
+    hMax: 'Max',
+    hAvg: 'KA',
+    secControlPoints: 'Rastipisteet',
+    hCpCtrl: 'Rasti',
+    hCpPunches: 'Leimaukset (arvio)',
+    hCpActual: 'Läpimenot',
+cpNote: 'Leimausarvio = hyväksytyn lopputuloksen saaneet juoksijat jotka ovat käyneet rastilla. Tarkka läpimenotieto on käytettävissä vain kisan tarkistuspisteistä. Vie hiiri palkin päälle nähdäksesi rastin koodin.',
+   cpTotPunches: 'Leimauksia yhteensä',
+   cpAvgPer: 'Leimauksia/rasti',
+   cpCount: 'Rastia',
+   cpMost: 'Eniten leimattu',
+   cpcodes: 'Käytetyt koodit',
+   cpCopied: 'Koodit kopioitu leikepöydälle',
+   cpCopyBtn: 'Kopioi',
+    cpSkip: 'ohitettavissa',
+    cpFreeOrder: 'vapaa järjestys',
   },
   en: {
     inputPlaceholder: 'Navisport event URL or slug (e.g. navisport.com/events/hyvinkaan-talvirastit-2026)',
@@ -563,6 +597,28 @@ const LANGS = {
     wNoData: 'No weather information available',
     wPlaceInput: 'Enter a place (e.g. Hyvinkää)',
     wFetchBtn: 'Fetch weather',
+    cDelay: 'Start delay',
+    secDelay: 'Start delays',
+    hDelaySec: 'Delay (s)',
+    hTeams: 'Teams',
+    hMedian: 'Median',
+    hMin: 'Min',
+    hMax: 'Max',
+    hAvg: 'Avg',
+    secControlPoints: 'Control points',
+    hCpCtrl: 'Control',
+    hCpPunches: 'Punches (est.)',
+    hCpActual: 'Passings',
+cpNote: 'Punch estimate = finishers with a valid result who visited the control. Exact passing data is only available for the checkpoints configured in the event. Hover a bar to see the control code.',
+   cpTotPunches: 'Total punches',
+   cpAvgPer: 'Avg punches/control',
+   cpCount: 'Controls',
+   cpMost: 'Most punched',
+   cpcodes: 'Used codes',
+   cpCopied: 'Codes copied to clipboard',
+   cpCopyBtn: 'Copy',
+    cpSkip: 'optional',
+    cpFreeOrder: 'free order',
   },
 };
 
@@ -1082,9 +1138,17 @@ function eventFlow(event) {
   });
   Object.keys(startByClass).forEach(k => startByClass[k].sort((a, b) => a - b));
   let firstExchange = null;
+  let registeredStartMinutes = null;
+  let delayOverall = null;
   if (event.raceType === 'Relay') {
     const ex = rows.filter(r => r.leg === 1 && r.finish != null).map(r => r.finish).sort((a, b) => a - b);
     firstExchange = ex.length ? ex[0] : null;
+    const results = event.results || [];
+    const teams = results.filter(r => r.resultType === 'Team');
+    const regTimes = teams.map(t => parseTS(t.startTime)).filter(t => t != null).sort((a, b) => a - b);
+    if (regTimes.length) registeredStartMinutes = regTimes.map(t => (t - base) / 60000);
+    const agg = aggregateRelayDelays(computeRelayDelays(event));
+    if (agg) delayOverall = agg.overall;
   }
   return {
     starters: starts.length,
@@ -1101,7 +1165,93 @@ function eventFlow(event) {
     startByClass,
     firstExchange,
     relayMarkers: relayMarkers(event),
+    registeredStartMinutes,
+    delayOverall,
   };
+}
+
+// Relay leg delay: difference between registered start time and actual start
+// (first Emit punch). For leg 1 this is team.startTime vs leg actual start.
+// For legs 2+ this is the previous leg's finish vs current leg's actual start.
+function computeRelayDelays(event) {
+  if (event.raceType !== 'Relay') return [];
+  const results = event.results || [];
+  const teams = results.filter(r => r.resultType === 'Team');
+  const legs = results.filter(r => r.resultType !== 'Team');
+  if (!teams.length || !legs.length) return [];
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const teamById = {};
+  teams.forEach(t => { teamById[t.id] = t; });
+  const matesByParent = {};
+  legs.forEach(l => {
+    const pid = l.parentId != null ? l.parentId : l.bibNumber;
+    (matesByParent[pid] = matesByParent[pid] || []).push(l);
+  });
+  const delays = [];
+  for (const team of teams) {
+    const mates = (matesByParent[team.id] || []).slice().sort((a, b) => (a.leg || 0) - (b.leg || 0));
+    if (!mates.length) continue;
+    const teamRegStart = parseTS(team.startTime);
+    let acc = teamRegStart;
+    for (const leg of mates) {
+      const legActualStart = parseTS(leg.startTime);
+      const actual = legActualStart != null ? legActualStart : acc;
+      if (leg.leg === 1 && teamRegStart != null) {
+        const delaySec = Math.round((actual - teamRegStart) / 1000);
+        delays.push({
+          teamName: team.name || '',
+          className: cc[team.classId] || team.classId || '',
+          classId: team.classId || '',
+          leg: 1,
+          registeredMs: teamRegStart,
+          actualMs: actual,
+          delaySec: delaySec,
+        });
+      } else if (leg.leg > 1) {
+        const prevLeg = mates[mates.indexOf(leg) - 1];
+        if (prevLeg) {
+          const prevFinish = parseTS(prevLeg.finishTime);
+          if (prevFinish != null) {
+            const handoffSec = Math.round((actual - prevFinish) / 1000);
+            delays.push({
+              teamName: team.name || '',
+              className: cc[team.classId] || team.classId || '',
+              classId: team.classId || '',
+              leg: leg.leg,
+              registeredMs: prevFinish,
+              actualMs: actual,
+              delaySec: handoffSec,
+            });
+          }
+        }
+      }
+      if (leg.time != null && leg.time > 0) acc = (acc || actual) + leg.time * 1000;
+    }
+  }
+  return delays;
+}
+
+// Aggregate relay delays into per-class and overall stats (leg 1 only).
+function aggregateRelayDelays(delays) {
+  if (!delays || !delays.length) return null;
+  const leg1 = delays.filter(d => d.leg === 1 && d.delaySec != null);
+  if (!leg1.length) return null;
+  const perClass = {};
+  leg1.forEach(d => {
+    const cn = d.className || '?';
+    (perClass[cn] = perClass[cn] || []).push(d.delaySec);
+  });
+  const stats = vals => {
+    if (!vals.length) return null;
+    const sorted = vals.slice().sort((a, b) => a - b);
+    const sum = sorted.reduce((s, v) => s + v, 0);
+    const avg = sum / sorted.length;
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    return { avg: avg, median: median, min: sorted[0], max: sorted[sorted.length - 1], count: sorted.length };
+  };
+  return { overall: stats(leg1.map(d => d.delaySec)), byClass: perClass, leg1: leg1 };
 }
 
 // Categorical class palette (Tableau 10 — industry-standard, colorblind-aware,
@@ -1931,6 +2081,21 @@ function drawFlowChart(ctx, w, h, opts, cross) {
     ctx.fillStyle = '#8a5a1c';
     ctx.fillText(lbl, lx + 4, padT + 24);
   }
+  const regStarts = opts.registeredStarts || [];
+  if (regStarts.length) {
+    ctx.strokeStyle = 'rgba(46,125,50,0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    for (const m of regStarts) {
+      const x = X(m);
+      if (x < padL || x > w - padR) continue;
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + ph);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   drawStepArea(ctx, starts, '#2e5a8a', 'rgba(46,90,138,0.10)', X, Y, sMin, xMax);
   let acc = [];
   ctx.lineWidth = 1.5;
@@ -2660,6 +2825,8 @@ function paintCharts() {
       ? Math.max(120, 18 * (cfg.paces || []).length + 40)
       : cfg.type === 'schedule'
       ? scheduleChartHeight(cfg)
+      : cfg.type === 'cps'
+      ? 220
       : 280;
     c.width = Math.round(w * dpr);
     c.height = Math.round(h * dpr);
@@ -2686,6 +2853,11 @@ function paintCharts() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       paintFlowCompare(ctx, w, h, cfg);
       attachFlowCompareTip(c);
+    } else if (cfg.type === 'cps') {
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintControlPoints(ctx, w, h, cfg);
+      attachCpTip(c);
     }
   }
 }
@@ -2882,6 +3054,100 @@ function attachFlowCompareTip(c) {
 }
 
 
+// Control-point punch pressure bars: one bar per control site, bar height =
+// estimated punches. No static x labels (codes can be many and long) — the
+// code/alt-codes show up only in the tooltip (see attachCpTip).
+function paintControlPoints(ctx, w, h, cfg) {
+  ctx.clearRect(0, 0, w, h);
+  const rows = cfg.rows || [];
+  const n = rows.length;
+  if (!n) return;
+  const padL = 40, padR = 8, padT = 10, padB = 20;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+  const maxV = Math.max(1, ...rows.map(r => r.est || 0));
+  const step = Math.max(1, niceStep(maxV / 4));
+  ctx.font = '11px sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'right';
+  for (let v = 0; v <= maxV + 0.001; v += step) {
+    const y = padT + ph - (v / maxV) * ph;
+    ctx.strokeStyle = '#eef2f6';
+    ctx.beginPath(); ctx.moveTo(padL, Math.round(y)); ctx.lineTo(w - padR, Math.round(y)); ctx.stroke();
+    ctx.fillStyle = '#8a97a6';
+    ctx.fillText(String(v), padL - 6, Math.round(y));
+  }
+  const slot = pw / n;
+  const barW = Math.max(2, Math.min(30, slot * 0.6));
+  rows.forEach((r, i) => {
+    const v = r.est || 0;
+    const bh = Math.max(1, (v / maxV) * ph);
+    const x = padL + i * slot + (slot - barW) / 2;
+    const y = padT + ph - bh;
+    if (r.skip) ctx.fillStyle = 'rgba(78,121,167,0.30)';
+    else ctx.fillStyle = '#4e79a7';
+    if (r.freeOrder) {
+      ctx.strokeStyle = 'rgba(244,144,50,0.95)';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, barW, bh);
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, barW, bh, 2);
+    else ctx.rect(x, y, barW, bh);
+    ctx.fill();
+  });
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8a97a6';
+  ctx.fillText(String(n), w - padR, 5);
+  cfg._barMap = { padL, padR, padT, slot, pw, rows };
+}
+
+function attachCpTip(c) {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const tip = document.querySelector('[data-tip-for="' + c.dataset.chartId + '"]');
+  if (!tip) return;
+  const cfgOf = () => chartStore[c.dataset.chartId];
+  const show = (clientX, clientY) => {
+    const cfg = cfgOf();
+    const map = cfg && cfg._barMap;
+    if (!map || !map.rows.length) { tip.hidden = true; return; }
+    const rect = c.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    const idx = Math.floor((px - map.padL) / map.slot);
+    if (px < map.padL || px > map.padL + map.pw || py < 4 || py > rect.height - 18 || idx < 0 || idx >= map.rows.length) {
+      tip.hidden = true; return;
+    }
+    const r = map.rows[idx];
+    const parts = ['<b>' + esc(r.codes) + '</b>'];
+    parts.push(esc(T('hCpPunches')) + ': ' + r.est);
+    if (r.actual != null) parts.push(esc(T('hCpActual')) + ': ' + r.actual);
+    const flags = [];
+    if (r.freeOrder) flags.push(T('cpFreeOrder'));
+    if (r.skip) flags.push(T('cpSkip'));
+    if (flags.length) parts.push(flags.map(f => esc(f)).join(' · '));
+    tip.innerHTML = parts.join('<br>');
+    tip.hidden = false;
+    const wrap = c.parentElement;
+    const wr = wrap.getBoundingClientRect();
+    const ww = wrap.clientWidth || rect.width;
+    tip.style.left = Math.max(0, Math.min(clientX - wr.left + 14, ww - 220)) + 'px';
+    let ty = clientY - wr.top - (tip.offsetHeight || 0) - 10;
+    if (ty < 2) ty = clientY - wr.top + 16;
+    tip.style.top = ty + 'px';
+  };
+  c.addEventListener('mousemove', (e) => show(e.clientX, e.clientY));
+  c.addEventListener('mouseleave', () => { tip.hidden = true; });
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches && e.touches[0];
+    if (t) show(t.clientX, t.clientY);
+  }, { passive: true });
+  c.addEventListener('touchend', () => { tip.hidden = true; }, { passive: true });
+  c.addEventListener('touchcancel', () => { tip.hidden = true; }, { passive: true });
+}
+
+
 // ════════════════════════════════════════════════════════════════════
 //  Rendering
 // ════════════════════════════════════════════════════════════════════
@@ -2976,6 +3242,14 @@ function flowCards(flow, onCourseCount, event) {
   if (flow.firstExchange != null) {
     cards.push(cardHtml(T('cFirstExchange'), c(flow.firstExchange)));
   }
+  if (flow.delayOverall != null) {
+    const ds = flow.delayOverall;
+    cards.push(cardHtml(T('cDelay'),
+      fmtTime(ds.avg),
+      esc(T('hAvg') + ' · ' + T('hMedian') + ' ' + fmtTime(ds.median) + ' · ' +
+        T('hMin') + ' ' + fmtTime(ds.min) + ' · ' + T('hMax') + ' ' + fmtTime(ds.max) + ' · ' +
+        ds.count + ' ' + T('hTeams'))));
+  }
   const pk = finishPeak(flow.finishMinutes);
   if (pk && flow.finishMinutes.length) {
     const base = flow.firstStart != null ? flow.firstStart : flow.firstFinish;
@@ -3028,6 +3302,7 @@ function flowSection(event) {
     starts: flow.startMinutes, classes, clockBase, xMode: 'rel',
     startByClass, extraStartMins,
     markers: flow.relayMarkers || [],
+    registeredStarts: flow.registeredStartMinutes || [],
   };
   rebuildLegendItems(cfg);
   parts.push(sectionHtml(T('secFlow'),
@@ -3037,6 +3312,196 @@ function flowSection(event) {
   return { html: parts.join('\n'), warnBox };
 }
 
+// Two-line helper for a delay stat value: value plus the count of teams.
+function delayStatTd(stat) {
+  if (!stat || !stat.avg) return '<td class="num">—</td>';
+  return '<td class="num">' + esc(fmtTime(stat.avg)) +
+    '<br><span class="subdim">' + esc(stat.count) + ' ' + esc(T('hTeams')) + '</span></td>';
+}
+
+// Per-class start-delay statistics (leg 1) for relay races. Horizontal bars
+// give a scannable comparison of average registered-vs-actual delay per class.
+function delaySection(event) {
+  if (event.raceType !== 'Relay') return '';
+  const delays = computeRelayDelays(event);
+  const agg = aggregateRelayDelays(delays);
+  if (!agg) return '';
+  const byClass = agg.byClass || {};
+  const names = Object.keys(byClass);
+  const maxAvg = Math.max.apply(null, names.map(n => byClass[n].reduce((s, v) => s + v, 0) / byClass[n].length));
+  const rowHtml = (n) => {
+    const vals = byClass[n];
+    const sorted = vals.slice().sort((a, b) => a - b);
+    const sum = sorted.reduce((s, v) => s + v, 0);
+    const avg = sum / sorted.length;
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    const bw = maxAvg > 0 ? (avg / maxAvg) * 100 : 0;
+    return '<tr><td>' + esc(n) + '</td>' +
+      '<td class="num">' + esc(fmtTime(avg)) + '</td>' +
+      '<td class="num">' + esc(fmtTime(median)) + '</td>' +
+      '<td class="num">' + esc(fmtTime(sorted[0])) + '</td>' +
+      '<td class="num">' + esc(fmtTime(sorted[sorted.length - 1])) + '</td>' +
+      '<td class="num">' + sorted.length + '</td>' +
+      '<td class="bard"><div class="barbg"><div class="barfill" style="width:' + Math.round(bw) + '%"></div></div></td></tr>';
+  };
+  names.sort((a, b) => {
+    const av = byClass[a].reduce((s, v) => s + v, 0) / byClass[a].length;
+    const bv = byClass[b].reduce((s, v) => s + v, 0) / byClass[b].length;
+    return bv - av;
+  });
+  return sectionHtml(T('secDelay'),
+    '<table class="delaytbl">' +
+    '<tr><th>' + esc(T('hClass')) + '</th><th>' + esc(T('hAvg')) + '</th><th>' + esc(T('hMedian')) +
+    '</th><th>' + esc(T('hMin')) + '</th><th>' + esc(T('hMax')) + '</th><th>' + esc(T('hTeams')) +
+    '</th><th></th></tr>' +
+    names.map(rowHtml).join('') +
+    '</table>');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Control point usage & punch pressure
+// ════════════════════════════════════════════════════════════════════
+// Navisport only records exact punch/passing timestamps at the radio
+// checkpoints configured for the event (event.checkpoints → checkId in
+// results[].passings). For every ordinary control the punch count is not
+// stored, but it can be estimated: each runner with a valid (OK) result
+// must have punched every control on their course, so a control's punch
+// estimate = number of OK results whose course contains that control.
+// Forked controls (one course row with several `code` alternatives, e.g.
+// ['160','171']) are treated as one physical site with a combined count.
+function controlPunchStats(event) {
+  const courses = (event.courses || []);
+  const results = (event.results || []);
+  const okByCourse = {};
+  results.forEach(r => {
+    if (r.courseId == null) return;
+    if (classifyStatus(r.status) !== 'OK') return;
+    okByCourse[r.courseId] = (okByCourse[r.courseId] || 0) + 1;
+  });
+
+  const byLabel = {};
+  courses.forEach(c => {
+    (c.controls || []).forEach(ctrl => {
+      const label = String(ctrl.label != null ? ctrl.label : (ctrl.code || [''])[0]);
+      let e = byLabel[label];
+      if (!e) {
+        e = byLabel[label] = {
+          label, codes: new Set(),
+          est: 0, freeOrder: !!ctrl.freeOrder, skip: !!ctrl.skip,
+        };
+      }
+      (ctrl.code || []).forEach(code => e.codes.add(code));
+      e.est += okByCourse[c.id] || 0;
+      if (ctrl.freeOrder) e.freeOrder = true;
+      if (ctrl.skip) e.skip = true;
+    });
+  });
+
+  const cpNameById = {};
+  (event.checkpoints || []).forEach(cp => { cpNameById[cp.id] = cp.name; });
+  const actualByName = {};
+  let totalActual = 0;
+  results.forEach(r => {
+    (r.passings || []).forEach(p => {
+      totalActual++;
+      const nm = cpNameById[p.checkpointId];
+      if (nm != null) actualByName[nm] = (actualByName[nm] || 0) + 1;
+    });
+  });
+
+  const rows = Object.keys(byLabel).map(label => {
+    const e = byLabel[label];
+    const codes = Array.from(e.codes);
+    const useCodes = codes.length ? codes : [label];
+    const actual = actualByName[label];
+    const altActual = actual == null ? useCodes.some(c => actualByName[c] != null) : false;
+    const actualVal = actual != null ? actual : (altActual ? useCodes.reduce((s, c) => s + (actualByName[c] || 0), 0) : null);
+    return {
+      label: e.label,
+      codes: useCodes,
+      est: e.est,
+      freeOrder: e.freeOrder,
+      skip: e.skip,
+      actual: actualVal,
+    };
+  });
+  rows.sort((a, b) => b.est - a.est || String(a.label).localeCompare(String(b.label)));
+
+  let totalPunches = 0;
+  rows.forEach(r => { totalPunches += r.est; });
+  const mostPunched = rows.length ? rows[0] : null;
+  return {
+    rows,
+    totalPunches,
+    totalActual,
+    hasActual: totalActual > 0,
+    avgPerControl: rows.length ? totalPunches / rows.length : 0,
+    mostPunched,
+  };
+}
+
+function numberCompare(a, b) {
+  const na = Number(a), nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) {
+    if (na !== nb) return na - nb;
+    return String(a).localeCompare(String(b));
+  }
+  return String(a).localeCompare(String(b));
+}
+
+// All distinct control codes used anywhere in the event, sorted, for the
+// copyable comma-separated list (a fork/multi-code site contributes each of
+// its codes; e.g. 174,173,300).
+function controlCodesUsed(event) {
+  const seen = new Set();
+  controlPunchStats(event).rows.forEach(r => (r.codes || []).forEach(c => seen.add(c)));
+  return Array.from(seen).sort(numberCompare);
+}
+
+function cpSection(event) {
+  const stats = controlPunchStats(event);
+  if (!stats.rows.length) return '';
+
+  const parts = [];
+  const cards = [
+    cardHtml(T('cpCount'), String(stats.rows.length)),
+    cardHtml(T('cpTotPunches'), esc(String(stats.totalPunches))),
+    cardHtml(T('cpAvgPer'), stats.avgPerControl.toFixed(1)),
+  ];
+  if (stats.mostPunched && stats.mostPunched.est > 0) {
+    cards.push(cardHtml(T('cpMost'), esc(stats.mostPunched.codes.join(',')),
+      esc(stats.mostPunched.est + ' ' + T('hCpPunches').toLowerCase())));
+  }
+  if (stats.hasActual) {
+    cards.push(cardHtml(T('hCpActual'), esc(String(stats.totalActual))));
+  }
+  parts.push('<div class="cards">' + cards.join('') + '</div>');
+
+  const chartRows = stats.rows.map(r => ({
+    codes: r.codes.join(','),
+    est: r.est,
+    actual: r.actual,
+    freeOrder: r.freeOrder,
+    skip: r.skip,
+  }));
+  parts.push(chartCanvas({ type: 'cps', rows: chartRows }));
+
+  const codesUsed = controlCodesUsed(event);
+  if (codesUsed.length) {
+    const codesAttr = escAttr(codesUsed.join(','));
+    parts.push(
+      '<div class="cpcodes"><span>' + esc(T('cpcodes')) + '</span>' +
+      '<code>' + esc(codesUsed.join(',')) + '</code>' +
+      '<button type="button" class="btn btn-outline cpcopybtn" data-cp-copy data-codes="' + codesAttr + '">' +
+        esc(T('cpCopyBtn')) + '</button></div>'
+    );
+  }
+  parts.push('<p class="chartcap">' + esc(T('cpNote')) + '</p>');
+
+  return sectionHtml(T('secControlPoints'), parts.join(''));
+}
+
 // Body of an individual/relay analysis (header + cards + flow + pace +
 // schedule + warnings), reused both for the single-race view and for each
 // column of a two-race comparison. `Relay` and individual render the same
@@ -3044,7 +3509,7 @@ function flowSection(event) {
 // suffices; only the header text differs by race type via renderHeader.
 function renderRaceBody(event) {
   const flow = flowSection(event);
-  return renderHeader(event) + '\n' + flow.html + '\n' + paceSection(event) + '\n' + scheduleSection(event) + '\n' + flow.warnBox;
+  return renderHeader(event) + '\n' + flow.html + '\n' + delaySection(event) + '\n' + paceSection(event) + '\n' + cpSection(event) + '\n' + scheduleSection(event) + '\n' + flow.warnBox;
 }
 
 function renderIndividual(event) {
@@ -3169,6 +3634,7 @@ function renderMultistage() {
     const flow = flowSection(s);
     out.push(flow.html);
     out.push(paceSection(s));
+    out.push(cpSection(s));
     out.push(scheduleSection(s));
     out.push(flow.warnBox);
   });
@@ -3183,7 +3649,7 @@ function renderMultistage() {
 function compareColHtml(event, variant) {
   const name = event.name || '';
   const flowHtml = flowSection(event);
-  let inner = flowHtml.html + '\n' + paceSection(event, true) + '\n' + scheduleSection(event) + '\n' + flowHtml.warnBox;
+  let inner = flowHtml.html + '\n' + paceSection(event, true) + '\n' + cpSection(event) + '\n' + scheduleSection(event) + '\n' + flowHtml.warnBox;
   return '<div class="cmpcol' + (variant === 'b' ? ' b' : '') + '"><div class="cmphdr">' +
     '<span class="cmpname">' + esc(name) + '</span></div>' + inner + '</div>';
 }
@@ -3340,6 +3806,25 @@ async function shareLink() {
     setStatus(T('shareCopied'), 'ok');
   } catch (e) {
     setStatus(location.href, 'ok');
+  }
+}
+async function copyCodes(btn) {
+  const codes = btn && btn.getAttribute ? btn.getAttribute('data-codes') : null;
+  if (!codes) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(codes);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = codes;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setStatus(T('cpCopied'), 'ok');
+  } catch (e) {
+    setStatus(codes, 'ok');
   }
 }
 
@@ -3554,6 +4039,19 @@ function addFlowRows(rows, event) {
   }
 }
 
+function addControlRows(rows, event) {
+  const stats = controlPunchStats(event);
+  if (!stats.rows.length) return;
+  rows.push([]);
+  rows.push([T('secControlPoints')]);
+  rows.push([T('hCpCtrl'), T('hCpPunches'), T('hCpActual')]);
+  stats.rows.forEach(r => rows.push([
+    r.codes.join(','),
+    r.est,
+    r.actual != null ? r.actual : '',
+  ]));
+}
+
 function buildCSV() {
   const event = state.event;
   if (!event) return '';
@@ -3563,9 +4061,11 @@ function buildCSV() {
       rows.push([]);
       rows.push([T('secStage') + ' ' + (stage.stageNumber || (i + 1)) + (stage.name ? ' ' + stage.name : '')]);
       addFlowRows(rows, stage);
+      addControlRows(rows, stage);
     });
   } else {
     addFlowRows(rows, event);
+    addControlRows(rows, event);
     const paces = classPaces(event);
     if (paces.length) {
       rows.push([]);
@@ -3634,6 +4134,10 @@ function wireUI() {
       const card = btn.closest ? btn.closest('[data-wx-key]') : null;
       if (!card) return;
       doWx(card.getAttribute('data-wx-key'), btn);
+    });
+    out.addEventListener('click', e => {
+      const btn = e.target && e.target.closest ? e.target.closest('[data-cp-copy]') : null;
+      if (btn) copyCodes(btn);
     });
     out.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;

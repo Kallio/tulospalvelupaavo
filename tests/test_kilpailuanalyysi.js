@@ -275,9 +275,12 @@ try {
       parseClassName, compareClassNames, classSortKey, autoDetectGroups, scheduleData,
       compareFlowSeries, comparePaceRows, comparePaceSection, compareFlowSection,
       compareColHtml, renderCompare, setMode, parseHash, analyzeCompare,
+      renderRaceBody,
       compareAvgSummary, flowCards,
       weatherCards, weatherCodeToText, deriveWeatherCodeFromFmi, wxKeyFor, eventForWxKey,
       localityFromAddress,
+      computeRelayDelays, aggregateRelayDelays, delaySection,
+      controlPunchStats, cpSection, addControlRows, controlCodesUsed, paintControlPoints,
       slugFromHash, setCompareShareHash, setShareHash,
     };
     global.__state = {
@@ -377,6 +380,124 @@ assert('relay flow: into forest 13:20', (rflow.lastStart - rflow.firstStart) / 1
 assert('relay flow: wait 11:40', (rflow.lastFinish - rflow.firstFinish) / 1000 === 700);
 assert('relay flow: last leg finish = team total', (rflow.lastFinish - rflow.firstStart) / 1000 === 1300);
 assert('relay flow: startByClass covers cls1 4 + cls2 1', (rflow.startByClass.cls1 || []).length === 4 && (rflow.startByClass.cls2 || []).length === 1);
+
+// ── relay start-delay (registered vs actual) ──
+// Teams start at 08:00 registered (team.startTime). Leg 1 runners punch at
+// 08:04 / 08:05 (delay 240s / 300s). Leg 2 runner of team A punches 08:12
+// while leg 1 finished 08:10 (handoff delay 120s).
+const delayEvent = {
+  id: 'e-delay', raceType: 'Relay', eventKind: 'Event',
+  courseClasses: [{ id: 'cls1', name: 'M21' }, { id: 'cls2', name: 'N21' }], courses: [],
+  results: [
+    { id: 'ta', resultType: 'Team', bibNumber: 1, name: 'Team A', classId: 'cls1', status: 'Ok', time: 900, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'tb', resultType: 'Team', bibNumber: 2, name: 'Team B', classId: 'cls1', status: 'Ok', time: 900, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'tc', resultType: 'Team', bibNumber: 3, name: 'Team C', classId: 'cls2', status: 'Ok', time: 700, startTime: '2026-03-21T08:00:00.000Z' },
+    { id: 'a1', resultType: 'Individual', parentId: 'ta', leg: 1, classId: 'cls1', name: 'A1', status: 'Ok', time: 600, startTime: '2026-03-21T08:04:00.000Z', finishTime: '2026-03-21T08:10:00.000Z' },
+    { id: 'a2', resultType: 'Individual', parentId: 'ta', leg: 2, classId: 'cls1', name: 'A2', status: 'Ok', time: 300, startTime: '2026-03-21T08:12:00.000Z', finishTime: '2026-03-21T08:15:00.000Z' },
+    { id: 'b1', resultType: 'Individual', parentId: 'tb', leg: 1, classId: 'cls1', name: 'B1', status: 'Ok', time: 600, startTime: '2026-03-21T08:05:00.000Z', finishTime: '2026-03-21T08:11:00.000Z' },
+    { id: 'c1', resultType: 'Individual', parentId: 'tc', leg: 1, classId: 'cls2', name: 'C1', status: 'Ok', time: 650, startTime: '2026-03-21T08:04:00.000Z', finishTime: '2026-03-21T08:11:00.000Z' },
+  ],
+};
+const delays = P.computeRelayDelays(delayEvent);
+assert('delay: one leg-1 delay per team + one leg-2', delays.length === 4, String(delays.length));
+const l1A = delays.find(d => d.teamName === 'Team A' && d.leg === 1);
+assert('delay: leg1 delay = punch - registered', l1A.delaySec === 240, String(l1A.delaySec));
+const l1C = delays.find(d => d.teamName === 'Team C' && d.leg === 1);
+assert('delay: leg1 240s for Team C', l1C.delaySec === 240, String(l1C.delaySec));
+const l2A = delays.find(d => d.teamName === 'Team A' && d.leg === 2);
+assert('delay: leg2 handoff = actual - prev finish (120s)', l2A.delaySec === 120, String(l2A.delaySec));
+assert('delay: className resolves', l1A.className === 'M21' && l1C.className === 'N21');
+const agg = P.aggregateRelayDelays(delays);
+assert('delay: overall avg = (240+300+240)/3', Math.round(agg.overall.avg) === 260, String(agg.overall.avg));
+assert('delay: overall min/max', agg.overall.min === 240 && agg.overall.max === 300);
+assert('delay: byClass includes M21 (2) + N21 (1)', (agg.byClass['M21'] || []).length === 2 && (agg.byClass['N21'] || []).length === 1);
+assert('delay: aggregate ignores handoffs for overall', agg.overall.count === 3, String(agg.overall.count));
+const delayFlow = P.eventFlow(delayEvent);
+assert('delay: delayOverall present in eventFlow', delayFlow.delayOverall != null && Math.round(delayFlow.delayOverall.avg) === 260);
+assert('delay: registeredStartMinutes sizes to 3 teams', delayFlow.registeredStartMinutes.length === 3, String(delayFlow.registeredStartMinutes.length));
+// delay card appears in flow cards
+const delayCards = P.flowCards(delayFlow, 0, { _weather: null, address: 'x' }).join(' ');
+assert('delay: card labeled cDelay/Sarja', delayCards.includes('Lähtöviive'), delayCards);
+assert('delay: card shows avg 4:20', delayCards.includes('4:20'), delayCards);
+// delaySection renders a per-class table for relays only
+const dsec = P.delaySection(delayEvent);
+assert('delay: section has table with M21 row', dsec.includes('M21') && dsec.includes('N21'), dsec);
+assert('delay: section not for individual', P.delaySection(indEvent) === '');
+// individual races have no delay
+assert('delay: individual event has no delayOverall', P.eventFlow(indEvent).delayOverall == null && P.eventFlow(indEvent).registeredStartMinutes == null);
+
+
+// ── control point usage / punch pressure ──
+const cpEvent = {
+  id: 'e-cp', name: 'Rastitesti', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [
+    { id: 'ca', name: 'A', courses: [{ id: 'coA', legs: 1 }] },
+    { id: 'cb', name: 'B', courses: [{ id: 'coB', legs: 1 }] },
+  ],
+  courses: [
+    { id: 'coA', name: 'A', distance: 3325, controls: [
+      { label: '111', code: ['111'], distance: 126, freeOrder: false, skip: false },
+      { label: '160', code: ['160', '171'], distance: 247, freeOrder: false, skip: false },
+      { label: 'F', code: ['100'], distance: 236, freeOrder: false, skip: false },
+    ] },
+    { id: 'coB', name: 'B', distance: 2500, controls: [
+      { label: '111', code: ['111'], distance: 58, freeOrder: false, skip: false },
+      { label: '112', code: ['112'], distance: 131, freeOrder: true, skip: false },
+      { label: 'F', code: ['100'], distance: 218, freeOrder: false, skip: false },
+    ] },
+  ],
+  checkpoints: [{ id: 'cpX1', name: '160' }],
+  results: [
+    { id: 'c1', classId: 'ca', courseId: 'coA', status: 'Ok', time: 600, passings: [{ id: 'p1', checkpointId: 'cpX1', time: 100 }] },
+    { id: 'c2', classId: 'ca', courseId: 'coA', status: 'Ok', time: 700, passings: [{ id: 'p2', checkpointId: 'cpX1', time: 200 }] },
+    { id: 'c3', classId: 'ca', courseId: 'coA', status: 'Ok', time: 800 },
+    { id: 'c4', classId: 'ca', courseId: 'coA', status: 'DNF', time: 0 },
+    { id: 'c5', classId: 'ca', courseId: 'coA', status: 'MP', time: 0 },
+    { id: 'c6', classId: 'cb', courseId: 'coB', status: 'Ok', time: 900 },
+  ],
+};
+const cpStats = P.controlPunchStats(cpEvent);
+assert('cp: one row per control label', cpStats.rows.length === 4, String(cpStats.rows.length));
+const cp111 = cpStats.rows.find(r => r.label === '111');
+const cp160 = cpStats.rows.find(r => r.label === '160');
+const cp112 = cpStats.rows.find(r => r.label === '112');
+const cpF = cpStats.rows.find(r => r.label === 'F');
+assert('cp: shared control sums OK runners across courses', cp111.est === 4, 'est=' + cp111.est);
+assert('cp: fork kept as one site with all codes', cp160.codes.join(',') === '160,171', cp160.codes.join(','));
+assert('cp: fork est counts each OK runner once', cp160.est === 3, 'est=' + cp160.est);
+assert('cp: checkpoint passes through to actual', cp160.actual === 2, 'actual=' + cp160.actual);
+assert('cp: actual value present globally', cpStats.hasActual && cpStats.totalActual === 2);
+assert('cp: freeOrder flag carried', cp112.freeOrder === true);
+assert('cp: non-OK runners excluded', cp112.est === 1, 'est=' + cp112.est);
+assert('cp: finish control counted', cpF.est === 4 && cpF.codes.join(',') === '100');
+assert('cp: total punches', cpStats.totalPunches === 12, String(cpStats.totalPunches));
+assert('cp: avg punches/control', cpStats.avgPerControl === 3, String(cpStats.avgPerControl));
+assert('cp: most punched is shared control', cpStats.mostPunched && cpStats.mostPunched.label === '111', cpStats.mostPunched && cpStats.mostPunched.label);
+assert('cp: rows sorted by pressure desc', cpStats.rows[0].label === '111' && cpStats.rows[3].label === '112', cpStats.rows.map(r => r.label).join(','));
+// events without control data produce no section
+assert('cp: empty stats for no controls', P.controlPunchStats(indEvent).rows.length === 0);
+assert('cp: no section for event without controls', P.cpSection(indEvent) === '');
+const cps = P.cpSection(cpEvent);
+assert('cp: section title + cards + note', cps.includes('Rastipisteet') && cps.includes('Leimauksia yhteensä') && cps.includes('Leimausarvio'), cps.slice(0, 120));
+assert('cp: chart replaces table', cps.includes('data-chart-id') && !cps.includes('<table'), cps.slice(0, 80));
+assert('cp: copyable sorted code list', cps.includes('100,111,112,160,171'), cps);
+assert('cp: copy button present', cps.includes('data-cp-copy') && cps.includes('>Kopioi</button>'), cps);
+assert('cp: used codes sorted numeric', P.controlCodesUsed(cpEvent).join(',') === '100,111,112,160,171', P.controlCodesUsed(cpEvent).join(','));
+const cpRows = [];
+P.addControlRows(cpRows, cpEvent);
+assert('cp: csv header + fork row', cpRows.some(r => r[0] === '160,171' && r[1] === 3 && r[2] === 2), JSON.stringify(cpRows));
+const cpCtx = new Proxy({}, { get: (t, k) => { if (k === 'measureText') return () => ({ width: 42 }); return () => {}; }, set: () => true });
+const cpCfg = { rows: cpStats.rows.map(r => ({ codes: r.codes.join(','), est: r.est, actual: r.actual, skip: r.skip === true, freeOrder: r.freeOrder === true })) };
+let cpDrew = true;
+try { P.paintControlPoints(cpCtx, 620, 220, cpCfg); } catch (e) { cpDrew = false; console.log('paintControlPoints threw:', e); }
+assert('cp: pressure chart draws without error', cpDrew);
+assert('cp: chart hit-map built', cpCfg._barMap && cpCfg._barMap.rows.length === 4, JSON.stringify(cpCfg._barMap || null));
+// relay fixtures with no control defs → no section
+assert('cp: no section for relay without control data', P.cpSection(relayEvent) === '');
+// wired into single-race body + compare column
+assert('cp: renderRaceBody includes section', P.renderRaceBody(cpEvent).includes('Rastipisteet'));
+assert('cp: compareColHtml includes section', P.compareColHtml(cpEvent, 'a').includes('Rastipisteet'));
+
 
 // ── eventFlow (no timestamps) ──
 const nflow = P.eventFlow(relayLegacyEvent);
