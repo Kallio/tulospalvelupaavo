@@ -32,6 +32,10 @@ body { font-family: Arial, sans-serif; background: #e8e8e8; }
   box-shadow: 0 2px 12px rgba(0,0,0,0.5);
 }
 .ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: 1; min-width: 180px; }
+/* In the top (wrapped) panel layout the Sticker Sheet box is the last .ps and
+   can wrap to a flex line by itself, stretching across the whole panel.
+   Cap its width so it stays compact like the sibling boxes. */
+body:not(.sidebar-mode) #setup-panel > .ps:last-child { max-width: 360px; }
 .ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
 .ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
 .ps label:first-of-type { margin-top: 0; }
@@ -821,14 +825,41 @@ function getFilteredEntries() {
   return entries;
 }
 
+// Position of a runner among its team's runners on the same leg (par) and,
+// when several runners share the same (osuus, alaosuus) group, the runner's
+// 1-based position within that group (dup/dupTotal).
+function runnerParallelIdx(team, runner) {
+  const rs = (team && Array.isArray(team.runners) && team.runners.includes(runner))
+    ? team.runners
+    : (runner.osuus ? [runner] : []);
+  if (!runner.osuus) return { par: 0, dup: 0, dupTotal: 0 };
+  let par = 0, dup = 0, dupTotal = 0;
+  for (const r of rs) {
+    if (!r.osuus || r.osuus !== runner.osuus) continue;
+    par++;
+    if (r === runner) break;
+  }
+  if (runner.alaosuus) {
+    for (const r of rs) {
+      if (!r.osuus || r.osuus !== runner.osuus || r.alaosuus !== runner.alaosuus) continue;
+      dupTotal++;
+      if (r === runner) dup = dupTotal;
+    }
+  }
+  return { par: par || 1, dup: dup || 1, dupTotal: dupTotal || 1 };
+}
+
 // Barcode value shared between the bib card and the sticker sheet.
 function getBarcodeValue(team, runner) {
   const isSingle = !runner.osuus;
-  const showAlao = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const showAlao = !!runner.alaosuus;
   const classPrefix = team.sarja ? sanitizeForBarcode(classPrefixMap[team.sarja] ?? '') : '';
   const bcBase = classPrefix ? `${classPrefix}-${team.kilpailunumero}` : team.kilpailunumero;
   if (isSingle) return bcBase;
-  if (showAlao) return `${bcBase}-${runner.osuus}-${runner.alaosuus}`;
+  if (showAlao) {
+    const { dup, dupTotal } = runnerParallelIdx(team, runner);
+    return dupTotal > 1 ? `${bcBase}-${runner.osuus}-${runner.alaosuus}-${dup}` : `${bcBase}-${runner.osuus}-${runner.alaosuus}`;
+  }
   return `${bcBase}-${runner.osuus}`;
 }
 
@@ -884,7 +915,8 @@ function generateBibs() {
 
 function createBib(team, runner) {
   const isSingle   = !runner.osuus;
-  const showAlao   = runner.alaosuus && runner.alaosuus !== runner.osuus;
+  const showAlao   = !!runner.alaosuus;
+  const osuusSub   = showAlao ? runnerParallelIdx(team, runner).par : '';
   const sponsorImgs = sponsorLogos
     .map((s, i) => sponsorApplies(s, runner.osuus) ? { src: s.src, slot: SPONSOR_SLOT(i) } : null)
     .filter(Boolean);
@@ -939,7 +971,7 @@ function createBib(team, runner) {
     if (legColor) d.style.background = legColor;
     d.innerHTML = `<span class="n" style="font-size:${numFsMm}mm;">${esc(team.kilpailunumero)}</span>`
       + (runner.osuus
-          ? `<span class="o" style="font-size:${osuusFsMm}mm;">&nbsp;${esc(runner.osuus)}${showAlao?'&#8209;'+esc(runner.alaosuus):''}</span>`
+          ? `<span class="o" style="font-size:${osuusFsMm}mm;">&nbsp;${esc(runner.osuus)}${showAlao?'&#8209;'+esc(String(osuusSub)):''}</span>`
           : '');
     card.appendChild(d);
   }
@@ -2115,14 +2147,16 @@ function navLoadRelay(json) {
       nimi:           navName(r),
       kilpailukortti: String(r.chip||''),
       osuus:          r.leg != null ? String(r.leg) : '',
-      alaosuus:       '',
+      alaosuus:       r.subLeg != null ? String(r.subLeg) : '',
       rata:           '',
       lahtöaika:      navTime(r),
     });
   }
 
   csvTeams = Object.values(teamMap);
-  csvTeams.forEach(t => t.runners.sort((a,b) => +a.osuus - +b.osuus));
+  csvTeams.forEach(t => {
+    t.runners.sort((a,b) => +a.osuus - +b.osuus);
+  });
   sortTeams();
   return { skipped };
 }

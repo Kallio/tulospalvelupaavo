@@ -68,9 +68,9 @@ const rows = parseCSV(csv, ',');
 assert('kompassi convert: 6 rows incl header', rows.length === 6, String(rows.length));
 assert('kompassi convert: header 5 blocks', rows[0].includes('Nimi-5'));
 assert('kompassi convert: row1 (5 runners) full', rows[1][38] === 'Kauppi Pedro');
-assert('kompassi convert: row2 (4 runners) padded to 5 blocks, trailing empty', rows[2].length === 45 && rows[2][9] === '1' && rows[2][17] === '2' && rows[2][18] === '1' && rows[2][25] === '2' && rows[2][26] === '2' && rows[2][33] === '3' && rows[2][38] === '', JSON.stringify(rows[2].slice(6, 46)));
+assert('kompassi convert: row2 (4 runners) padded to 5 blocks, trailing empty', rows[2].length === 45 && rows[2][9] === '1' && rows[2][17] === '2' && rows[2][18] === '1' && rows[2][25] === '2' && rows[2][26] === '1' && rows[2][33] === '3' && rows[2][38] === '', JSON.stringify(rows[2].slice(6, 46)));
 assert('kompassi convert: row4 (3 runners) padded to 5 blocks', rows[4][38] === '' && rows[4][41] === '');
-assert('kompassi convert: row3 D12 alaosuudet 1,2 on osuus 2', rows[3][18] === '1' && rows[3][26] === '2' && rows[3][17] === '2' && rows[3][25] === '2');
+assert('kompassi convert: row3 D12 subleg 1 on every leg-2 slot', rows[3][18] === '1' && rows[3][26] === '1' && rows[3][17] === '2' && rows[3][25] === '2', JSON.stringify(rows[3].slice(14, 30)));
 
 // fillEmpty ON
 getEl('fillEmpty').checked = true;
@@ -78,7 +78,8 @@ convert();
 const csvF = __lastResult().csv;
 const rowsF = parseCSV(csvF, ',');
 assert('fillEmpty: saveBtn still enabled', getEl('saveBtn').disabled === false);
-assert('fillEmpty: row2 (4 runners) → 5 blocks, leg2 ala 3 placeholder, Pedro on leg3', rowsF[2].length === 45 && rowsF[2][30] === '' && rowsF[2][33] === '2' && rowsF[2][34] === '3' && rowsF[2][38] === 'Kauppi Pedro' && rowsF[2][41] === '3', JSON.stringify(rowsF[2].slice(6, 46)));
+assert('fillEmpty: row2 (4 runners) → 5 blocks, leg2 ala 3 placeholder, Pedro on leg3', rowsF[2].length === 45 && rowsF[2][30] === 'VAC' && rowsF[2][33] === '2' && rowsF[2][34] === '1' && rowsF[2][38] === 'Kauppi Pedro' && rowsF[2][41] === '3', JSON.stringify(rowsF[2].slice(6, 46)));
+assert('fillEmpty: Lainakortti=Ei everywhere', rowsF[1][8] === 'Ei' && rowsF[1][16] === 'Ei' && rowsF[1][24] === 'Ei' && rowsF[1][32] === 'Ei' && rowsF[1][40] === 'Ei', JSON.stringify([rowsF[1][8], rowsF[1][16], rowsF[1][24], rowsF[1][32], rowsF[1][40]]));
 assert('fillEmpty: preview shows placeholders', getEl('previewWrap').innerHTML.includes('tyhjä'));
 getEl('fillEmpty').checked = false;
 

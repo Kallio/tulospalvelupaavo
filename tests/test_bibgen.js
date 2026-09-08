@@ -38,7 +38,7 @@ global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 
 let threw = null;
 try {
-  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, SPONSOR_SLOT, ensureSponsorSlots, sponsorApplies, orderZ, setPos, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l, setSelected: (k, r) => { selectedKey = k; selectedRef = r; } };');
+  eval(code + '; global.__p = { deepClone, parseCSV, parseTeams, parseRanges, sanitizeForBarcode, buildClassPrefixes, getFilteredEntries, getBarcodeValue, runnerParallelIdx, navLoadIndividual, navLoadRelay, navName, navTime, makePosDiv, createBib, esc, escA, sortTeams, SPONSOR_SLOT, ensureSponsorSlots, sponsorApplies, orderZ, setPos, mimeToExt, dataURLInfo, sanitizeFileName, buildBundleContent, exportBundle, extToMime, parseBundle, applyImportedBundle, importBundleFromZip, applyStateData, buildStateData, applyPos }; global.__state = { csvTeams: () => csvTeams, setCsvTeams: t => csvTeams = t, rawCsvText: () => rawCsvText, setRawCsvText: v => rawCsvText = v, classPrefixMap: () => classPrefixMap, setClassPrefixMap: m => classPrefixMap = m, useClassPrefix: () => useClassPrefix, setUseClassPrefix: v => useClassPrefix = v, showBarcode: () => showBarcode, setShowBarcode: v => showBarcode = v, colorLegs: () => colorLegs, setColorLegs: v => colorLegs = v, showClub: () => showClub, setShowClub: v => showClub = v, showStickerName: () => showStickerName, setShowStickerName: v => showStickerName = v, sponsorLogos: () => sponsorLogos, setSponsorLogos: v => sponsorLogos = v, eventLogoSrc: () => eventLogoSrc, setEventLogoSrc: v => eventLogoSrc = v, eventLogoName: () => eventLogoName, setEventLogoName: v => eventLogoName = v, customFont: () => customFont, setCustomFont: v => customFont = v, stickerLayout: () => stickerLayout, stickerGroupPos: () => stickerGroupPos, setStickerGroupPos: v => stickerGroupPos = v, stickerConfig: () => stickerConfig, setStickerConfig: v => stickerConfig = v,   LEG_COLORS: () => LEG_COLORS, layout: () => layout, setLayout: l => layout = l, setSelected: (k, r) => { selectedKey = k; selectedRef = r; } };');
 } catch (e) { threw = e; }
 if (threw) { console.log('eval threw:', threw.stack); process.exit(1); }
 
@@ -55,6 +55,9 @@ const S = global.__state;
 const src = { a: 1, b: { c: [1, 2] } };
 const cpy = P.deepClone(src);
 assert('deepClone: equal + not same ref', JSON.stringify(cpy) === JSON.stringify(src) && cpy !== src && cpy.b !== src.b);
+
+// ── CSS: Sticker Sheet settings box must not span the whole panel in top layout ──
+assert('css: sticker settings box capped in top layout', html.includes('body:not(.sidebar-mode) #setup-panel > .ps:last-child'));
 
 // ── parseCSV ──
 assert('csv: simple', JSON.stringify(P.parseCSV('a,b\n1,2')) === JSON.stringify([['a', 'b'], ['1', '2']]));
@@ -113,9 +116,28 @@ S.setClassPrefixMap({});
 assert('bc: no prefix → num', P.getBarcodeValue(t101, { osuus: '', alaosuus: '' }) === '101');
 S.setClassPrefixMap({ H21: 'H21' });
 assert('bc: relay osuus', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '' }) === 'H21-101-1');
-assert('bc: alaosuus same as osuus → 2-part', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }) === 'H21-101-1');
+assert('bc: alaosuus equal to osuus → 3-part (parallel leg)', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }) === 'H21-101-1-1', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1' }));
 assert('bc: alaosuus different → 3-part', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1A' }) === 'H21-101-1-1A', P.getBarcodeValue(t101, { osuus: '1', alaosuus: '1A' }));
 assert('bc: no prefix relay', P.getBarcodeValue({ kilpailunumero: '101', sarja: '' }, { osuus: '2', alaosuus: '' }) === '101-2');
+
+// Parallel subleg shared by several runners (converter's "2-1, 2-1, 2-1"): the
+// barcode keeps osuus-alaosuus and appends the 1-based position within the group.
+S.setClassPrefixMap({});
+const dupTeam = { kilpailunumero: '101', sarja: '', runners: [
+  { nimi: 'A', osuus: '2', alaosuus: '1' }, { nimi: 'B', osuus: '2', alaosuus: '1' }, { nimi: 'C', osuus: '2', alaosuus: '1' },
+] };
+assert('bc parallel dup: 101-2-1-1/-2/-3', [0, 1, 2].map(i => P.getBarcodeValue(dupTeam, dupTeam.runners[i])).join(',') === '101-2-1-1,101-2-1-2,101-2-1-3', [0, 1, 2].map(i => P.getBarcodeValue(dupTeam, dupTeam.runners[i])).join(','));
+// Distinct sublegs → no extra index, barcode unchanged.
+const distTeam = { kilpailunumero: '101', sarja: '', runners: [
+  { nimi: 'A', osuus: '2', alaosuus: '1' }, { nimi: 'B', osuus: '2', alaosuus: '2' },
+] };
+assert('bc parallel distinct: no index appended', [0, 1].map(i => P.getBarcodeValue(distTeam, distTeam.runners[i])).join(',') === '101-2-1,101-2-2', [0, 1].map(i => P.getBarcodeValue(distTeam, distTeam.runners[i])).join(','));
+// Parallel runs next to non-parallel legs keep the plain osuus form.
+const mixTeam = { kilpailunumero: '101', sarja: '', runners: [
+  { nimi: 'A', osuus: '1', alaosuus: '' }, { nimi: 'B', osuus: '2', alaosuus: '1' },
+] };
+assert('bc: non-parallel leg unaffected', P.getBarcodeValue(mixTeam, mixTeam.runners[0]) === '101-1', P.getBarcodeValue(mixTeam, mixTeam.runners[0]));
+S.setClassPrefixMap({ H21: 'H21' });
 
 // ── getFilteredEntries ──
 const ftTeams = [
@@ -201,6 +223,38 @@ assert('relay parent: sarja from runner classId', teamA.sarja === 'Naisten', tea
 assert('relay parent: two runners sorted', teamA.runners.length === 2 && teamA.runners.map(r => r.osuus).join(',') === '1,2');
 assert('relay parent: orphaned runner skipped', relayParentResult.skipped === 1, relayParentResult.skipped);
 
+// ── navLoadRelay: parallel legs read subLeg from the API verbatim ──
+P.navLoadRelay({
+  courseClasses: [{ id: 'c1', name: 'H14' }],
+  results: [
+    { resultType: 'Team', id: 't1', bibNumber: 100, name: 'Espoon Suunta 1', classId: 'c1' },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC A', leg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC A', leg: 2, subLeg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC B', leg: 2, subLeg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC C', leg: 2, subLeg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 3 },
+  ],
+});
+const par = S.csvTeams();
+assert('relay parallel: one team', par.length === 1, String(par.length));
+assert('relay parallel: leg 1 no subleg', par[0].runners[0].alaosuus === '', par[0].runners[0].alaosuus);
+assert('relay parallel: leg 2 sublegs read from API (1,1,1)', par[0].runners.slice(1, 4).map(r => r.alaosuus).join(',') === '1,1,1', par[0].runners.map(r => r.alaosuus).join(','));
+assert('relay parallel: leg 3 no subleg', par[0].runners[4].alaosuus === '', par[0].runners[4].alaosuus);
+assert('relay parallel: osuus sequence', par[0].runners.map(r => r.osuus).join(',') === '1,2,2,2,3', par[0].runners.map(r => r.osuus).join(','));
+
+// ── navLoadRelay: distinct subLeg values are kept, never re-derived ──
+P.navLoadRelay({
+  courseClasses: [{ id: 'c1', name: 'H14' }],
+  results: [
+    { resultType: 'Team', id: 't1', bibNumber: 101, name: 'OK 77 1', classId: 'c1' },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2, subLeg: 2 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2, subLeg: 1 },
+    { resultType: 'Individual', parentId: 't1', name: 'VAC', leg: 2, subLeg: 3 },
+  ],
+});
+const par2 = S.csvTeams();
+assert('relay parallel: API subLeg 2,1,3 preserved', par2[0].runners.map(r => r.alaosuus).join(',') === '2,1,3', par2[0].runners.map(r => r.alaosuus).join(','));
+
 // ── makePosDiv ──
 const d1 = P.makePosDiv(S.layout(), 'numberArea');
 assert('makePosDiv: position + size', d1.dataset.lk === 'numberArea' && d1.style.left === '50%' && d1.style.top === '25%' && d1.style.width === '90%' && d1.style.fontSize === '42mm');
@@ -218,6 +272,30 @@ assert('createBib: leg color applied', numArea && numArea.style.background === '
 const bcDiv = card.children.find(c => c.dataset.lk === 'barcode');
 assert('createBib: barcode data-val', bcDiv && bcDiv.innerHTML.includes('data-val="H21-101-1"'), bcDiv && bcDiv.innerHTML);
 assert('createBib: teamInfo for relay', card.children.some(c => c.dataset.lk === 'teamInfo'));
+
+// parallel leg: subleg equal to leg number must still be shown ("100 2-2")
+// (esc() mangles text to '' in the DOM stub, so we assert on the non-breaking
+// hyphen separator that proveAlao produced, plus the barcode data-val)
+S.setClassPrefixMap({});
+const cardPar = P.createBib({ kilpailunumero: '100', sarja: 'H21', joukkue: 'Team A' }, { nimi: 'Astra', osuus: '2', alaosuus: '2', rata: '', lahtöaika: '' });
+const numAreaPar = cardPar.children.find(c => c.dataset.lk === 'numberArea');
+assert('createBib parallel: subleg separator rendered', numAreaPar.innerHTML.includes('&#8209;'), numAreaPar && numAreaPar.innerHTML);
+assert('createBib parallel: barcode has subleg', cardPar.children.find(c => c.dataset.lk === 'barcode').innerHTML.includes('data-val="100-2-2"'));
+S.setClassPrefixMap({ H21: 'H21' });
+
+// parallel subleg shared by several runners: the bib shows the numeric position
+// within the leg (2-1/2-2/2-3), the barcode keeps alaosuus + index (2-1-2).
+S.setClassPrefixMap({});
+const parDup = P.runnerParallelIdx(dupTeam, dupTeam.runners[1]);
+assert('runParallelIdx: 2nd of 3 shared sublegs → par 2 dup 2 dupTotal 3', parDup.par === 2 && parDup.dup === 2 && parDup.dupTotal === 3, JSON.stringify(parDup));
+const parDist = P.runnerParallelIdx(distTeam, distTeam.runners[0]);
+assert('runParallelIdx: distinct sublegs → no dup group', parDist.par === 1 && parDist.dupTotal === 1, JSON.stringify(parDist));
+const dupCard = P.createBib(dupTeam, dupTeam.runners[1]);
+const dupNum = dupCard.children.find(c => c.dataset.lk === 'numberArea');
+const dupBc = dupCard.children.find(c => c.dataset.lk === 'barcode');
+assert('createBib parallel dup: leg separator rendered', dupNum && dupNum.innerHTML.includes('&#8209;'), dupNum && dupNum.innerHTML);
+assert('createBib parallel dup: barcode keeps subleg + index', dupBc && dupBc.innerHTML.includes('data-val="101-2-1-2"'), dupBc && dupBc.innerHTML);
+S.setClassPrefixMap({ H21: 'H21' });
 
 // single runner: no leg color, runnerInfo present, no teamInfo
 S.setClassPrefixMap({ H21: 'H21' });

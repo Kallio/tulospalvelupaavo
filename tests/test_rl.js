@@ -27,7 +27,7 @@ global.document = doc;
 eval(code);
 
 // ── profiles ──
-const kompassiKilpa = { name: 'Kilpa', sarjat: [], legs: [
+const kompassiKilpa = { name: 'Kilpa', sarjat: [], alaosuusSame: true, legs: [
   { osuus: 1, lkm: 1, tieto: '' }, { osuus: 2, lkm: 3, tieto: '' }, { osuus: 3, lkm: 1, tieto: '' }] };
 const halikko = { name: 'Halikko', sarjat: [], legs: [
   { osuus: 1, lkm: 1 }, { osuus: 2, lkm: 3 }, { osuus: 3, lkm: 3 },
@@ -65,14 +65,14 @@ const team5 = { sarja: 'H14', joukkue: 'Parhaat', seura: 'X', slots: ['Vesa','Pa
 const a5 = buildAssignment(team5, kompassiKilpa);
 assert('5-runner: no error', !a5.error, a5.error);
 assert('5-runner: osuus seq = 1,2,2,2,3', JSON.stringify(a5.used.map(b => b.osuus)) === JSON.stringify(['1','2','2','2','3']), JSON.stringify(a5.used.map(b => b.osuus)));
-assert('5-runner: alaosuus seq = ,1,2,3,', JSON.stringify(a5.used.map(b => b.alaosuus)) === JSON.stringify(['','1','2','3','']), JSON.stringify(a5.used.map(b => b.alaosuus)));
+assert('5-runner: alaosuus seq = ,1,1,1,', JSON.stringify(a5.used.map(b => b.alaosuus)) === JSON.stringify(['','1','1','1','']), JSON.stringify(a5.used.map(b => b.alaosuus)));
 assert('5-runner: full length = 5', a5.full.length === 5, String(a5.full.length));
 
 // ── test 3: 3-runner team → osuus 1,2,3, no alaosuus ──
 const team3 = { sarja: 'H14', joukkue: 'P3', seura: 'X', slots: ['A','B','C'], runners: ['A','B','C'] };
 const a3 = buildAssignment(team3, kompassiKilpa);
 assert('3-runner: osuus = 1,2,3', JSON.stringify(a3.used.map(b => b.osuus)) === JSON.stringify(['1','2','3']));
-assert('3-runner: alaosuus empty', a3.used.every(b => b.alaosuus === ''));
+assert('3-runner: alaosuus only on parallel leg', JSON.stringify(a3.used.map(b => b.alaosuus)) === JSON.stringify(['','1','']), JSON.stringify(a3.used.map(b => b.alaosuus)));
 
 // ── test 4: Halikko 13-runner team ──
 const slots15 = ['E1','E2','E3','E4','E5','E6','E7','E8','E9','E10','E11','E12','E13','',''];
@@ -97,7 +97,8 @@ assert('csvOff header Nimi-5 present', header.includes('Nimi-5'));
 const row1 = parseCSV(csvOff, ',')[1];
 assert('csvOff row1 has 5 named runners', row1[6] === 'Vesa' && row1[38] === 'Pedro', JSON.stringify(row1.slice(6, 40)));
 assert('csvOff row1 osuus = 1,2,2,2,3', row1[9] === '1' && row1[17] === '2' && row1[25] === '2' && row1[33] === '2' && row1[41] === '3');
-assert('csvOff row1 alaosuus = ,1,2,3,', row1[10] === '' && row1[18] === '1' && row1[26] === '2' && row1[34] === '3' && row1[42] === '');
+assert('csvOff row1 alaosuus = ,1,1,1,', row1[10] === '' && row1[18] === '1' && row1[26] === '1' && row1[34] === '1' && row1[42] === '');
+assert('csvOff row1 Lainakortti=Ei', row1[8] === 'Ei' && row1[16] === 'Ei' && row1[24] === 'Ei' && row1[32] === 'Ei' && row1[40] === 'Ei', JSON.stringify([row1[8], row1[16], row1[24], row1[32], row1[40]]));
 const row2 = parseCSV(csvOff, ',')[2];
 assert('csvOff row2 (3-runner) padded to 5 blocks, trailing empty', row2.length === row1.length && row2[6] === 'A' && row2[9] === '1' && row2[14] === 'B' && row2[17] === '2' && row2[22] === 'C' && row2[25] === '3' && row2[30] === '' && row2[38] === '', JSON.stringify(row2.slice(6, 40)));
 
@@ -108,7 +109,9 @@ assert('rtc fillEmpty on: ok', rtcOn.ok, rtcOn.msg);
 const row1on = parseCSV(csvOn, ',')[1];
 assert('fillEmpty on: row1 still 5 blocks', row1on[6] === 'Vesa' && row1on[38] === 'Pedro');
 const row2on = parseCSV(csvOn, ',')[2];
-assert('fillEmpty on: 3-runner row has 5 blocks: A/1, B/2, ,/2, ,/2, C/3', row2on[6] === 'A' && row2on[9] === '1' && row2on[14] === 'B' && row2on[17] === '2' && row2on[22] === '' && row2on[30] === '' && row2on[38] === 'C' && row2on[41] === '3', JSON.stringify(row2on.slice(6, 46)));
+assert('fillEmpty on: 3-runner row has 5 blocks: A/1, B/2, VAC/2, VAC/2, C/3', row2on[6] === 'A' && row2on[9] === '1' && row2on[14] === 'B' && row2on[17] === '2' && row2on[22] === 'VAC' && row2on[25] === '2' && row2on[26] === '1' && row2on[30] === 'VAC' && row2on[34] === '1' && row2on[38] === 'C' && row2on[41] === '3', JSON.stringify(row2on.slice(6, 46)));
+assert('fillEmpty on: subleg 1 on every parallel leg-2 slot', row2on[18] === '1' && row2on[26] === '1' && row2on[34] === '1', JSON.stringify([row2on[18], row2on[26], row2on[34]]));
+assert('fillEmpty on: Lainakortti=Ei on every block', row2on[8] === 'Ei' && row2on[16] === 'Ei' && row2on[24] === 'Ei' && row2on[32] === 'Ei' && row2on[40] === 'Ei', JSON.stringify(row2on.slice(7, 41).filter((_, i) => i % 8 === 1)));
 
 // ── test 7: Halikko full structure round-trip ──
 const aH2 = buildAssignment(teamH, halikko);
@@ -116,7 +119,7 @@ const csvH = generateCSV([Object.assign(aH2, { team: teamH, kilpailunumero: 200 
 const rtcH = verifyOutput(csvH);
 assert('halikko rtc ok', rtcH.ok, rtcH.msg);
 const hrow = parseCSV(csvH, ',')[1];
-assert('halikko full: 15 blocks, slot14 empty osuus 14', hrow[6 + 13 * 8] === '' && hrow[9 + 13 * 8] === '14', JSON.stringify(hrow.slice(6 + 13 * 8, 6 + 14 * 8)));
+assert('halikko full: 15 blocks, slot14 VAC placeholder osuus 14', hrow[6 + 13 * 8] === 'VAC' && hrow[9 + 13 * 8] === '14' && hrow[10 + 13 * 8] === '' && hrow[8 + 13 * 8] === 'Ei', JSON.stringify(hrow.slice(6 + 13 * 8, 6 + 14 * 8)));
 
 // ── test 8: warnings & errors ──
 const holeTeam = { sarja: 'H14', joukkue: 'H', seura: '', slots: ['A', '', 'B', ''], runners: ['A','B'] };

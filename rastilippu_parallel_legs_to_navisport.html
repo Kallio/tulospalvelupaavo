@@ -238,11 +238,13 @@ function defaultProfiles() {
     { name: 'Kilpa (Kompassi-viesti)', legs: [
         { osuus: 1, lkm: 1, tieto: '' }, { osuus: 2, lkm: 3, tieto: '' }, { osuus: 3, lkm: 1, tieto: '' }],
       sarjat: ['D14','H14','D12','H12','D10RR','H10RR','D8RR','H8RR'],
-      nums: '100-999' },
+      nums: '100-999',
+      alaosuusSame: true },
     { name: 'Avoin (Kompassi-viesti)', legs: [
         { osuus: 1, lkm: 1, tieto: '' }, { osuus: 2, lkm: 1, tieto: '' }, { osuus: 3, lkm: 1, tieto: '' }],
       sarjat: ['Avoin Oranssi','Avoin Keltainen/valkoinen','Avoin Vihreä (RR)','Avoin Vihreä'],
-      nums: '1000-1099' },
+      nums: '1000-1099',
+      alaosuusSame: true },
     { name: 'Halikko-viesti', legs: [
         { osuus: 1,  lkm: 1, tieto: 'violetti 4,5 km' },
         { osuus: 2,  lkm: 3, tieto: 'violetti 4,5 km' },
@@ -313,13 +315,15 @@ function addProfileBlock(profile) {
     '<label style="font-size:10px;color:#9aa;display:block;margin-top:4px;">Sarjat joihin profiili pätee (pilkulla eroteltuna)</label>' +
     '<input class="p-sarjat" type="text" placeholder="D14, H14, H12, ...">' +
     '<label style="font-size:10px;color:#9aa;display:block;margin-top:6px;">Kilpailunumerot (tyhjä = ei numeroita, numerot jaetaan joukkuelle)</label>' +
-    '<input class="p-nums" type="text" placeholder="esim. 1-500 tai 1001-1050">';
+    '<input class="p-nums" type="text" placeholder="esim. 1-500 tai 1001-1050">' +
+    '<label style="font-size:10px;color:#9aa;display:block;margin-top:6px;"><input type="checkbox" class="p-ala-same" style="vertical-align:-2px;"> Rinnakkaisilla osuuksilla alaosuus aina 1 (esim. 2-1, 2-1, 2-1 eikä 2-1, 2-2, 2-3)</label>';
   wrap.appendChild(el);
   if (profile) {
     el.querySelector('.p-name').value = profile.name || '';
     el.querySelector('.p-legs').value = legsToText(profile.legs);
     el.querySelector('.p-sarjat').value = (profile.sarjat || []).join(', ');
     el.querySelector('.p-nums').value = profile.nums || '';
+    el.querySelector('.p-ala-same').checked = !!profile.alaosuusSame;
   }
   syncDefaultSelect();
 }
@@ -340,6 +344,7 @@ function readProfilesFromDOM() {
       sarjat: parseSarjat(el.querySelector('.p-sarjat').value),
       numText,
       nums: numParsed.nums,
+      alaosuusSame: el.querySelector('.p-ala-same').checked,
     });
   });
   if (list.length && !errors.length) profiles = list;
@@ -543,7 +548,7 @@ function buildAssignment(team, profile) {
       full.push({
         nimi: j < c ? names[j] : '',
         osuus: String(leg.osuus),
-        alaosuus: c >= 2 ? String(j + 1) : '',
+        alaosuus: leg.lkm > 1 ? (profile.alaosuusSame ? '1' : String(j + 1)) : '',
         tieto: leg.tieto,
       });
     }
@@ -574,7 +579,7 @@ function generateCSV(assignments, fillEmpty) {
     for (let b = 0; b < blocks.length; b++) {
       const blk = blocks[b];
       cells.push(q(' '.repeat(b + 1)));
-      cells.push(q(blk.nimi), q(''), q(''), q(blk.osuus), q(blk.alaosuus), q(''), q(''));
+      cells.push(q(blk.nimi || (fillEmpty ? 'VAC' : '')), q(''), q('Ei'), q(blk.osuus), q(blk.alaosuus), q(''), q(''));
     }
     lines.push(cells.join(','));
   }
@@ -596,7 +601,7 @@ function verifyOutput(csv) {
       const nimi = (r[baseIdx] || '').trim();
       if (!nimi) break;
       const osuus = (r[baseIdx + 3] || '').trim();
-      if (!osuus) missing++;
+      if (!osuus && nimi !== 'VAC') missing++;
       checked++;
     }
   }
