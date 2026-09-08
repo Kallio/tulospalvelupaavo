@@ -280,7 +280,7 @@ try {
       weatherCards, weatherCodeToText, deriveWeatherCodeFromFmi, wxKeyFor, eventForWxKey,
       localityFromAddress,
       computeRelayDelays, aggregateRelayDelays, delaySection,
-      controlPunchStats, cpSection, addControlRows, controlCodesUsed, paintControlPoints,
+      controlPunchStats, cpSection, addControlRows, controlCodesUsed, paintControlPoints, courseDistMissing,
       slugFromHash, setCompareShareHash, setShareHash,
     };
     global.__state = {
@@ -654,6 +654,30 @@ const pctx = new Proxy({}, { get: (t, k) => { if (k === 'measureText') return ()
 let drew = true;
 try { P.paintPace(pctx, 600, 100, { paces: [{ className: 'Avoin', paceSec: 217 }, { className: 'Kilpasarja', paceSec: 233 }] }); } catch (e) { drew = false; }
 assert('paces: chart draws without error', drew);
+
+// Courses whose distance field is missing or implausibly small (km instead of
+// meters) must not produce absurd paces — the pace section shows a note instead.
+const distMissingEvent = {
+  id: 'e-dist', name: 'Kifatreeni', raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [
+    { id: 'el', name: 'Elite Long', courses: [{ id: 'cL', legs: 1 }] },
+    { id: 'es', name: 'Elite Short', courses: [{ id: 'cS', legs: 1 }] },
+  ],
+  courses: [
+    { id: 'cL', name: 'Elite Long', distance: 3, controls: [] },
+    { id: 'cS', name: 'Elite Short', distance: 2, controls: [] },
+  ],
+  results: [
+    { id: 'x1', classId: 'el', courseId: 'cL', status: 'Ok', time: 1375 },
+    { id: 'x2', classId: 'es', courseId: 'cS', status: 'Ok', time: 2072 },
+  ],
+};
+assert('paces: implausible distances produce no rows', P.classPaces(distMissingEvent).length === 0);
+assert('paces: dist-missing flagged for km-typed values', P.courseDistMissing(distMissingEvent) === true);
+assert('paces: dist-missing false for normal events', P.courseDistMissing(indEvent) === false && P.courseDistMissing(relayEvent) === false);
+assert('paces: dist-missing false for no courses', P.courseDistMissing(relayLegacyEvent) === false);
+const dmSection = P.paceSection(distMissingEvent);
+assert('paces: note rendered instead of empty', dmSection.includes('Keskivauhti sarjoittain') && dmSection.includes('pituustiedot puuttuvat'), dmSection);
 
 // ── classFlowSeries (per-class finish curves) ──
 const cls = P.classFlowSeries(indEvent);

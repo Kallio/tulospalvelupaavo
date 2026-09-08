@@ -420,6 +420,7 @@ const LANGS = {
     lClear: 'Tyhjennä valinnat',
     secClassPaces: 'Keskivauhti sarjoittain',
     hPace: 'min/km',
+    paceDistMissing: 'Ratojen pituustiedot puuttuvat – vauhtia sarjoittain ei voida laskea.',
     hRunners: 'Juoksijat',
     lFastest: 'Nopein',
     secSchedule: 'Lähtökaistat',
@@ -558,6 +559,7 @@ cpNote: 'Leimausarvio = hyväksytyn lopputuloksen saaneet juoksijat jotka ovat k
     lClear: 'Clear selections',
     secClassPaces: 'Average pace by class',
     hPace: 'min/km',
+    paceDistMissing: 'Course distances are missing – per-class pace cannot be calculated.',
     hRunners: 'Runners',
     lFastest: 'Fastest',
     secSchedule: 'Start lanes',
@@ -1343,7 +1345,10 @@ function finishPeak(finishMinutes, binW = 5) {
 // own course, so it works for individual and relay races alike.
 function classPaces(event) {
   const dist = {};
-  (event.courses || []).forEach(c => { if (c.distance > 0) dist[c.id] = c.distance; });
+  // Only lengths that are plausible as meters count (≥ 100 m). Courses with a
+  // missing (0/null) or implausibly small value — e.g. "2"/"3" entered in km —
+  // are ignored so their runners don't produce absurd paces.
+  (event.courses || []).forEach(c => { if (c.distance >= 100) dist[c.id] = c.distance; });
   const cc = {};
   (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
   const byClass = {};
@@ -1360,6 +1365,16 @@ function classPaces(event) {
     fastestSec: Math.round(Math.min(...paces)),
     runners: paces.length,
   })).sort((a, b) => a.paceSec - b.paceSec);
+}
+
+// True when a course is defined but has no usable length: missing/zero value,
+// or an implausibly small-as-meters figure (e.g. "2"/"3", entered in km). The
+// pace section then can't compute per-class paces and shows a note instead.
+function courseDistMissing(event) {
+  return (event.courses || []).some(c => {
+    const d = c && c.distance;
+    return !(d >= 100);
+  });
 }
 
 // ── Two-race comparison helpers ──────────────────────────────────────────
@@ -3529,7 +3544,12 @@ function paceRefsLegend(refs) {
 
 function paceSection(event, grouped) {
   const paces = classPaces(event);
-  if (!paces.length) return '';
+  if (!paces.length) {
+    if (courseDistMissing(event)) {
+      return sectionHtml(T('secClassPaces'), '<p class="empty">' + esc(T('paceDistMissing')) + '</p>');
+    }
+    return '';
+  }
   if (grouped) sortPacesGrouped(paces);
   const id = 'ch' + (++chartSeq);
   return sectionHtml(T('secClassPaces'),
