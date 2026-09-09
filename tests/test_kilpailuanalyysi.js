@@ -43,7 +43,13 @@ const mockHistory = {
 };
 global.window = { history: mockHistory, location: mockLocation, addEventListener() {}, print() {} };
 global.location = mockLocation;
-global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+const _localStorage = new Map();
+global.localStorage = {
+  getItem: k => (_localStorage.has(k) ? _localStorage.get(k) : null),
+  setItem: (k, v) => { _localStorage.set(k, String(v)); },
+  removeItem: k => { _localStorage.delete(k); },
+  clear: () => { _localStorage.clear(); },
+};
 global.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL() {} };
 global.Blob = function () {};
 
@@ -279,6 +285,7 @@ try {
       compareAvgSummary, flowCards,
       weatherCards, weatherCodeToText, deriveWeatherCodeFromFmi, wxKeyFor, eventForWxKey,
       localityFromAddress,
+      ensureWeatherForEvent, wxActivity, fetchEventCached, wxCacheKeyFor, wxCacheGet, wxTestReset,
       computeRelayDelays, aggregateRelayDelays, delaySection,
       controlPunchStats, cpSection, addControlRows, controlCodesUsed, paintControlPoints, courseDistMissing,
       slugFromHash, setCompareShareHash, setShareHash,
@@ -1284,6 +1291,160 @@ assert('cmp: parseHash empty', P.parseHash('') === null);
       assert('swap: valid form setCompareShareHash', typeof P.setCompareShareHash === 'function');
     } finally {
       global.fetch = origFetch;
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+    }
+  }
+
+  // ── interaction-gated weather fetch + persistent cache + inflight dedup ──
+  // The weather APIs may only be hit after the user first interacts with the
+  // page (bots/open shared URLs never dispatch input events), a fresh cached
+  // copy renders instantly with zero network, and equal keys are teed up
+  // through a single upstream call.
+  {
+    const origFetch = global.fetch;
+    let omCalls = 0;
+    const wxEvent = (id) => ({ id, name: 'Säätesti 2026', begin: '2026-04-13T08:00:00.000Z', address: 'Siuntio' });
+    try {
+      global.fetch = (url) => {
+        const u = String(url);
+        if (u.includes('open-meteo.com')) {
+          omCalls++;
+          if (u.includes('geocoding-api')) {
+            return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ results: [{ latitude: 60.17, longitude: 24.38 }] }) });
+          }
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({
+            daily: { time: ['2026-04-13'], temperature_2m_max: [12.5], temperature_2m_min: [3.1],
+              precipitation_sum: [0], rain_sum: [0], wind_speed_10m_max: [6.2], wind_gusts_10m_max: [8.4], weather_code: [3] },
+          }) });
+        }
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null), text: () => Promise.resolve('') });
+      };
+
+      P.wxTestReset();
+      localStorage.clear();
+      omCalls = 0;
+
+      // 1. No weather fetch at all before real user interaction.
+      const ev1 = wxEvent('wx-1');
+      P.ensureWeatherForEvent(ev1);
+      assert('wx-gate: no fetch before interaction', omCalls === 0 && !ev1._weather, 'omCalls=' + omCalls + ' weather=' + ev1._weather);
+
+      // 2. First interaction arms the deferred fetch.
+      await P.wxActivity();
+      assert('wx-gate: interaction arms fetch',
+        ev1._weather && ev1._weather.source === 'open-meteo' && ev1._weather.tempMax === 12.5,
+        JSON.stringify(ev1._weather));
+      assert('wx-gate: one address = exactly geocode+archive pair', omCalls === 2, 'omCalls=' + omCalls);
+
+      // 3. Fresh cache entry renders instantly with zero network.
+      omCalls = 0;
+      const ev2 = wxEvent('wx-1'); // same id/place/date → same cache key
+      P.ensureWeatherForEvent(ev2);
+      assert('wx-gate: cache hit needs no interaction and no network',
+        ev2._weather && ev2._weather.source === 'open-meteo' && omCalls === 0,
+        'omCalls=' + omCalls + ' weather=' + JSON.stringify(ev2._weather));
+
+      // 4. Expired entries are not served and are refetched on demand. Stay
+      //    unarmed for the ensure() so the queued fetch happens inside the
+      //    awaited wxActivity() instead of an unattended auto-kick.
+      let list = JSON.parse(localStorage.getItem('ka_wx_v1'));
+      list[0].ts = 0; // age beyond the 90-day TTL
+      localStorage.setItem('ka_wx_v1', JSON.stringify(list));
+      P.wxTestReset();
+      omCalls = 0;
+      assert('wx-gate: stale cache NOT served', P.wxCacheGet(P.wxCacheKeyFor(wxEvent('wx-1'), 'Siuntio')) === null);
+      const ev3 = wxEvent('wx-1');
+      P.ensureWeatherForEvent(ev3);
+      assert('wx-gate: stale lookup leaves weather unset', !ev3._weather, String(ev3._weather));
+      await P.wxActivity();
+      assert('wx-gate: stale entry refetched on interaction',
+        ev3._weather && ev3._weather.source === 'open-meteo' && omCalls === 2,
+        'omCalls=' + omCalls + ' weather=' + JSON.stringify(ev3._weather));
+
+      // 5. Items sharing a key are resolved through a single upstream call.
+      P.wxTestReset();
+      localStorage.clear();
+      omCalls = 0;
+      const ea = wxEvent('wx-dup');
+      const eb = wxEvent('wx-dup');
+      P.ensureWeatherForEvent(ea);
+      P.ensureWeatherForEvent(eb);
+      await Promise.all([P.wxActivity(), P.wxActivity()]);
+      assert('wx-gate: deduped items both receive weather',
+        ea._weather && eb._weather && ea._weather.source === 'open-meteo' && eb._weather.source === 'open-meteo',
+        JSON.stringify([ea._weather && ea._weather.source, eb._weather && eb._weather.source]));
+      assert('wx-gate: shared key costs one upstream pair', omCalls === 2, 'omCalls=' + omCalls);
+    } finally {
+      global.fetch = origFetch;
+      P.wxTestReset();
+      localStorage.clear();
+    }
+  }
+
+  // ── navisport memo + load-time weather gating through analyze paths ──
+  {
+    const origFetch = global.fetch;
+    let navi = 0;
+    let wxUpstream = 0;
+    try {
+      P.wxTestReset();
+      localStorage.clear();
+      global.fetch = (url) => {
+        const u = String(url);
+        if (u.includes('/trpc/eventsTrpcRouter.getEvent')) {
+          navi++;
+          let slug = '';
+          const m = u.match(/input=([^&]*)/);
+          if (m) { try { slug = JSON.parse(decodeURIComponent(m[1]))['0'] || ''; } catch (e) {} }
+          if (slug === 'memo-fresh') {
+            return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([{ result: { data: { id: 'memo-uuid-1' } } }]) });
+          }
+          return origFetch(u);
+        }
+        if (u.includes('/api/events/memo-uuid-1')) {
+          navi++;
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 'memo-uuid-1', name: 'Memo-testi', begin: '2026-03-21T08:00:00.000Z', address: 'Testikatu 1', raceType: 'Individual', eventKind: 'Event', courseClasses: [], courses: [], results: [] }) });
+        }
+        if (u.includes('/api/events/')) navi++;
+        if (u.includes('fmi.fi') || u.includes('open-meteo.com')) wxUpstream++;
+        return origFetch(u);
+      };
+      const beforeA = navi;
+
+      const e1 = await P.fetchEventCached('memo-fresh');
+      assert('navi-memo: fresh slug does one network round-trip', navi - beforeA === 2, 'delta=' + (navi - beforeA));
+      const e2 = await P.fetchEventCached('memo-fresh');
+      assert('navi-memo: repeated slug served from memo', e2 === e1 && navi - beforeA === 2, 'delta=' + (navi - beforeA));
+      const e3 = await P.fetchEventCached('memo-uuid-1');
+      assert('navi-memo: resolved uuid also memoized', e3 === e1 && navi - beforeA === 2, 'delta=' + (navi - beforeA));
+
+      // Shared compare URL load: a memo-warm slug pair must not be refetched,
+      // and weather must be queued, never fetched, on load.
+      S.setEvent(null);
+      S.compare().a = null;
+      S.compare().b = null;
+      S.setCompareMode('single');
+      document.getElementById('output')._html = '';
+      await P.fetchEventCached('race-a-slug');
+      await P.fetchEventCached('race-b-slug');
+      const beforeB = navi;
+      wxUpstream = 0;
+      await P.analyzeCompare('race-a-slug', 'race-b-slug');
+      assert('navi-memo: memowarm compare load refetches nothing', navi - beforeB === 0, 'delta=' + (navi - beforeB));
+      assert('wx-gate: compare load makes zero weather calls', wxUpstream === 0, 'wxUpstream=' + wxUpstream);
+
+      // Single-event shared URL load: same guarantee (analyze stays live).
+      wxUpstream = 0;
+      await P.analyze('race-a-slug');
+      assert('wx-gate: analyze load makes zero weather calls', wxUpstream === 0, 'wxUpstream=' + wxUpstream);
+      assert('wx-gate: analyze leaves weather unset pending arm', !S.event()._weather, String(S.event()._weather));
+    } finally {
+      global.fetch = origFetch;
+      P.wxTestReset();
+      localStorage.clear();
       S.setEvent(null);
       S.compare().a = null;
       S.compare().b = null;

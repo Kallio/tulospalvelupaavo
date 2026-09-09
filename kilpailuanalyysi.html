@@ -1807,6 +1807,158 @@ async function fetchWeatherForPlace(address, date) {
   return fetchWeatherOpenMeteo(address, date);
 }
 
+// ── Weather fetch gating ────────────────────────────────────────────────
+// Weather is NOT fetched on page load. Shared URLs are opened by crawlers,
+// link-previewers and headless bots that load the page and run JS but never
+// dispatch real input events — gating the fetch on genuine user interaction
+// (pointer/keyboard/touch) keeps those cheap and free of weather-API calls.
+// A persisted localStorage cache still serves the data instantly on repeat
+// visits without any network, and past-date observations are immutable so a
+// successful fetch is effectively cached almost forever.
+const WX_CACHE_KEY = 'ka_wx_v1';
+const WX_CACHE_MAX = 200;
+let wxPending = [];
+let wxArmed = false;
+let wxListenersInstalled = false;
+const wxInflight = {};
+
+// Test-only hook: clears the module-level weather-gating state so the test
+// harness can exercise the gating/cache logic from a clean slate.
+function wxTestReset() {
+  wxPending = [];
+  wxArmed = false;
+  wxListenersInstalled = false;
+  Object.keys(wxInflight).forEach(k => { delete wxInflight[k]; });
+}
+
+function wxLocalDate() {
+  try { return new Date().toISOString().substring(0, 10); } catch (e) { return ''; }
+}
+
+// Immutable past observations can be cached nearly indefinitely; today (and
+// future dates, if forecast endpoints are ever used) must be refreshed often.
+function wxCacheTtl(date) {
+  const today = wxLocalDate();
+  return String(date || '') < today ? 90 * 24 * 3600 * 1000 : 2 * 3600 * 1000;
+}
+
+function wxCacheRead() {
+  try {
+    const raw = localStorage.getItem(WX_CACHE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+function wxCacheWrite(list) {
+  try { localStorage.setItem(WX_CACHE_KEY, JSON.stringify(list.slice(0, WX_CACHE_MAX))); } catch (e) {}
+}
+function wxCacheGet(key) {
+  const now = Date.now();
+  const list = wxCacheRead();
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].key === key) {
+      const entry = list[i];
+      if (now - entry.ts <= wxCacheTtl(entry.date)) {
+        if (i > 0) { list.splice(i, 1); list.unshift(entry); wxCacheWrite(list); }
+        return entry.data;
+      }
+      list.splice(i, 1);
+      wxCacheWrite(list);
+      return null;
+    }
+  }
+  return null;
+}
+function wxCacheSet(key, date, data) {
+  const list = wxCacheRead();
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].key === key) { list.splice(i, 1); break; }
+  }
+  list.unshift({ key, date, ts: Date.now(), data });
+  wxCacheWrite(list);
+}
+function wxCacheKeyFor(event, place) {
+  const begin = event && event.begin;
+  const date = begin ? String(begin).substring(0, 10) : '';
+  return (event && event.id ? event.id : 'ev') + '|' + (place || '') + '|' + date;
+}
+
+function applyWxToEvent(item, wx) {
+  if (!wx) return;
+  item.event._weather = wx;
+  item.event._weatherPlace = item.place;
+  // Multistage: apply the parent event's weather to each stage.
+  if (item.event === state.event && state.stageEvents && state.stageEvents.length) {
+    for (let i = 0; i < state.stageEvents.length; i++) state.stageEvents[i]._weather = wx;
+  }
+}
+
+function kickWeatherFetch() {
+  if (!wxPending.length) return Promise.resolve();
+  const items = wxPending.splice(0, wxPending.length);
+  const jobs = items.map(item => {
+    if (wxInflight[item.key]) {
+      return wxInflight[item.key].then(wx => { applyWxToEvent(item, wx); return wx; });
+    }
+    const task = fetchWeatherForEvent(item.event, item.place)
+      .then(wx => {
+        applyWxToEvent(item, wx);
+        if (wx) wxCacheSet(item.key, item.date, wx);
+        return wx;
+      })
+      .catch(e => { console.warn('deferred weather fetch failed:', e); return null; })
+      .finally(() => { delete wxInflight[item.key]; });
+    wxInflight[item.key] = task;
+    return task;
+  });
+  return Promise.all(jobs).then(() => {
+    try { render(); } catch (e) {}
+  });
+}
+
+// Called by every interaction listener. First activity arms the pending fetch.
+function wxActivity() {
+  if (!wxArmed) wxArmed = true;
+  return kickWeatherFetch();
+}
+
+function installWxListeners() {
+  if (wxListenersInstalled) return;
+  wxListenersInstalled = true;
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  const arm = () => { if (!wxArmed) { wxArmed = true; kickWeatherFetch(); } };
+  ['pointermove', 'pointerdown', 'mousedown', 'touchstart', 'keydown', 'click', 'scroll'].forEach(evt => {
+    try { document.addEventListener(evt, arm, { passive: true }); } catch (e) {}
+  });
+}
+
+// Entry point used by analyze()/analyzeCompare(). Serves a fresh cached copy
+// instantly (no network, no interaction needed); otherwise queues the fetch to
+// be triggered by the first real user interaction.
+function ensureWeatherForEvent(event) {
+  if (!event) return;
+  const place = (event.address || '').trim();
+  if (!place) return;
+  const begin = event.begin;
+  if (!begin) return;
+  const date = begin.substring(0, 10);
+  const key = wxCacheKeyFor(event, place);
+  const cached = wxCacheGet(key);
+  if (cached && typeof cached === 'object') {
+    event._weather = cached;
+    event._weatherPlace = place;
+    return;
+  }
+  // Multiple events may legitimately share a cache key (e.g. compare modes),
+  // so queue each one: the in-flight map dedups the network call and every
+  // queued item receives the resolved weather. Cap the queue as a hard safety
+  // net so pathological repeated loads can never accumulate without bound.
+  if (wxPending.length > 64) wxPending.shift();
+  wxPending.push({ event, place, date, key });
+  installWxListeners();
+  if (wxArmed) kickWeatherFetch();
+}
+
 async function fetchWeatherForEvent(event, placeOverride) {
   if (!event) return null;
   const address = (placeOverride != null && String(placeOverride).trim())
@@ -1888,6 +2040,11 @@ async function refreshWeather(key, place) {
   event._weatherPlace = (place != null && String(place).trim()) ? String(place).trim() : null;
   let wx = await fetchWeatherForEvent(event, event._weatherPlace || event.address);
   event._weather = wx;
+  // Store the manually fetched result in the persistent cache too, so the next
+  // page load (and any interaction-gated fetch) can render it without network.
+  if (wx && event.begin) {
+    wxCacheSet(wxCacheKeyFor(event, event._weatherPlace || event.address), event.begin.substring(0, 10), wx);
+  }
   // Multistage: propagate to stages
   if (wx && state.stageEvents.length && event === state.event) {
     for (let i = 0; i < state.stageEvents.length; i++) state.stageEvents[i]._weather = wx;
@@ -3869,8 +4026,11 @@ async function analyze(inputOverride) {
     if (id) setShareHash(id);
     const sb = $('shareBtn');
     if (sb) sb.style.display = '';
-    // Fetch weather and stages in parallel
-    const weatherPromise = fetchWeatherForEvent(event);
+    // Weather is fetched lazily, after the user first interacts with the page:
+    // shared URLs are also opened by bots/crawlers that never dispatch input
+    // events, and the weather APIs shouldn't be hit by them. A fresh cached
+    // copy renders immediately instead.
+    ensureWeatherForEvent(event);
     if (isMultistageEvent(event)) {
       const stages = event.events || [];
       for (let i = 0; i < stages.length; i++) {
@@ -3882,13 +4042,6 @@ async function analyze(inputOverride) {
         } catch (e) {
           console.warn('Stage load failed:', stages[i].id, e);
         }
-      }
-    }
-    event._weather = await weatherPromise;
-    // Multistage: apply parent event's weather to each stage
-    if (event._weather && state.stageEvents.length) {
-      for (let i = 0; i < state.stageEvents.length; i++) {
-        state.stageEvents[i]._weather = event._weather;
       }
     }
     render();
@@ -3942,7 +4095,7 @@ async function loadCompareOne(slot, input) {
   const id = input.trim();
   if (!id) return null;
   try {
-    const ev = await fetchEvent(id);
+    const ev = await fetchEventCached(id);
     state.compare[slot] = ev;
     return ev;
   } catch (e) {
@@ -3950,6 +4103,28 @@ async function loadCompareOne(slot, input) {
     console.error(e);
     return null;
   }
+}
+
+// In-memory, session-scoped memo for compare loads. Only the compare path uses
+// it, so re-running analyze() always pulls fresh live results. Prevents the
+// same event (e.g. both compare sides, or a slug reopened after a uuid) from
+// being fetched from Navisport twice in one page session.
+const eventFetchMemo = {};
+const EVENT_FETCH_MEMO_MAX = 8;
+async function fetchEventCached(input) {
+  const id = (input == null ? '' : String(input)).trim();
+  if (!id) return null;
+  if (Object.prototype.hasOwnProperty.call(eventFetchMemo, id)) return eventFetchMemo[id];
+  const ev = await fetchEvent(id);
+  if (ev && ev.id) {
+    eventFetchMemo[id] = ev;
+    eventFetchMemo[ev.id] = ev;
+    const keys = Object.keys(eventFetchMemo);
+    if (keys.length > EVENT_FETCH_MEMO_MAX) {
+      delete eventFetchMemo[keys[0]];
+    }
+  }
+  return ev;
 }
 
 async function analyzeCompare(inputA, inputB) {
@@ -3993,13 +4168,11 @@ async function analyzeCompare(inputA, inputB) {
         '<div>' + esc(failures.join(', ')) + '</div></div>';
     }
   }
-  // Fetch weather for both events in parallel
-  const [wx_a, wx_b] = await Promise.all([
-    a ? fetchWeatherForEvent(a) : Promise.resolve(null),
-    b ? fetchWeatherForEvent(b) : Promise.resolve(null),
-  ]);
-  if (a) a._weather = wx_a;
-  if (b) b._weather = wx_b;
+  // Weather is fetched lazily after the first real user interaction, never on
+  // load (bots opening shared compare URLs must not hit the weather APIs).
+  // Cached copies render immediately instead.
+  ensureWeatherForEvent(a || null);
+  ensureWeatherForEvent(b || null);
   render();
   if (!failures.length) {
     setStatus(T('statusDone'), 'ok');
