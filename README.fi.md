@@ -19,6 +19,7 @@ on kokoelma työkaluja — ikään kuin kasvava työkalupakki, joka laajentaa tu
 | SM-viesti-joukkueet (ikäsarjat + veteraanien ikäsummasäännöt) | [SM-viesti -joukkuesuunnittelu](#sm-viesti--joukkuesuunnittelu) |
 | Ajantasaisen listan Suomen suunnistusseuroista | [IRMA-seurarekisterin hakija](#irma-seurarekisterin-hakija) |
 | Karttojen pussitukseen viestin hajonta joukkueittain | [Viestin hajontakaavio](#viestin-hajontakaavio) |
+| Viestin lähtönumeroiden taustat A4-paikoiksi | [Viestin numerotaustat](#viestin-numerotaustat) |
 | ...piirikartoituksineen | [IRMA-seurahaku piirikarttoineen](#irma-seurahaku-piirikarttoineen) |
 | Purple Pen -radat IOF XML -muotoon | [Purple Pen → IOF -muunnin](#purple-pen--iof--muunnin) |
 | Lasten kartat A4-arkeiksi painoon | [Map Merger](#map-merger) |
@@ -226,6 +227,31 @@ klikkaamalla sarakkeen otsikkoa, piilota/näytä juoksijasarakkeet
 selaimen tulostusikkunan kautta. URL-parametri `?slug=...` täyttää
 Navisport-kentän automaattisesti. Toimii kokonaan selaimessa —
 ei palvelinta tarvita.
+
+</details>
+
+### Viestin numerotaustat
+
+Tiedosto: [`relaybackprint.html`](relaybackprint.html)
+
+Haluatko, että juoksijan lähtönumero näkyy takana myös silloin, kun numero
+taitetaan takin päälle? Hae joukkuetiedot Navisportista, lisää hätäpuhelinnumero
+ja halutessasi tapahtuman logo, ja tulosta yksi taitettu A4-arkki jokaista
+numeroa kohti.
+
+<details>
+<summary>Lisätiedot</summary>
+
+Tulostaa viestin numerotaustat: yksi taitettu A4-arkki jokaista lähtönumeroa
+kohden, jotta numero pysyy näkyvissä paidan/takin päälle kiinnitettynä. Hakee
+joukkue- ja juoksijaluettelon suoraan [Navisport](#navisport)-API:sta (viesti-,
+moniosa- ja yksilötapahtumat slug:lla tai UUID:lla) sarja- ja
+joukkuetoimet suodatuksin. Numeropino (numero + osuus) on raahattava ja
+venyy automaattisesti taituosalle, koko pino pyöritettävissä ja asettelu
+jaetaan JSON-tiedostona (vienti/tuonti/skopiointi). Jokaiselle arkille voi
+lisäksi tulostua lisäteksti (esim. hätäpuhelinnumero) ja tapahtuman logo —
+molemmat siirreltävissä ja kooltaan säädettävissä muokkaustilassa. Tapahtuman
+nimi näkyy selaimen välilehdessä latauksen jälkeen.
 
 </details>
 

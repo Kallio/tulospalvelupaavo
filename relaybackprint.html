@@ -3,9 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Relay Back Print</title>
+<title>Relay Map Back Print</title>
 <style id="page-style">
   @page { size: 210mm 297mm; margin: 0; }
+</style>
+<style id="font-style">
+  .sheet { font-family: Arial, sans-serif; }
 </style>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -129,6 +132,17 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
   white-space: nowrap;
 }
 
+/* Extra text (e.g. emergency phone) + event logo are positioned independently
+   of the number stack (still % of the folded half, draggable in Edit Layout). */
+.sheet .half > [data-lk] { position: absolute; }
+.sheet .extra {
+  font-weight: 700;
+  text-align: center;
+  white-space: pre-wrap;
+  color: #000;
+}
+.sheet .logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
 /* Hidden elements */
 .sheet [data-lk][data-hidden="true"]  { display: none !important; }
 .edit-mode .sheet [data-lk][data-hidden="true"] { display: block !important; opacity: 0.22; outline: 2px dotted #888 !important; pointer-events: all; }
@@ -183,7 +197,7 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
 }
 </style>
 </head>
-<body class="hfold">
+<body>
 <div id="app">
 
 <!-- ══════════════════ SETUP PANEL ══════════════════ -->
@@ -254,18 +268,51 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
     <div id="layoutStatus" class="hint" style="margin-top:5px;min-height:14px;"></div>
   </div>
 
+  <!-- 4. Page content: extra text + event logo on every sheet -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Page Content</h3>
+    <label>Extra text (every page)</label>
+    <input type="text" id="extraText" placeholder="e.g. Emergency phone 040-123456" oninput="updateExtraText(this.value)">
+    <label>Event logo</label>
+    <input type="file" id="eventLogoFile" accept="image/*" onchange="loadEventLogo(this)">
+    <div id="logoPreview" style="margin-top:6px;min-height:28px;"></div>
+    <div class="hint">Position these in Edit Layout — drag to move, use the toolbar for size (logo) / font (extra text).</div>
+  </div>
+
   <!-- 4. Fold orientation + print -->
   <div class="ps" style="min-width:200px;">
     <h3>Fold &amp; Print</h3>
     <label>Paper orientation &amp; fold</label>
     <select id="foldOrientation" onchange="applyFoldOrientation(this)">
+      <option value="portrait-fold-portrait" selected>A4 portrait · fold portrait</option>
       <option value="portrait-fold-landscape">A4 portrait · fold landscape</option>
-      <option value="portrait-fold-portrait">A4 portrait · fold portrait</option>
       <option value="landscape-fold-landscape">A4 landscape · fold landscape</option>
       <option value="landscape-fold-portrait">A4 landscape · fold portrait</option>
     </select>
     <div class="hint">The A4 sheet is folded in half; the bib number sits in the folded half. Dotted line shows the fold point.</div>
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <h3>Font</h3>
+      <label>Number font</label>
+      <select id="fontFamilySelect" onchange="applyFontFamily()">
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Arial Black', sans-serif">Arial Black</option>
+        <option value="Impact, sans-serif">Impact</option>
+        <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+      </select>
+      <div style="margin-top:5px;display:flex;gap:5px;align-items:center;">
+        <input type="file" id="customFontFile" accept=".ttf,.otf,.woff,.woff2"
+               style="flex:1;font-size:10px;padding:3px 5px;"
+               onchange="loadCustomFont(this)">
+      </div>
+      <div id="customFontStatus" class="hint" style="min-height:13px;"></div>
+    </div>
+    <div style="margin-top:6px;border-top:1px solid #334;padding-top:8px;">
       <button class="bs" style="width:100%;" onclick="window.print()">🖨 Print / Save PDF</button>
     </div>
     <div id="status"></div>
@@ -287,6 +334,12 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
     <button class="bg btn-sm" onclick="adj('fontSize',-2)">−</button>
     <span class="tb-val" id="tb-fs">—</span>
     <button class="bg btn-sm" onclick="adj('fontSize',+2)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Size (logo)</span>
+    <button class="bg btn-sm" onclick="adj('size',-5)">−</button>
+    <span class="tb-val" id="tb-sz">—</span>
+    <button class="bg btn-sm" onclick="adj('size',+5)">+</button>
   </div>
   <div class="tb-row">
     <span>Spacing</span>
@@ -323,13 +376,16 @@ let rawCsvText = null;
 let editMode   = false;
 let selectedKey = null;
 let selectedRef = null;
+let customFont  = null; // {family, src} when a custom font is loaded
+let extraText   = '';   // extra line shown on every sheet (e.g. emergency phone)
+let eventLogoSrc = null;
 
 // Paper orientation + fold direction → sheet size (mm) and which way to fold.
 // dir 'h' = fold across the middle (halves are landscape), dir 'v' = fold down
 // the middle (halves are portrait). The number always sits in one half.
 const FOLDS = [
-  { id: 'portrait-fold-landscape',  label: 'A4 portrait · fold landscape',  w: 210, h: 297, dir: 'h' },
   { id: 'portrait-fold-portrait',   label: 'A4 portrait · fold portrait',   w: 210, h: 297, dir: 'v' },
+  { id: 'portrait-fold-landscape',  label: 'A4 portrait · fold landscape',  w: 210, h: 297, dir: 'h' },
   { id: 'landscape-fold-landscape', label: 'A4 landscape · fold landscape', w: 297, h: 210, dir: 'h' },
   { id: 'landscape-fold-portrait',  label: 'A4 landscape · fold portrait',  w: 297, h: 210, dir: 'v' },
 ];
@@ -350,6 +406,8 @@ const DEF_LAYOUT = {
   backGroup:  { cx: 50, y: 50, w: 100, rotate: 0 },
   numberArea: { fontSize: 100, letterSpacing: 0 },
   leg:        { hidden: false },
+  extra:      { cx: 50, y: 90, fontSize: 6, letterSpacing: 0, rotate: 0, hidden: false },
+  logo:       { cx: 50, y: 2, w: 30, h: 8, rotate: 0, hidden: false },
 };
 let layout = deepClone(DEF_LAYOUT);
 
@@ -549,6 +607,24 @@ function buildSheet(team, runner, i, total, dims) {
   group.appendChild(num);
   group.appendChild(leg);
   half.appendChild(group);
+
+  // Extra text (e.g. emergency phone) — shown on every sheet.
+  const extra = document.createElement('div');
+  extra.className = 'extra';
+  extra.dataset.lk = 'extra';
+  extra.textContent = extraText;
+  if (!extraText) extra.dataset.hidden = 'true';
+  half.appendChild(extra);
+
+  // Optional event logo on every sheet.
+  if (eventLogoSrc) {
+    const logo = document.createElement('div');
+    logo.className = 'logo';
+    logo.dataset.lk = 'logo';
+    logo.innerHTML = `<img src="${escA(eventLogoSrc)}" alt="event logo">`;
+    half.appendChild(logo);
+  }
+
   sheet.appendChild(half);
 
   document.getElementById('print-area').appendChild(cap);
@@ -628,6 +704,15 @@ function applyPos(el, key) {
     // The group's font-size is the number size; leg scales as its 0.3em child.
     const numL = layout.numberArea;
     if (numL) el.style.fontSize = numL.fontSize + 'mm';
+  } else {
+    if (l.cx !== undefined) {
+      el.style.left = l.cx + '%';
+      el.style.transform = 'translateX(-50%)'
+        + (l.rotate ? ` rotate(${l.rotate}deg)` : '');
+    }
+    if (l.y  !== undefined) el.style.top  = l.y  + '%';
+    if (l.w  !== undefined) el.style.width  = l.w + '%';
+    if (l.h  !== undefined) el.style.height = l.h + '%';
   }
   if (l.fontSize !== undefined) {
     if (key === 'numberArea') {
@@ -644,23 +729,27 @@ function applyPos(el, key) {
 
 // Shrink the number until it fits inside the folded half. Measured in rendered
 // px (so it survives browser zoom); writes back into layout.numberArea.fontSize
-// so the toolbar always shows the real size. Leg scales along (0.3em). The
-// whole stack (number + leg) rotates together as one footprint, so a 90°/270°
-// rotation swaps which of the stack's dimensions is the visual width.
+// so the toolbar always shows the real size. The group's box is 100% of the
+// half, so the constraint comes from the number's (and leg's) real text metrics
+// — not the group box. The whole stack (number + leg) rotates together, so a
+// 90°/270° rotation swaps which stack dimension is the visual width.
 function fitHalf(sheet) {
   const group = sheet.querySelector('.group');
   const num   = sheet.querySelector('[data-lk="numberArea"]');
+  const leg   = sheet.querySelector('[data-lk="leg"]');
   const half  = sheet.querySelector('.half');
   if (!group || !num || !half || !num.textContent) return;
 
   group.style.fontSize = '100mm'; // reference size for measuring
-  const rot  = (layout.backGroup.rotate || 0) % 360;
-  const side = (rot === 90 || rot === 270);
-  const flowW = group.offsetWidth;
-  const flowH = group.offsetHeight;
-  const effW  = side ? flowH : flowW; // visual width of the rotated stack
-  const effH  = side ? flowW : flowH; // visual height of the rotated stack
-  const availW = group.clientWidth;
+  const rot   = (layout.backGroup.rotate || 0) % 360;
+  const side  = (rot === 90 || rot === 270);
+  const numW  = num.offsetWidth;
+  const legW  = (leg && leg.textContent) ? leg.offsetWidth : 0;
+  const stackW = Math.max(numW, legW);        // visual width in flow
+  const stackH = group.offsetHeight;          // number + gap + leg in flow
+  const effW  = side ? stackH : stackW;
+  const effH  = side ? stackW : stackH;
+  const availW = half.clientWidth;
   const availH = half.clientHeight;
   if (!availW || !availH || !effW || !effH) return;
 
@@ -777,6 +866,11 @@ function adj(prop, delta) {
       document.getElementById('autoFitChk').checked = false;
       setStatus('Auto-fit off — using toolbar size');
     }
+  } else if (prop === 'size') {
+    if (l.w === undefined || l.h === undefined) return;
+    const f = clamp((l.w + delta) / l.w, 0.1, 5);
+    l.w = clamp(Math.round(l.w * f), 1, 100);
+    l.h = clamp(Math.round(l.h * f), 1, 100);
   } else {
     return;
   }
@@ -793,9 +887,17 @@ function toggleHidden() {
 }
 
 function rotateSel(delta) {
-  const grp = layout.backGroup;
-  if (!grp) return;
-  grp.rotate = (((grp.rotate || 0) + delta) % 360 + 360) % 360;
+  if (!selectedRef) return;
+  const add = ((delta % 360) + 360) % 360;
+  if (selectedRef.rotate !== undefined) {
+    // logo / extra text (and the group) rotate themselves
+    selectedRef.rotate = ((selectedRef.rotate || 0) + add) % 360;
+  } else {
+    // number / leg: rotate the enclosing group instead
+    const grp = layout.backGroup;
+    if (!grp) return;
+    grp.rotate = ((grp.rotate || 0) + add) % 360;
+  }
   syncLayout();
   updateToolbar();
   saveLayout();
@@ -817,19 +919,24 @@ function updateToolbar() {
   document.getElementById('tb-name').textContent = selectedKey === GROUP_KEY ? 'group (number + leg)' : selectedKey;
   document.getElementById('tb-fs').textContent = l.fontSize !== undefined ? Math.round(l.fontSize) + 'mm' : '—';
   document.getElementById('tb-ls').textContent = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2) + 'em' : '—';
+  document.getElementById('tb-sz').textContent = l.w !== undefined && l.h !== undefined ? Math.round(l.w) + '%' : '—';
 
-  const canRot = layout.backGroup != null;
-  document.getElementById('tb-rot').textContent = canRot ? ((layout.backGroup.rotate || 0) % 360) + '°' : '—';
-  document.getElementById('tb-rot-l').disabled = !canRot;
-  document.getElementById('tb-rot-r').disabled = !canRot;
+  const rotVal = l.rotate !== undefined ? ((l.rotate || 0) % 360 + 360) % 360
+                                        : ((layout.backGroup && layout.backGroup.rotate || 0) % 360 + 360) % 360;
+  document.getElementById('tb-rot').textContent = Math.round(rotVal) + '°';
 
   const cxIn = document.getElementById('tb-cx');
   const cyIn = document.getElementById('tb-y');
-  cxIn.disabled = l.cx === undefined; cyIn.disabled = l.y === undefined;
-  if (l.cx === undefined || l.y === undefined) { cxIn.value = ''; cyIn.value = ''; }
-  else {
-    if (document.activeElement !== cxIn) cxIn.value = l.cx.toFixed(1);
-    if (document.activeElement !== cyIn) cyIn.value = l.y.toFixed(1);
+  // Members (number/leg) move with the group, so show/edit the group's position.
+  const posKey = GROUP_MEMBERS.has(selectedKey) ? GROUP_KEY : selectedKey;
+  const posRef = getLayoutRef(posKey);
+  cxIn.disabled = !posRef || posRef.cx === undefined;
+  cyIn.disabled = !posRef || posRef.y === undefined;
+  if (!cxIn.disabled || !cyIn.disabled) {
+    if (document.activeElement !== cxIn && posRef.cx !== undefined) cxIn.value = posRef.cx.toFixed(1);
+    if (document.activeElement !== cyIn && posRef.y !== undefined) cyIn.value = posRef.y.toFixed(1);
+  } else {
+    cxIn.value = ''; cyIn.value = '';
   }
   document.getElementById('tb-visible').textContent = l.hidden ? 'Show' : 'Hide';
   document.getElementById('tb-visible').style.color = l.hidden ? '#27ae60' : '#e94560';
@@ -916,10 +1023,12 @@ async function loadFromNavisport() {
 
   try {
     const json = await navFetch(slug);
+    const name = (json.name || slug).trim();
+    if (name) document.title = `Relay Map Back Print — ${name}`;
     if (json.raceType === 'Relay') navLoadRelay(json);
     else                           navLoadIndividual(json);
     const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
-    navStatus(`✓ ${(json.name || slug).trim()} — ${csvTeams.length} teams, ${total} runners`, 'ok');
+    navStatus(`✓ ${name} — ${csvTeams.length} teams, ${total} runners`, 'ok');
     document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
     populateSarjaFilter();
     rawCsvText = null;
@@ -1055,6 +1164,101 @@ function updatePanelControls() {
   bc.title       = isCollapsed ? 'Expand panel' : 'Collapse panel';
 }
 
+// ═══════════════════════════════════════════
+// FONT
+// ═══════════════════════════════════════════
+function refitSheets() {
+  requestAnimationFrame(() => {
+    if (document.getElementById('autoFitChk').checked) {
+      document.querySelectorAll('.sheet').forEach(fitHalf);
+    }
+  });
+}
+
+function applyFontFamily() {
+  const val = document.getElementById('fontFamilySelect').value;
+  document.getElementById('font-style').textContent = `.sheet { font-family: ${val}; }`;
+  localStorage.setItem('relayBackFont', JSON.stringify({ family: val, custom: customFont }));
+  refitSheets();
+}
+
+function refreshExtras() {
+  document.querySelectorAll('.sheet .extra').forEach(el => {
+    el.textContent = extraText;
+    if (extraText) delete el.dataset.hidden; else el.dataset.hidden = 'true';
+  });
+}
+
+function updateExtraText(v) {
+  extraText = v;
+  localStorage.setItem('relayBackExtra', v);
+  refreshExtras();
+}
+
+function loadEventLogo(inp) {
+  const f = inp.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    eventLogoSrc = e.target.result;
+    document.getElementById('logoPreview').innerHTML =
+      `<img src="${escA(eventLogoSrc)}" style="max-height:34px;max-width:120px;object-fit:contain;" alt="preview">`;
+    if (document.getElementById('print-area').children.length) regenerate();
+  };
+  rd.onerror = () => {};
+  rd.readAsDataURL(f);
+}
+
+function base64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8.buffer;
+}
+
+function applyCustomFontFromDataUrl(family, dataUrl) {
+  customFont = { family, src: dataUrl };
+  document.getElementById('font-style').textContent = `.sheet { font-family: '${family}', sans-serif; }`;
+  if (typeof FontFace === 'undefined' || !document.fonts) return;
+  const face = new FontFace(family, base64ToArrayBuffer(dataUrl.slice(dataUrl.indexOf(',') + 1)));
+  face.load().then(() => {
+    document.fonts.add(face);
+    const sel = document.getElementById('fontFamilySelect');
+    const existing = sel.querySelector('option[data-custom]');
+    if (existing) existing.remove();
+    const opt = document.createElement('option');
+    opt.value = `'${family}', sans-serif`;
+    opt.textContent = family + ' (custom)';
+    opt.dataset.custom = '1';
+    sel.appendChild(opt);
+    sel.value = opt.value;
+    applyFontFamily();
+    // Font metrics settle after the face is swapped in — refit once more.
+    requestAnimationFrame(() => refitSheets());
+  });
+}
+
+async function loadCustomFont(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('customFontStatus');
+  statusEl.style.color = '#7ec8e3';
+  statusEl.textContent = 'Loading…';
+  try {
+    const src = await new Promise(resolve => {
+      const rd = new FileReader();
+      rd.onload = e => resolve(e.target.result);
+      rd.readAsDataURL(file);
+    });
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_');
+    applyCustomFontFromDataUrl(name, src);
+    statusEl.style.color = '#6a6';
+    statusEl.textContent = `Loaded: ${file.name}`;
+  } catch (e) {
+    statusEl.style.color = '#e94560';
+    statusEl.textContent = 'Failed: ' + e.message;
+  }
+}
+
 (function initToolbarDrag() {
   const tb     = document.getElementById('toolbar');
   const handle = document.getElementById('tb-drag-handle');
@@ -1101,6 +1305,7 @@ function updatePanelControls() {
 })();
 
 function esc(s)  { if (!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+function escA(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
 function sortTeams() {
   csvTeams.sort((a, b) => +a.kilpailunumero - +b.kilpailunumero);
@@ -1140,6 +1345,30 @@ updatePanelControls();
   } else {
     setStatus('Layout: default');
   }
+})();
+
+// Restore saved extra text on start
+(function() {
+  const s = localStorage.getItem('relayBackExtra');
+  if (s != null) {
+    extraText = s;
+    if (document.getElementById('extraText')) document.getElementById('extraText').value = s;
+  }
+})();
+
+// Restore saved font on start
+(function() {
+  const s = localStorage.getItem('relayBackFont');
+  if (!s) return;
+  try {
+    const saved = JSON.parse(s);
+    if (saved.custom && saved.custom.src && saved.custom.family) {
+      applyCustomFontFromDataUrl(saved.custom.family, saved.custom.src);
+    } else if (saved.family) {
+      document.getElementById('fontFamilySelect').value = saved.family;
+      applyFontFamily();
+    }
+  } catch {}
 })();
 
 applyFoldOrientation();

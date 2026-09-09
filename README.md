@@ -22,6 +22,7 @@ install, no server, no account: download the file (or just open it) and go.
 | Build SM-viesti teams (age classes + veteran age-sum rules) | [SM-viesti Team Planner](#sm-viesti-team-planner) |
 | Get an up-to-date list of Finnish orienteering clubs | [IRMA Club Registry Fetcher](#irma-club-registry-fetcher) |
 | Map relay forkings to teams for map packing | [Relay Forking](#relay-forking) |
+| Print relay bib backs on folded A4 sheets | [Relay Back Print](#relay-back-print) |
 | ...with district/area info attached | [IRMA Club Fetcher with Districts](#irma-club-fetcher-with-districts) |
 | Convert Purple Pen course files to IOF XML | [Purple Pen → IOF Converter](#purple-pen--iof-converter) |
 | Lay out kids' maps on A4 sheets for printing | [Map Merger](#map-merger) |
@@ -221,6 +222,30 @@ column, toggle runner name columns on/off (J1/J2/J3 checkboxes), CSV export,
 and print-friendly PDF output via the browser's print dialog. URL parameter
 `?slug=...` pre-fills the Navisport field. Works entirely in the browser —
 no server needed.
+
+</details>
+
+### Relay Back Print
+
+File: [`relaybackprint.html`](relaybackprint.html)
+
+Need each runner's bib number to stay visible on the back when the number
+is folded over the jacket? Pull the team/runner list from Navisport, add a
+line of emergency info and an optional event logo, and print one folded A4
+sheet per bib.
+
+<details>
+<summary>Details</summary>
+
+Prints relay bib backs: one folded A4 sheet per bib number so the number
+stays visible on the outside when pinned/folded onto the jacket. Loads the
+team/runner list straight from [Navisport](#navisport) (relay, multistage, or
+individual events via slug or UUID) with class/team filtering, and renders a
+draggable number stack (number + leg) with auto-fit sizing, full rotation and
+a JSON layout that round-trips through export/import/copy so a design can be
+shared. Optional extras printed on every sheet: an extra text line (e.g.
+emergency phone) and an event logo — both positionable and scalable in edit
+mode. Once loaded, the browser tab title shows the event name.
 
 </details>
 
