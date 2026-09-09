@@ -229,23 +229,25 @@ no server needed.
 
 File: [`relaybackprint.html`](relaybackprint.html)
 
-Need each runner's bib number to stay visible on the back when the number
-is folded over the jacket? Pull the team/runner list from Navisport, add a
-line of emergency info and an optional event logo, and print one folded A4
-sheet per bib.
+Need the map's bib number to stay visible on the outside when the A4 sheet
+is folded into a map holder (e.g. in front of a chest pouch)? Pull the
+team/runner list from Navisport, add a line of emergency info and an optional
+event logo, and print one folded A4 sheet per bib.
 
 <details>
 <summary>Details</summary>
 
-Prints relay bib backs: one folded A4 sheet per bib number so the number
-stays visible on the outside when pinned/folded onto the jacket. Loads the
+Prints relay bib backs: one folded A4 sheet per bib number, with the number
+rendered on the half that stays visible once the sheet is folded into a map
+holder. Loads the
 team/runner list straight from [Navisport](#navisport) (relay, multistage, or
 individual events via slug or UUID) with class/team filtering, and renders a
-draggable number stack (number + leg) with auto-fit sizing, full rotation and
-a JSON layout that round-trips through export/import/copy so a design can be
-shared. Optional extras printed on every sheet: an extra text line (e.g.
-emergency phone) and an event logo — both positionable and scalable in edit
-mode. Once loaded, the browser tab title shows the event name.
+draggable number stack (number + leg) with auto-fit sizing to the visible
+half, full rotation and a JSON layout that round-trips through
+export/import/copy so a design can be shared. Optional extras printed on
+every sheet: an extra text line (e.g. emergency phone) and an event logo —
+both positionable and scalable in edit mode. Once loaded, the browser tab
+title shows the event name.
 
 </details>
 

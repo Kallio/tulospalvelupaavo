@@ -234,24 +234,26 @@ ei palvelinta tarvita.
 
 Tiedosto: [`relaybackprint.html`](relaybackprint.html)
 
-Haluatko, että juoksijan lähtönumero näkyy takana myös silloin, kun numero
-taitetaan takin päälle? Hae joukkuetiedot Navisportista, lisää hätäpuhelinnumero
+Haluatko, että kartan numeronäyttö pysyy näkyvissä myös karttatelineessä
+(A4-arkki taitettuna)? Hae joukkuetiedot Navisportista, lisää hätäpuhelinnumero
 ja halutessasi tapahtuman logo, ja tulosta yksi taitettu A4-arkki jokaista
-numeroa kohti.
+numeroa kohden.
 
 <details>
 <summary>Lisätiedot</summary>
 
 Tulostaa viestin numerotaustat: yksi taitettu A4-arkki jokaista lähtönumeroa
-kohden, jotta numero pysyy näkyvissä paidan/takin päälle kiinnitettynä. Hakee
+kohden. Numerot tulostetaan siihen puoleen, joka jää esiin, kun arkki
+taitetaan karttatelineeseen (esim. rintalaukun edessä). Hakee
 joukkue- ja juoksijaluettelon suoraan [Navisport](#navisport)-API:sta (viesti-,
 moniosa- ja yksilötapahtumat slug:lla tai UUID:lla) sarja- ja
 joukkuetoimet suodatuksin. Numeropino (numero + osuus) on raahattava ja
-venyy automaattisesti taituosalle, koko pino pyöritettävissä ja asettelu
-jaetaan JSON-tiedostona (vienti/tuonti/skopiointi). Jokaiselle arkille voi
-lisäksi tulostua lisäteksti (esim. hätäpuhelinnumero) ja tapahtuman logo —
-molemmat siirreltävissä ja kooltaan säädettävissä muokkaustilassa. Tapahtuman
-nimi näkyy selaimen välilehdessä latauksen jälkeen.
+venyy automaattisesti esiin jäävälle puolelle, koko pino pyöritettävissä ja
+asettelu jaetaan JSON-tiedostona (vienti/tuonti/skopiointi). Jokaiselle
+arkille voi lisäksi tulostua lisäteksti (esim. hätäpuhelinnumero) ja
+tapahtuman logo — molemmat siirreltävissä ja kooltaan säädettävissä
+muokkaustilassa. Tapahtuman nimi näkyy selaimen välilehdessä latauksen
+jälkeen.
 
 </details>
 
