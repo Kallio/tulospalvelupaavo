@@ -141,6 +141,12 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
   white-space: pre-wrap;
   color: #000;
 }
+.sheet .team-name {
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  color: #000;
+}
 .sheet .logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 /* Hidden elements */
@@ -276,7 +282,11 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
     <label>Event logo</label>
     <input type="file" id="eventLogoFile" accept="image/*" onchange="loadEventLogo(this)">
     <div id="logoPreview" style="margin-top:6px;min-height:28px;"></div>
-    <div class="hint">Position these in Edit Layout — drag to move, use the toolbar for size (logo) / font (extra text).</div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="teamNameChk" onchange="toggleTeamName(this)">
+      <label for="teamNameChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Team name (from CSV, every page)</label>
+    </div>
+    <div class="hint">Position these in Edit Layout — drag to move, use the toolbar for size (logo) / font (extra/team name).</div>
   </div>
 
   <!-- 4. Fold orientation + print -->
@@ -406,6 +416,7 @@ const DEF_LAYOUT = {
   backGroup:  { cx: 50, y: 50, w: 100, rotate: 0 },
   numberArea: { fontSize: 100, letterSpacing: 0 },
   leg:        { hidden: false },
+  teamName:   { cx: 50, y: 70, fontSize: 4, letterSpacing: 0, rotate: 0, hidden: true },
   extra:      { cx: 50, y: 90, fontSize: 6, letterSpacing: 0, rotate: 0, hidden: false },
   logo:       { cx: 50, y: 2, w: 30, h: 8, rotate: 0, hidden: false },
 };
@@ -615,6 +626,14 @@ function buildSheet(team, runner, i, total, dims) {
   extra.textContent = extraText;
   if (!extraText) extra.dataset.hidden = 'true';
   half.appendChild(extra);
+
+  // Optional team name on every sheet.
+  const teamNameEl = document.createElement('div');
+  teamNameEl.className = 'team-name';
+  teamNameEl.dataset.lk = 'teamName';
+  teamNameEl.textContent = team.joukkue || '';
+  if (!team.joukkue) teamNameEl.dataset.hidden = 'true';
+  half.appendChild(teamNameEl);
 
   // Optional event logo on every sheet.
   if (eventLogoSrc) {
@@ -1195,6 +1214,13 @@ function updateExtraText(v) {
   refreshExtras();
 }
 
+function toggleTeamName(chk) {
+  layout.teamName.hidden = !chk.checked;
+  saveLayout();
+  syncLayout();
+  setStatus(chk.checked ? 'Team name shown ✓' : 'Team name hidden');
+}
+
 function loadEventLogo(inp) {
   const f = inp.files[0]; if (!f) return;
   const rd = new FileReader();
@@ -1345,6 +1371,12 @@ updatePanelControls();
   } else {
     setStatus('Layout: default');
   }
+})();
+
+// Sync the team-name checkbox with the (possibly saved) layout on start.
+(function() {
+  const chk = document.getElementById('teamNameChk');
+  if (chk) chk.checked = !layout.teamName.hidden;
 })();
 
 // Restore saved extra text on start
