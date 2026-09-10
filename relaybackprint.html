@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay Map Back Print</title>
+<style id="page-style">
+  @page { size: 210mm 297mm; margin: 0; }
+</style>
+<style id="font-style">
+  .sheet { font-family: Arial, sans-serif; }
+</style>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; }
+
+/* ─── Setup Panel ─── */
+#setup-panel {
+  background: #1a1a2e;
+  color: #eee;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: 1; min-width: 180px; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+input[type="file"], input[type="text"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334; border-radius: 4px;
+  color: #eee; font-size: 12px;
+}
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+.bp  { background: #e94560; color: #fff; }
+.bs  { background: #27ae60; color: #fff; }
+.bw  { background: #e67e22; color: #fff; }
+.bg  { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 4px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#bibCount { font-size: 12px; color: #7ec8e3; margin-bottom: 6px; min-height: 16px; }
+#status { font-size: 11px; color: #6a6; margin-top: 5px; min-height: 14px; }
+.hint { font-size: 10.5px; color: #7d8aa0; margin-top: 4px; }
+.csv-help a { color: #7ec8e3; cursor: pointer; text-decoration: underline; }
+
+#panel-controls { display: flex; gap: 5px; flex-shrink: 0; align-self: flex-start; }
+#panel-controls button {
+  background: #0f3460; border: 1px solid #334; color: #7ec8e3;
+  padding: 4px 9px; font-size: 15px; border-radius: 4px;
+  cursor: pointer; line-height: 1.1; font-weight: normal;
+}
+body.sidebar-mode #app { display: flex; flex-direction: row; align-items: flex-start; }
+body.sidebar-mode #setup-panel {
+  flex-direction: column; flex-wrap: nowrap;
+  width: 270px; min-width: 270px; height: 100vh; max-height: 100vh;
+  overflow-y: auto; overflow-x: hidden;
+  position: sticky; top: 0; flex-shrink: 0;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+body.sidebar-mode #setup-panel .ps { flex: none; min-width: 0; width: 100%; }
+body.sidebar-mode #print-area { flex: 1; min-width: 0; }
+body.panel-collapsed #setup-panel .ps { display: none !important; }
+body.panel-collapsed #setup-panel { padding: 5px 12px; }
+
+/* ─── Print Area ─── */
+#print-area { padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+/* ─── A4 Sheet ─── */
+/* Each number = one full A4 sheet. The sheet is folded in half and the number
+   sits in the folded half. width/height come from #page-style via FOLD dims. */
+.sheet {
+  background: white;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid #bbb;
+  page-break-after: always;
+  page-break-inside: avoid;
+  flex-shrink: 0;
+}
+.sheet-cap { font-size: 11px; color: #556; text-align: center; margin-bottom: 2px; }
+
+/* The folded half that carries the number: top half for a horizontal fold,
+   left half for a vertical fold. Toggle via body.hfold / body.vfold. */
+.sheet .half {
+  position: absolute;
+  overflow: hidden;
+  text-align: center;
+  /* Stacking context so edit-mode outlines / negative z never paint behind. */
+  isolation: isolate;
+}
+body.hfold .sheet .half { top: 0; left: 0; width: 100%; height: 50%; }
+body.vfold .sheet .half { top: 0; left: 0; width: 50%; height: 100%; }
+
+/* Fold guide: dotted line across the midpoint of the A4 sheet. */
+.sheet .fold {
+  position: absolute;
+  pointer-events: none;
+  border: 0.2mm dashed #000;
+}
+body.hfold .sheet .fold { top: 50%; left: 0; width: 100%; border-width: 0.2mm 0 0 0; }
+body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0.2mm; }
+
+/* ─── Editable content ─── */
+/* backGroup is the draggable stack (number + leg). It moves/resizes as one,
+   exactly like the sticker group in the bib generator. */
+.sheet .group {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.sheet .group .num {
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+.sheet .group .leg {
+  font-family: monospace;
+  font-size: 0.3em;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  padding-left: 0.35em; /* balance the letter-spacing so the text stays centred */
+  margin-top: 0.05em;
+  white-space: nowrap;
+}
+
+/* Extra text (e.g. emergency phone) + event logo are positioned independently
+   of the number stack (still % of the folded half, draggable in Edit Layout). */
+.sheet .half > [data-lk] { position: absolute; }
+.sheet .extra {
+  font-weight: 700;
+  text-align: center;
+  white-space: pre-wrap;
+  color: #000;
+}
+.sheet .logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Hidden elements */
+.sheet [data-lk][data-hidden="true"]  { display: none !important; }
+.edit-mode .sheet [data-lk][data-hidden="true"] { display: block !important; opacity: 0.22; outline: 2px dotted #888 !important; pointer-events: all; }
+
+/* Edit mode */
+.edit-mode .sheet [data-lk] {
+  outline: 2px dashed rgba(233,69,96,0.6);
+  cursor: move;
+  user-select: none;
+  min-width: 20px;
+  min-height: 10px;
+}
+.edit-mode .sheet [data-lk]:hover { outline-color: #e94560; z-index: 20; }
+.sheet [data-lk].selected { outline: 2px solid #e94560 !important; z-index: 30; }
+
+/* ─── Floating Toolbar ─── */
+#toolbar {
+  position: fixed; bottom: 20px; right: 20px;
+  background: #1a1a2e; border-radius: 10px; padding: 12px 14px;
+  display: none; flex-direction: column; gap: 8px;
+  z-index: 1000; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  color: #eee; font-size: 12px; min-width: 220px;
+}
+#toolbar.visible { display: flex; }
+#toolbar h4 { color: #7ec8e3; font-size: 11px; text-transform: uppercase; }
+#tb-drag-handle {
+  cursor: move; user-select: none; text-align: center;
+  font-size: 11px; color: #7ec8e3; background: #0f3460;
+  border-radius: 6px; padding: 4px 6px; margin: -2px -4px 2px;
+}
+#tb-drag-handle:hover { background: #1a4080; }
+#toolbar button:disabled { opacity: 0.35; cursor: default; }
+.tb-row { display: flex; align-items: center; gap: 8px; }
+.tb-row span { flex: 1; font-size: 11px; color: #9aa; }
+.tb-val { min-width: 44px; text-align: center; font-size: 12px; color: #eee; }
+#toolbar input[type="number"] {
+  width: 58px; padding: 3px 4px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+#toolbar input[type="number"]:disabled { opacity: 0.35; }
+
+/* ─── Print Styles ─── */
+@media print {
+  #setup-panel, #toolbar { display: none !important; }
+  body { background: white; }
+  #print-area { padding: 0; gap: 0; }
+  .sheet { border: none; margin: 0; box-shadow: none; }
+  .sheet-cap { display: none; }
+}
+@media screen {
+  .sheet { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══════════════════ SETUP PANEL ══════════════════ -->
+<div id="setup-panel">
+  <div id="panel-controls">
+    <button id="btn-layout"   onclick="toggleSidebar()"       title="Move panel to left sidebar">⬅</button>
+    <button id="btn-collapse" onclick="togglePanelCollapse()" title="Collapse panel">−</button>
+  </div>
+
+  <!-- 1. Data sources -->
+  <div class="ps" style="min-width:230px;flex:2;">
+    <h3>Navisport</h3>
+    <label>Event URL or slug</label>
+    <input type="text" id="navisportUrl" placeholder="https://navisport.com/events/…">
+    <div class="row">
+      <button class="bp" onclick="loadFromNavisport()">Load from Navisport</button>
+    </div>
+    <div id="navisportStatus" style="font-size:11px;margin-top:5px;min-height:14px;"></div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <label style="margin-top:0;">or load CSV file</label>
+      <input type="file" id="csvFile" accept=".csv">
+      <div id="bibCount" style="font-size:11px;color:#7ec8e3;margin-top:6px;min-height:14px;"></div>
+      <div class="hint">
+        Same format as the bib generator&nbsp;·&nbsp;Download example:
+        <a onclick="downloadExampleCSV('relay')">relay</a>
+        &nbsp;·&nbsp;
+        <a onclick="downloadExampleCSV('individual')">individual</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Filters + generate -->
+  <div class="ps" style="min-width:220px;flex:2;">
+    <h3>Filters &amp; Generate</h3>
+    <label>Print only chosen leg (Osuus)</label>
+    <select id="filterLeg"><option value="">All legs</option></select>
+    <div class="hint">Selecting a leg prints that leg only (e.g. all leg 1 bibs).</div>
+    <label style="margin-top:8px;">Filter team numbers (e.g. 1-5, 10)</label>
+    <input type="text" id="filterNumbers" placeholder="empty = all">
+    <label>Filter parts / Osuus (e.g. 1,2)</label>
+    <input type="text" id="filterParts" placeholder="empty = all">
+    <label>Filter class / Sarja</label>
+    <select id="filterSarja"><option value="">All</option></select>
+    <div class="row">
+      <button class="bp" onclick="generateBibs()">Generate</button>
+    </div>
+  </div>
+
+  <!-- 3. Layout -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Layout</h3>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+      <input type="checkbox" id="autoFitChk" checked>
+      <label for="autoFitChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Fit number to folded half</label>
+    </div>
+    <div class="hint">If off, use the toolbar font size with the selected element in Edit Layout.</div>
+    <div class="row">
+      <button class="bw" id="editBtn" onclick="toggleEditMode()">Edit Layout</button>
+      <button class="bg btn-sm" onclick="resetLayout()">Reset</button>
+    </div>
+    <div class="row" style="margin-top:4px;">
+      <button class="bg btn-sm" onclick="exportLayout()">Export JSON</button>
+      <button class="bg btn-sm" onclick="importLayout()">Import JSON</button>
+    </div>
+    <div class="row" style="margin-top:4px;">
+      <button class="bg btn-sm" onclick="copyLayout()">Copy JSON</button>
+    </div>
+    <div id="layoutStatus" class="hint" style="margin-top:5px;min-height:14px;"></div>
+  </div>
+
+  <!-- 4. Page content: extra text + event logo on every sheet -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Page Content</h3>
+    <label>Extra text (every page)</label>
+    <input type="text" id="extraText" placeholder="e.g. Emergency phone 040-123456" oninput="updateExtraText(this.value)">
+    <label>Event logo</label>
+    <input type="file" id="eventLogoFile" accept="image/*" onchange="loadEventLogo(this)">
+    <div id="logoPreview" style="margin-top:6px;min-height:28px;"></div>
+    <div class="hint">Position these in Edit Layout — drag to move, use the toolbar for size (logo) / font (extra text).</div>
+  </div>
+
+  <!-- 4. Fold orientation + print -->
+  <div class="ps" style="min-width:200px;">
+    <h3>Fold &amp; Print</h3>
+    <label>Paper orientation &amp; fold</label>
+    <select id="foldOrientation" onchange="applyFoldOrientation(this)">
+      <option value="portrait-fold-portrait" selected>A4 portrait · fold portrait</option>
+      <option value="portrait-fold-landscape">A4 portrait · fold landscape</option>
+      <option value="landscape-fold-landscape">A4 landscape · fold landscape</option>
+      <option value="landscape-fold-portrait">A4 landscape · fold portrait</option>
+    </select>
+    <div class="hint">The A4 sheet is folded in half; the bib number sits in the folded half. Dotted line shows the fold point.</div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <h3>Font</h3>
+      <label>Number font</label>
+      <select id="fontFamilySelect" onchange="applyFontFamily()">
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Arial Black', sans-serif">Arial Black</option>
+        <option value="Impact, sans-serif">Impact</option>
+        <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+      </select>
+      <div style="margin-top:5px;display:flex;gap:5px;align-items:center;">
+        <input type="file" id="customFontFile" accept=".ttf,.otf,.woff,.woff2"
+               style="flex:1;font-size:10px;padding:3px 5px;"
+               onchange="loadCustomFont(this)">
+      </div>
+      <div id="customFontStatus" class="hint" style="min-height:13px;"></div>
+    </div>
+    <div style="margin-top:6px;border-top:1px solid #334;padding-top:8px;">
+      <button class="bs" style="width:100%;" onclick="window.print()">🖨 Print / Save PDF</button>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+<!-- end setup-panel -->
+
+<!-- ══════════════════ PRINT AREA ══════════════════ -->
+<div id="print-area"></div>
+
+</div><!-- end app -->
+
+<!-- ══════════════════ FLOATING TOOLBAR ══════════════════ -->
+<div id="toolbar">
+  <div id="tb-drag-handle" title="Drag to move panel">⠿⠿ Drag to move</div>
+  <h4 id="tb-name">Select an element</h4>
+  <div class="tb-row">
+    <span>Font size</span>
+    <button class="bg btn-sm" onclick="adj('fontSize',-2)">−</button>
+    <span class="tb-val" id="tb-fs">—</span>
+    <button class="bg btn-sm" onclick="adj('fontSize',+2)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Size (logo)</span>
+    <button class="bg btn-sm" onclick="adj('size',-5)">−</button>
+    <span class="tb-val" id="tb-sz">—</span>
+    <button class="bg btn-sm" onclick="adj('size',+5)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Spacing</span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',-0.05)">−</button>
+    <span class="tb-val" id="tb-ls">—</span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',+0.05)">+</button>
+  </div>
+  <div class="tb-row">
+    <span>Rotate</span>
+    <button class="bg btn-sm" id="tb-rot-l" onclick="rotateSel(-90)">⟲ 90</button>
+    <span class="tb-val" id="tb-rot">—</span>
+    <button class="bg btn-sm" id="tb-rot-r" onclick="rotateSel(+90)">⟳ 90</button>
+  </div>
+  <div class="tb-row" style="margin-top:4px;border-top:1px solid #334;padding-top:6px;">
+    <span>Visible</span>
+    <button class="bg btn-sm" id="tb-visible" onclick="toggleHidden()" style="min-width:52px;">—</button>
+  </div>
+  <div class="tb-row">
+    <span>Pos x / y %</span>
+    <input type="number" id="tb-cx" step="0.1" min="0" max="100" title="Center X (% of folded half)" onchange="setPos('cx', this.value)">
+    <input type="number" id="tb-y" step="0.1" min="0" max="100" title="Center Y (% of folded half)" onchange="setPos('y', this.value)">
+  </div>
+  <div class="tb-row">
+    <span style="font-size:10px;color:#555;">Drag elements to move</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let csvTeams   = [];
+let rawCsvText = null;
+let editMode   = false;
+let selectedKey = null;
+let selectedRef = null;
+let customFont  = null; // {family, src} when a custom font is loaded
+let extraText   = '';   // extra line shown on every sheet (e.g. emergency phone)
+let eventLogoSrc = null;
+
+// Paper orientation + fold direction → sheet size (mm) and which way to fold.
+// dir 'h' = fold across the middle (halves are landscape), dir 'v' = fold down
+// the middle (halves are portrait). The number always sits in one half.
+const FOLDS = [
+  { id: 'portrait-fold-portrait',   label: 'A4 portrait · fold portrait',   w: 210, h: 297, dir: 'v' },
+  { id: 'portrait-fold-landscape',  label: 'A4 portrait · fold landscape',  w: 210, h: 297, dir: 'h' },
+  { id: 'landscape-fold-landscape', label: 'A4 landscape · fold landscape', w: 297, h: 210, dir: 'h' },
+  { id: 'landscape-fold-portrait',  label: 'A4 landscape · fold portrait',  w: 297, h: 210, dir: 'v' },
+];
+
+function getFold() {
+  const v = document.getElementById('foldOrientation').value;
+  return FOLDS.find(f => f.id === v) || FOLDS[0];
+}
+
+const GROUP_KEY = 'backGroup';
+const GROUP_MEMBERS = new Set(['numberArea', 'leg']);
+
+// Layout: group position/size (%, of the folded half) + member styling.
+// baseGroup font-size is set from numberArea.fontSize — the number text
+// inherits it and the leg scales as 0.3em of it. Dragging the group (or any
+// member) moves the whole stack; auto-fit shrinks numberArea.fontSize.
+const DEF_LAYOUT = {
+  backGroup:  { cx: 50, y: 50, w: 100, rotate: 0 },
+  numberArea: { fontSize: 100, letterSpacing: 0 },
+  leg:        { hidden: false },
+  extra:      { cx: 50, y: 90, fontSize: 6, letterSpacing: 0, rotate: 0, hidden: false },
+  logo:       { cx: 50, y: 2, w: 30, h: 8, rotate: 0, hidden: false },
+};
+let layout = deepClone(DEF_LAYOUT);
+
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+// ═══════════════════════════════════════════
+// CSV PARSING  (same format as the bib generator)
+// ═══════════════════════════════════════════
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (c === '"') {
+      if (inQ && n === '"') { field += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      row.push(field); field = '';
+    } else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && n === '\n') i++;
+      if (field || row.length) { row.push(field); rows.push(row); }
+      row = []; field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function parseTeams(rows) {
+  if (rows.length < 2) return [];
+  const teams = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]?.trim()) continue;
+    const team = {
+      kilpailunumero: r[0]?.trim() || '',
+      sarja:          r[1]?.trim() || '',
+      joukkue:        r[2]?.trim() || '',
+      seura:          r[4]?.trim() || '',
+      runners:        [],
+    };
+    for (let b = 0; b < 20; b++) {
+      const base = 6 + b * 8;
+      if (base >= r.length) break;
+      const nimi = r[base]?.trim();
+      if (!nimi || /^\s+$/.test(nimi)) continue;
+      team.runners.push({
+        nimi,
+        kilpailukortti: r[base+1]?.trim() || '',
+        osuus:          r[base+3]?.trim() || '',
+        alaosuus:       r[base+4]?.trim() || '',
+        rata:           r[base+5]?.trim() || '',
+        lahtöaika:      r[base+6]?.trim() || '',
+      });
+    }
+    if (team.runners.length) teams.push(team);
+  }
+  return teams;
+}
+
+// Parse "1-5, 10, 20-30" → Set of integers (null = no filter)
+function parseRanges(str) {
+  if (!str.trim()) return null;
+  const s = new Set();
+  for (const part of str.split(',')) {
+    const t = part.trim();
+    const m = t.match(/^(\d+)-(\d+)$/);
+    if (m) { for (let n=+m[1]; n<=+m[2]; n++) s.add(n); }
+    else if (/^\d+$/.test(t)) s.add(+t);
+  }
+  return s;
+}
+
+function downloadExampleCSV(type) {
+  const q = v => `"${v}"`;
+  const S = q(' ');
+  const teamHdr = ['Kilpailunumero','Sarja','Joukkueen nimi','Kansalaisuus','Seura'].map(q).join(',');
+  const rHdr = n => [S, `Nimi-${n}`,`Kilpailukortti-${n}`,`Lainakortti-${n}`,`Osuus-${n}`,`Alaosuus-${n}`,`Rata-${n}`,`Lähtöaika-${n}`].map((v,i)=>i===0?v:q(v)).join(',');
+  const r = (nimi,chip,osuus,alaosuus,rata,aika) => [S,nimi,chip,'',osuus,(alaosuus||''),rata,aika].map((v,i)=>i===0?v:q(v)).join(',');
+
+  let content, filename;
+  if (type === 'relay') {
+    content = [
+      teamHdr + ',' + [1,2,3].map(rHdr).join(','),
+      ['101','Jukola','Piipsjärven Pihinä','FIN','Club A'].map(q).join(',') + ',' + r('Astra Hyvärinen','12345','1','','A','10:00:00') + ',' + r('Anna Hyvärinen','12346','2','','A','') + ',' + r('Johanna Hyvärinen','12347','3','','A',''),
+      ['102','Venlat','Luontaisesti vahvat','FIN','Club B'].map(q).join(',') + ',' + r('Leo Hyvärinen','23456','1','','A','10:01:00') + ',' + r('Simo Hyvärinen','23457','2','','A','') + ',' + r('Ville Hyvärinen','23458','3','','A',''),
+      ['103','Jukola','Kovaa Ukkoo','FIN','Club C'].map(q).join(',') + ',' + r('Olli Virta','34567','1','','A','10:02:00') + ',' + r('Maija Virta','34568','2','','A','') + ',' + r('Kalle Virta','34569','3','','A',''),
+    ].join('\r\n');
+    filename = 'example_relay.csv';
+  } else {
+    content = [
+      teamHdr + ',' + rHdr(1),
+      ['101','D21','Kotkajuuri Kaisa','FIN','Club A'].map(q).join(',')  + ',' + r('Kotkajuuri Kaisa','12345','','','A','10:00:00'),
+      ['102','D21','Särkkä Saara','FIN','Club A'].map(q).join(',') + ',' + r('Särkkä Saara','12346','','','A','10:01:00'),
+    ].join('\r\n');
+    filename = 'example_individual.csv';
+  }
+  const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════
+function populateSarjaFilter() {
+  const sel = document.getElementById('filterSarja');
+  const current = sel.value;
+  const classes = [...new Set(csvTeams.map(t => t.sarja).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All</option>'
+    + classes.map(c => `<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`).join('');
+
+  const leg = document.getElementById('filterLeg');
+  const curLeg = leg.value;
+  const legs = [...new Set(csvTeams.flatMap(t => t.runners.map(r => r.osuus)).filter(Boolean))]
+    .sort((a, b) => +a - +b);
+  leg.innerHTML = '<option value="">All legs</option>'
+    + legs.map(l => `<option value="${esc(l)}"${l === curLeg ? ' selected' : ''}>Leg ${esc(l)}</option>`).join('');
+}
+
+// Returns the filtered list of {team, runner} pairs per the current filters.
+function getFilteredEntries() {
+  const numFilter   = parseRanges(document.getElementById('filterNumbers').value);
+  const partFilter  = parseRanges(document.getElementById('filterParts').value);
+  const sarjaFilter = document.getElementById('filterSarja').value;
+  const legFilter   = document.getElementById('filterLeg').value;
+
+  const entries = [];
+  for (const team of csvTeams) {
+    if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
+    if (sarjaFilter && team.sarja !== sarjaFilter) continue;
+    for (const runner of team.runners) {
+      if (legFilter && runner.osuus !== legFilter) continue;
+      if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
+      entries.push({ team, runner });
+    }
+  }
+  return entries;
+}
+
+// ═══════════════════════════════════════════
+// FOLD ORIENTATION
+// ═══════════════════════════════════════════
+function applyFoldOrientation() {
+  const f = getFold();
+  document.getElementById('page-style').textContent =
+    `@page { size: ${f.w}mm ${f.h}mm; margin: 0; }`;
+  document.body.classList.toggle('hfold', f.dir === 'h');
+  document.body.classList.toggle('vfold', f.dir === 'v');
+  if (document.getElementById('print-area').children.length) regenerate();
+}
+
+// ═══════════════════════════════════════════
+// BIB GENERATION
+// ═══════════════════════════════════════════
+function legText(runner) {
+  if (!runner.osuus) return '';
+  if (!runner.alaosuus) return runner.osuus;
+  return `${runner.osuus}\u2013${runner.alaosuus}`;
+}
+
+function buildSheet(team, runner, i, total, dims) {
+  const cap = document.createElement('div');
+  cap.className = 'sheet-cap';
+  cap.textContent = `A4 ${i + 1}/${total} — ${team.kilpailunumero} · osuus ${runner.osuus || '–'}`;
+
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet';
+  sheet.style.width  = dims.w + 'mm';
+  sheet.style.height = dims.h + 'mm';
+
+  const fold = document.createElement('div');
+  fold.className = 'fold';
+  sheet.appendChild(fold);
+
+  const half = document.createElement('div');
+  half.className = 'half';
+
+  const group = document.createElement('div');
+  group.className = 'group';
+  group.dataset.lk = GROUP_KEY;
+
+  const num = document.createElement('div');
+  num.className = 'num';
+  num.dataset.lk = 'numberArea';
+  num.textContent = team.kilpailunumero;
+
+  const leg = document.createElement('div');
+  leg.className = 'leg';
+  leg.dataset.lk = 'leg';
+  leg.textContent = legText(runner);
+
+  group.appendChild(num);
+  group.appendChild(leg);
+  half.appendChild(group);
+
+  // Extra text (e.g. emergency phone) — shown on every sheet.
+  const extra = document.createElement('div');
+  extra.className = 'extra';
+  extra.dataset.lk = 'extra';
+  extra.textContent = extraText;
+  if (!extraText) extra.dataset.hidden = 'true';
+  half.appendChild(extra);
+
+  // Optional event logo on every sheet.
+  if (eventLogoSrc) {
+    const logo = document.createElement('div');
+    logo.className = 'logo';
+    logo.dataset.lk = 'logo';
+    logo.innerHTML = `<img src="${escA(eventLogoSrc)}" alt="event logo">`;
+    half.appendChild(logo);
+  }
+
+  sheet.appendChild(half);
+
+  document.getElementById('print-area').appendChild(cap);
+  document.getElementById('print-area').appendChild(sheet);
+  return sheet;
+}
+
+function generateBibs() {
+  if (!csvTeams.length) { alert('Load a CSV file first'); return; }
+  const entries = getFilteredEntries();
+  if (editMode) exitEditMode(false);
+  clearSelection();
+  regenerate(entries);
+}
+
+// Shared by generate + orientation change + edit-mode re-entry. `entries` is
+// cached by callers that already computed it (avoids re-reading filters).
+function regenerate(entries) {
+  const f = getFold();
+  document.getElementById('page-style').textContent =
+    `@page { size: ${f.w}mm ${f.h}mm; margin: 0; }`;
+  document.body.classList.toggle('hfold', f.dir === 'h');
+  document.body.classList.toggle('vfold', f.dir === 'v');
+
+  if (!entries) {
+    entries = getFilteredEntries();
+    if (editMode) exitEditMode(false);
+    clearSelection();
+  }
+
+  const area = document.getElementById('print-area');
+  area.innerHTML = '';
+  const sheets = [];
+  const total = entries.length;
+  entries.forEach(({ team, runner }, i) => {
+    sheets.push(buildSheet(team, runner, i + 1, total, f));
+  });
+
+  requestAnimationFrame(() => {
+    // Refresh layout from saved state, then fit numbers, then re-attach
+    // edit-mode drag handlers so a live edit behind the toolbar is seamless.
+    sheets.forEach(sheet => {
+      applySheetLayout(sheet);
+      if (document.getElementById('autoFitChk').checked) fitHalf(sheet);
+      if (editMode) { sheet.classList.add('edit-mode'); attachDrag(sheet); }
+    });
+    const n = sheets.length;
+    document.getElementById('status').textContent = n
+      ? `${n} bibs · ${n} A4 sheet${n === 1 ? '' : 's'}`
+      : 'No bibs matched';
+  });
+
+  const tot = csvTeams.reduce((s,t) => s + t.runners.length, 0);
+  document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${tot} runners`;
+}
+
+// ═══════════════════════════════════════════
+// LAYOUT SYNC + AUTO-FIT
+// ═══════════════════════════════════════════
+function getLayoutRef(key) {
+  if (Object.prototype.hasOwnProperty.call(layout, key)) return layout[key];
+  return null;
+}
+
+function applySheetLayout(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(el => applyPos(el, el.dataset.lk));
+}
+
+function applyPos(el, key) {
+  const l = getLayoutRef(key); if (!l) return;
+  if (key === GROUP_KEY) {
+    el.style.left = l.cx + '%';
+    el.style.top  = l.y  + '%';
+    el.style.width = l.w + '%';
+    el.style.transform = 'translate(-50%, -50%)'
+      + (l.rotate ? ` rotate(${l.rotate}deg)` : '');
+    // The group's font-size is the number size; leg scales as its 0.3em child.
+    const numL = layout.numberArea;
+    if (numL) el.style.fontSize = numL.fontSize + 'mm';
+  } else {
+    if (l.cx !== undefined) {
+      el.style.left = l.cx + '%';
+      el.style.transform = 'translateX(-50%)'
+        + (l.rotate ? ` rotate(${l.rotate}deg)` : '');
+    }
+    if (l.y  !== undefined) el.style.top  = l.y  + '%';
+    if (l.w  !== undefined) el.style.width  = l.w + '%';
+    if (l.h  !== undefined) el.style.height = l.h + '%';
+  }
+  if (l.fontSize !== undefined) {
+    if (key === 'numberArea') {
+      const group = el.closest('.group');
+      if (group) group.style.fontSize = l.fontSize + 'mm';
+    } else {
+      el.style.fontSize = l.fontSize + 'mm';
+    }
+  }
+  if (l.letterSpacing !== undefined) el.style.letterSpacing = l.letterSpacing + 'em';
+  if (l.hidden) el.dataset.hidden = 'true';
+  else         delete el.dataset.hidden;
+}
+
+// Shrink the number until it fits inside the folded half. Measured in rendered
+// px (so it survives browser zoom); writes back into layout.numberArea.fontSize
+// so the toolbar always shows the real size. The group's box is 100% of the
+// half, so the constraint comes from the number's (and leg's) real text metrics
+// — not the group box. The whole stack (number + leg) rotates together, so a
+// 90°/270° rotation swaps which stack dimension is the visual width.
+function fitHalf(sheet) {
+  const group = sheet.querySelector('.group');
+  const num   = sheet.querySelector('[data-lk="numberArea"]');
+  const leg   = sheet.querySelector('[data-lk="leg"]');
+  const half  = sheet.querySelector('.half');
+  if (!group || !num || !half || !num.textContent) return;
+
+  group.style.fontSize = '100mm'; // reference size for measuring
+  const rot   = (layout.backGroup.rotate || 0) % 360;
+  const side  = (rot === 90 || rot === 270);
+  const numW  = num.offsetWidth;
+  const legW  = (leg && leg.textContent) ? leg.offsetWidth : 0;
+  const stackW = Math.max(numW, legW);        // visual width in flow
+  const stackH = group.offsetHeight;          // number + gap + leg in flow
+  const effW  = side ? stackH : stackW;
+  const effH  = side ? stackW : stackH;
+  const availW = half.clientWidth;
+  const availH = half.clientHeight;
+  if (!availW || !availH || !effW || !effH) return;
+
+  const scale = Math.min(1, availW / effW, availH / effH);
+  const size = Math.max(100 * scale, 8);
+  group.style.fontSize = size + 'mm';
+  layout.numberArea.fontSize = size;
+}
+
+// ═══════════════════════════════════════════
+// EDIT MODE / DRAG
+// ═══════════════════════════════════════════
+function toggleEditMode() {
+  if (!editMode) enterEditMode(); else exitEditMode(true);
+}
+
+function enterEditMode() {
+  editMode = true;
+  document.getElementById('editBtn').textContent = 'Exit Edit Mode';
+  document.getElementById('editBtn').className   = 'bp';
+  document.querySelectorAll('.sheet').forEach(s => {
+    s.classList.add('edit-mode');
+    attachDrag(s);
+  });
+  document.getElementById('toolbar').classList.add('visible');
+  syncLayout();
+}
+
+function exitEditMode(resetSelection) {
+  editMode = false;
+  document.getElementById('editBtn').textContent = 'Edit Layout';
+  document.getElementById('editBtn').className   = 'bw';
+  document.querySelectorAll('.sheet').forEach(s => {
+    s.classList.remove('edit-mode');
+    detachDrag(s);
+  });
+  document.getElementById('toolbar').classList.remove('visible');
+  if (resetSelection) { selectedKey = null; selectedRef = null; clearSelection(); }
+}
+
+function attachDrag(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(el => {
+    el.removeEventListener('mousedown', onMD);
+    el.addEventListener('mousedown', onMD);
+  });
+}
+
+function detachDrag(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(el => el.removeEventListener('mousedown', onMD));
+}
+
+let drag = null;
+
+function onMD(e) {
+  if (!editMode) return;
+  e.preventDefault(); e.stopPropagation();
+  const el  = e.currentTarget;
+  const key = el.dataset.lk;
+  const half = el.closest('.half');
+
+  // Members (number/leg) drag their group so the stack moves as one.
+  const posKey = GROUP_MEMBERS.has(key) ? GROUP_KEY : key;
+  const posRef = getLayoutRef(posKey);
+
+  clearSelection();
+  el.classList.add('selected');
+  selectedKey = key;
+  selectedRef = getLayoutRef(key);
+  updateToolbar();
+
+  const cr = half.getBoundingClientRect();
+  drag = { posRef, x0: e.clientX, y0: e.clientY, cx0: posRef.cx, y_0: posRef.y, cw: cr.width, ch: cr.height };
+
+  const mm = me => {
+    if (!drag) return;
+    const dx = ((me.clientX - drag.x0) / drag.cw) * 100;
+    const dy = ((me.clientY - drag.y0) / drag.ch) * 100;
+    drag.posRef.cx = clamp(drag.cx0 + dx, 0, 100);
+    drag.posRef.y  = clamp(drag.y_0 + dy, 0, 100);
+    syncLayout();
+  };
+  const mu = () => {
+    drag = null;
+    saveLayout();
+    document.removeEventListener('mousemove', mm);
+    document.removeEventListener('mouseup',   mu);
+  };
+  document.addEventListener('mousemove', mm);
+  document.addEventListener('mouseup',   mu);
+}
+
+function clearSelection() {
+  document.querySelectorAll('[data-lk].selected').forEach(el => el.classList.remove('selected'));
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function syncLayout() {
+  document.querySelectorAll('.sheet').forEach(sheet => applySheetLayout(sheet));
+  updateToolbar();
+}
+
+// Toolbar adjustments
+function adj(prop, delta) {
+  if (!selectedRef) return;
+  const l = selectedRef;
+  if (prop === 'letterSpacing') {
+    l.letterSpacing = parseFloat(clamp((l.letterSpacing ?? 0) + delta, -0.2, 1.0).toFixed(3));
+  } else if (prop === 'fontSize') {
+    if (l.fontSize === undefined) return;
+    l.fontSize = clamp(l.fontSize + delta, 2, 300);
+    // Manual sizing overrides auto-fit until it is switched back on.
+    if (document.getElementById('autoFitChk').checked) {
+      document.getElementById('autoFitChk').checked = false;
+      setStatus('Auto-fit off — using toolbar size');
+    }
+  } else if (prop === 'size') {
+    if (l.w === undefined || l.h === undefined) return;
+    const f = clamp((l.w + delta) / l.w, 0.1, 5);
+    l.w = clamp(Math.round(l.w * f), 1, 100);
+    l.h = clamp(Math.round(l.h * f), 1, 100);
+  } else {
+    return;
+  }
+  syncLayout();
+  saveLayout();
+}
+
+function toggleHidden() {
+  if (!selectedRef) return;
+  selectedRef.hidden = !selectedRef.hidden;
+  syncLayout();
+  updateToolbar();
+  saveLayout();
+}
+
+function rotateSel(delta) {
+  if (!selectedRef) return;
+  const add = ((delta % 360) + 360) % 360;
+  if (selectedRef.rotate !== undefined) {
+    // logo / extra text (and the group) rotate themselves
+    selectedRef.rotate = ((selectedRef.rotate || 0) + add) % 360;
+  } else {
+    // number / leg: rotate the enclosing group instead
+    const grp = layout.backGroup;
+    if (!grp) return;
+    grp.rotate = ((grp.rotate || 0) + add) % 360;
+  }
+  syncLayout();
+  updateToolbar();
+  saveLayout();
+}
+
+function setPos(prop, rawVal) {
+  if (!selectedRef || selectedRef[prop] === undefined) return;
+  const v = parseFloat(rawVal);
+  if (!Number.isFinite(v)) return;
+  selectedRef[prop] = clamp(v, 0, 100);
+  syncLayout();
+  updateToolbar();
+  saveLayout();
+}
+
+function updateToolbar() {
+  if (!selectedRef) return;
+  const l = selectedRef;
+  document.getElementById('tb-name').textContent = selectedKey === GROUP_KEY ? 'group (number + leg)' : selectedKey;
+  document.getElementById('tb-fs').textContent = l.fontSize !== undefined ? Math.round(l.fontSize) + 'mm' : '—';
+  document.getElementById('tb-ls').textContent = l.letterSpacing !== undefined ? l.letterSpacing.toFixed(2) + 'em' : '—';
+  document.getElementById('tb-sz').textContent = l.w !== undefined && l.h !== undefined ? Math.round(l.w) + '%' : '—';
+
+  const rotVal = l.rotate !== undefined ? ((l.rotate || 0) % 360 + 360) % 360
+                                        : ((layout.backGroup && layout.backGroup.rotate || 0) % 360 + 360) % 360;
+  document.getElementById('tb-rot').textContent = Math.round(rotVal) + '°';
+
+  const cxIn = document.getElementById('tb-cx');
+  const cyIn = document.getElementById('tb-y');
+  // Members (number/leg) move with the group, so show/edit the group's position.
+  const posKey = GROUP_MEMBERS.has(selectedKey) ? GROUP_KEY : selectedKey;
+  const posRef = getLayoutRef(posKey);
+  cxIn.disabled = !posRef || posRef.cx === undefined;
+  cyIn.disabled = !posRef || posRef.y === undefined;
+  if (!cxIn.disabled || !cyIn.disabled) {
+    if (document.activeElement !== cxIn && posRef.cx !== undefined) cxIn.value = posRef.cx.toFixed(1);
+    if (document.activeElement !== cyIn && posRef.y !== undefined) cyIn.value = posRef.y.toFixed(1);
+  } else {
+    cxIn.value = ''; cyIn.value = '';
+  }
+  document.getElementById('tb-visible').textContent = l.hidden ? 'Show' : 'Hide';
+  document.getElementById('tb-visible').style.color = l.hidden ? '#27ae60' : '#e94560';
+}
+
+// ═══════════════════════════════════════════
+// LAYOUT PERSISTENCE
+// ═══════════════════════════════════════════
+function saveLayout() { localStorage.setItem('relayBackLayout', JSON.stringify(layout)); }
+
+function resetLayout() {
+  layout = deepClone(DEF_LAYOUT);
+  saveLayout();
+  setStatus('Layout reset to default ✓');
+  clearSelection();
+  if (editMode) syncLayout();
+  else regenerate();
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('layoutStatus');
+  el.textContent = msg;
+}
+
+// ── Share / restore the layout as JSON ────────────────────────────────
+// The whole design (group position/size, number font/spacing/rotation, leg
+// visibility) lives in one JSON object, so it round-trips through a file or
+// the clipboard.
+function layoutJson() { return JSON.stringify(layout, null, 2); }
+
+function exportLayout() {
+  const blob = new Blob([layoutJson()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'relay-back-layout.json'; a.click();
+  URL.revokeObjectURL(url);
+  setStatus('Layout exported ✓');
+}
+
+function copyLayout() {
+  navigator.clipboard?.writeText(layoutJson()).then(
+    () => setStatus('Layout copied to clipboard ✓'),
+    () => setStatus('Copy failed — use Export JSON instead')
+  );
+}
+
+function mergeLayout(imp) {
+  const base = deepClone(DEF_LAYOUT);
+  const allKeys = new Set([...Object.keys(base), ...Object.keys(imp)]);
+  layout = {};
+  allKeys.forEach(k => { layout[k] = Object.assign({}, base[k] || {}, imp[k] || {}); });
+}
+
+function importLayout() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = ev => {
+      try {
+        mergeLayout(JSON.parse(ev.target.result));
+        saveLayout();
+        setStatus('Layout imported ✓');
+        clearSelection();
+        if (editMode) syncLayout(); else regenerate();
+      } catch { alert('Invalid layout JSON'); }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+
+// ═══════════════════════════════════════════
+// NAVISPORT  (tRPC API — slug-based)
+// ═══════════════════════════════════════════
+async function loadFromNavisport() {
+  const raw = document.getElementById('navisportUrl').value.trim();
+  if (!raw) { navStatus('Paste a Navisport event URL or slug', 'err'); return; }
+  navStatus('Loading…', 'ok');
+
+  const slugM = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  const slug  = slugM ? slugM[1] : raw.trim();
+
+  try {
+    const json = await navFetch(slug);
+    const name = (json.name || slug).trim();
+    if (name) document.title = `Relay Map Back Print — ${name}`;
+    if (json.raceType === 'Relay') navLoadRelay(json);
+    else                           navLoadIndividual(json);
+    const total = csvTeams.reduce((s,t) => s + t.runners.length, 0);
+    navStatus(`✓ ${name} — ${csvTeams.length} teams, ${total} runners`, 'ok');
+    document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
+    populateSarjaFilter();
+    rawCsvText = null;
+  } catch(e) {
+    navStatus('Error: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+async function navFetch(slug) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+    return navFetchByUUID(slug);
+  }
+  const input = encodeURIComponent(JSON.stringify({ '0': slug }));
+  const url   = `https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
+  const res   = await fetch(url);
+  if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status} for "${slug}"`);
+  const batch = await res.json();
+  const data  = batch?.[0]?.result?.data;
+  if (!data)  throw new Error('Unexpected Navisport response shape');
+  return data;
+}
+
+async function navFetchByUUID(uuid) {
+  const res = await fetch(`https://navisport.com/api/events/${uuid}`);
+  if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status} for event ${uuid}`);
+  return res.json();
+}
+
+function navStatus(msg, type) {
+  const el = document.getElementById('navisportStatus');
+  el.textContent = msg;
+  el.style.color = type === 'err' ? '#e94560' : '#7ec8e3';
+}
+
+function navName(r) {
+  if (r.name?.trim()) return r.name.trim();
+  return `${r.surname||''} ${r.givenName||''}`.trim();
+}
+
+function navTime(r) {
+  if (!r.startTime) return '';
+  try { return new Date(r.startTime).toLocaleTimeString('fi-FI', {hour:'2-digit', minute:'2-digit'}); }
+  catch { return ''; }
+}
+
+// Relay: one bib per team; runners carry the osuus (leg) each one prints with.
+function navLoadRelay(json) {
+  const cc      = {};
+  (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
+
+  const results   = json.results || [];
+  const teamsById = {};
+  results.filter(r => r.resultType === 'Team').forEach(r => { teamsById[r.id] = r; });
+
+  const teamMap = {};
+  const hasParentChild = Object.keys(teamsById).length > 0;
+  for (const r of results) {
+    if (r.resultType === 'Team') continue;
+    const parent = r.parentId ? teamsById[r.parentId] : null;
+    if (hasParentChild && !parent) continue;
+    const bibNum = parent?.bibNumber ?? r.bibNumber;
+    if (bibNum == null) continue;
+    const bib = String(bibNum);
+
+    if (!teamMap[bib]) {
+      teamMap[bib] = {
+        kilpailunumero: bib,
+        sarja:          cc[r.classId] || cc[parent?.classId] || '',
+        joukkue:        parent?.name || r.club || '',
+        seura:          r.club || '',
+        runners:        [],
+      };
+    }
+    if (!teamMap[bib].sarja)   teamMap[bib].sarja   = cc[r.classId] || cc[parent?.classId] || '';
+    if (!teamMap[bib].joukkue) teamMap[bib].joukkue = parent?.name || r.club || '';
+
+    teamMap[bib].runners.push({
+      nimi:           navName(r),
+      kilpailukortti: String(r.chip||''),
+      osuus:          r.leg != null ? String(r.leg) : '',
+      alaosuus:       r.subLeg != null ? String(r.subLeg) : '',
+      rata:           '',
+      lahtöaika:      navTime(r),
+    });
+  }
+
+  csvTeams = Object.values(teamMap);
+  csvTeams.forEach(t => { t.runners.sort((a,b) => +a.osuus - +b.osuus); });
+  sortTeams();
+}
+
+// Individual fallback: each runner gets their own bib.
+function navLoadIndividual(json) {
+  const cc = {};
+  (json.courseClasses||[]).forEach(c => { cc[c.id] = c.name; });
+
+  csvTeams = (json.results||[])
+    .filter(r => r.bibNumber != null && r.resultType !== 'Team')
+    .map(r => ({
+      kilpailunumero: String(r.bibNumber),
+      sarja:          cc[r.classId] || '',
+      joukkue:        r.club || navName(r),
+      seura:          r.club || '',
+      runners: [{ nimi: navName(r), kilpailukortti: String(r.chip||''), osuus: '', alaosuus: '', rata: '', lahtöaika: navTime(r) }]
+    }));
+  sortTeams();
+}
+
+// ═══════════════════════════════════════════
+// PANEL LAYOUT + TOOLBAR DRAG + INIT
+// ═══════════════════════════════════════════
+function toggleSidebar() {
+  const on = document.body.classList.toggle('sidebar-mode');
+  localStorage.setItem('panelSidebar', on ? '1' : '0');
+  updatePanelControls();
+}
+
+function togglePanelCollapse() {
+  const on = document.body.classList.toggle('panel-collapsed');
+  localStorage.setItem('panelCollapsed', on ? '1' : '0');
+  updatePanelControls();
+}
+
+function updatePanelControls() {
+  const isSidebar = document.body.classList.contains('sidebar-mode');
+  const isCollapsed = document.body.classList.contains('panel-collapsed');
+  const bl = document.getElementById('btn-layout');
+  const bc = document.getElementById('btn-collapse');
+  bl.textContent = isSidebar ? '⬆' : '⬅';
+  bl.title       = isSidebar ? 'Move panel to top' : 'Move panel to left sidebar';
+  bc.textContent = isCollapsed ? '+' : '−';
+  bc.title       = isCollapsed ? 'Expand panel' : 'Collapse panel';
+}
+
+// ═══════════════════════════════════════════
+// FONT
+// ═══════════════════════════════════════════
+function refitSheets() {
+  requestAnimationFrame(() => {
+    if (document.getElementById('autoFitChk').checked) {
+      document.querySelectorAll('.sheet').forEach(fitHalf);
+    }
+  });
+}
+
+function applyFontFamily() {
+  const val = document.getElementById('fontFamilySelect').value;
+  document.getElementById('font-style').textContent = `.sheet { font-family: ${val}; }`;
+  localStorage.setItem('relayBackFont', JSON.stringify({ family: val, custom: customFont }));
+  refitSheets();
+}
+
+function refreshExtras() {
+  document.querySelectorAll('.sheet .extra').forEach(el => {
+    el.textContent = extraText;
+    if (extraText) delete el.dataset.hidden; else el.dataset.hidden = 'true';
+  });
+}
+
+function updateExtraText(v) {
+  extraText = v;
+  localStorage.setItem('relayBackExtra', v);
+  refreshExtras();
+}
+
+function loadEventLogo(inp) {
+  const f = inp.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    eventLogoSrc = e.target.result;
+    document.getElementById('logoPreview').innerHTML =
+      `<img src="${escA(eventLogoSrc)}" style="max-height:34px;max-width:120px;object-fit:contain;" alt="preview">`;
+    if (document.getElementById('print-area').children.length) regenerate();
+  };
+  rd.onerror = () => {};
+  rd.readAsDataURL(f);
+}
+
+function base64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8.buffer;
+}
+
+function applyCustomFontFromDataUrl(family, dataUrl) {
+  customFont = { family, src: dataUrl };
+  document.getElementById('font-style').textContent = `.sheet { font-family: '${family}', sans-serif; }`;
+  if (typeof FontFace === 'undefined' || !document.fonts) return;
+  const face = new FontFace(family, base64ToArrayBuffer(dataUrl.slice(dataUrl.indexOf(',') + 1)));
+  face.load().then(() => {
+    document.fonts.add(face);
+    const sel = document.getElementById('fontFamilySelect');
+    const existing = sel.querySelector('option[data-custom]');
+    if (existing) existing.remove();
+    const opt = document.createElement('option');
+    opt.value = `'${family}', sans-serif`;
+    opt.textContent = family + ' (custom)';
+    opt.dataset.custom = '1';
+    sel.appendChild(opt);
+    sel.value = opt.value;
+    applyFontFamily();
+    // Font metrics settle after the face is swapped in — refit once more.
+    requestAnimationFrame(() => refitSheets());
+  });
+}
+
+async function loadCustomFont(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('customFontStatus');
+  statusEl.style.color = '#7ec8e3';
+  statusEl.textContent = 'Loading…';
+  try {
+    const src = await new Promise(resolve => {
+      const rd = new FileReader();
+      rd.onload = e => resolve(e.target.result);
+      rd.readAsDataURL(file);
+    });
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_');
+    applyCustomFontFromDataUrl(name, src);
+    statusEl.style.color = '#6a6';
+    statusEl.textContent = `Loaded: ${file.name}`;
+  } catch (e) {
+    statusEl.style.color = '#e94560';
+    statusEl.textContent = 'Failed: ' + e.message;
+  }
+}
+
+(function initToolbarDrag() {
+  const tb     = document.getElementById('toolbar');
+  const handle = document.getElementById('tb-drag-handle');
+  let offsetX = 0, offsetY = 0, dragging = false;
+
+  function place(left, top) {
+    const maxLeft = window.innerWidth  - tb.offsetWidth;
+    const maxTop  = window.innerHeight - tb.offsetHeight;
+    left = Math.min(Math.max(left, 0), Math.max(maxLeft, 0));
+    top  = Math.min(Math.max(top, 0),  Math.max(maxTop, 0));
+    tb.style.left   = left + 'px';
+    tb.style.top    = top + 'px';
+    tb.style.right  = 'auto';
+    tb.style.bottom = 'auto';
+  }
+
+  const saved = localStorage.getItem('tb-pos');
+  if (saved) {
+    try {
+      const { left, top } = JSON.parse(saved);
+      tb.style.visibility = 'hidden';
+      requestAnimationFrame(() => { place(left, top); tb.style.visibility = ''; });
+    } catch (e) {}
+  }
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    const rect = tb.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    place(e.clientX - offsetX, e.clientY - offsetY);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    localStorage.setItem('tb-pos', JSON.stringify({ left: parseFloat(tb.style.left), top: parseFloat(tb.style.top) }));
+  });
+})();
+
+function esc(s)  { if (!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+function escA(s) { return String(s||'').replace(/"/g,'&quot;'); }
+
+function sortTeams() {
+  csvTeams.sort((a, b) => +a.kilpailunumero - +b.kilpailunumero);
+}
+
+document.getElementById('csvFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    rawCsvText = e.target.result;
+    csvTeams = parseTeams(parseCSV(e.target.result));
+    sortTeams();
+    const total = csvTeams.reduce((s,t)=>s+t.runners.length,0);
+    document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
+    populateSarjaFilter();
+  };
+  rd.readAsText(f, 'UTF-8');
+});
+
+if (localStorage.getItem('panelSidebar')   === '1') document.body.classList.add('sidebar-mode');
+if (localStorage.getItem('panelCollapsed') === '1') document.body.classList.add('panel-collapsed');
+updatePanelControls();
+
+// Load saved layout on start
+(function() {
+  const s = localStorage.getItem('relayBackLayout');
+  if (s) {
+    try {
+      const saved = JSON.parse(s);
+      const base = deepClone(DEF_LAYOUT);
+      const allKeys = new Set([...Object.keys(base), ...Object.keys(saved)]);
+      layout = {};
+      allKeys.forEach(k => { layout[k] = Object.assign({}, base[k] || {}, saved[k] || {}); });
+      setStatus('Layout: loaded from storage');
+    }
+    catch { setStatus('Layout: default'); }
+  } else {
+    setStatus('Layout: default');
+  }
+})();
+
+// Restore saved extra text on start
+(function() {
+  const s = localStorage.getItem('relayBackExtra');
+  if (s != null) {
+    extraText = s;
+    if (document.getElementById('extraText')) document.getElementById('extraText').value = s;
+  }
+})();
+
+// Restore saved font on start
+(function() {
+  const s = localStorage.getItem('relayBackFont');
+  if (!s) return;
+  try {
+    const saved = JSON.parse(s);
+    if (saved.custom && saved.custom.src && saved.custom.family) {
+      applyCustomFontFromDataUrl(saved.custom.family, saved.custom.src);
+    } else if (saved.family) {
+      document.getElementById('fontFamilySelect').value = saved.family;
+      applyFontFamily();
+    }
+  } catch {}
+})();
+
+applyFoldOrientation();
+</script>
+</body>
+</html>
