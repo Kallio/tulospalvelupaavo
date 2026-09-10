@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forking Print — hajontapainatukset</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #e8e8e8; color: #222; }
+
+#top {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 392px;
+  background: #1a1a2e; color: #eee; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; z-index: 100; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+}
+.ps { background: #16213e; border-radius: 8px; padding: 10px 12px; flex: none; min-width: 0; }
+.ps h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 8px; }
+.ps label { display: block; font-size: 11px; color: #9aa; margin-bottom: 3px; margin-top: 6px; }
+.ps label:first-of-type { margin-top: 0; }
+input[type="text"], input[type="number"], select {
+  width: 100%; padding: 5px 7px; background: #0f3460; border: 1px solid #334;
+  border-radius: 4px; color: #eee; font-size: 12px;
+}
+input[type="file"] { width: 100%; padding: 4px 6px; background: #0f3460; border: 1px dashed #345; border-radius: 4px; color: #9aa; font-size: 11px; }
+button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.bp { background: #e94560; color: #fff; }
+.bs { background: #27ae60; color: #fff; }
+.bg { background: #0f3460; color: #7ec8e3; border: 1px solid #334; }
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9aa; margin-top: 5px; }
+.chk input { width: auto; }
+.hint { font-size: 10.5px; color: #7d8aa0; margin: 2px 0 0; }
+#status { font-size: 11px; color: #6a6; margin-top: 6px; min-height: 14px; }
+#status.err { color: #e94560; }
+#status.warn { color: #e67e22; }
+.mono { font-size: 11px; color: #7ec8e3; margin-top: 4px; min-height: 14px; }
+.hdr-row { display: flex; align-items: center; gap: 8px; }
+.hdr-row h3 { margin-bottom: 0; flex: 1; }
+
+#main { padding: 16px; margin-left: 408px; }
+.panel {
+  background: #fff; border: 1px solid #ccc; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #1a1a2e; margin-bottom: 8px; }
+.empty-hint { color: #889; font-size: 12px; padding: 8px 0; }
+
+/* Mapping table */
+#mappingList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.map-row { display: flex; align-items: center; gap: 8px; }
+.map-row select { width: auto; flex: 1; }
+.map-label { font-weight: 700; font-size: 12px; min-width: 90px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-status { width: 16px; text-align: center; font-size: 13px; }
+.map-status.ok { color: #27ae60; }
+.map-status.miss { color: #e94560; }
+
+/* Map thumbnails */
+#mapList { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 7px; }
+.map-item { background: #fafafa; border: 1px solid #e3e3e3; border-radius: 5px; padding: 3px; }
+.map-item canvas { width: 100%; height: auto; background: #fff; display: block; }
+.map-cap { font-size: 9px; color: #445; margin-top: 2px; word-break: break-all; }
+
+/* Preview */
+#previewList { display: flex; flex-direction: column; gap: 14px; }
+.preview-item { border: 1px solid #ddd; border-radius: 8px; padding: 8px; background: #fafafa; }
+.sheet-cap { font-size: 11px; color: #445; margin-bottom: 6px; font-weight: 700; }
+.preview-pair { display: flex; gap: 12px; flex-wrap: wrap; }
+.preview-page { display: flex; flex-direction: column; gap: 3px; }
+.preview-page canvas { width: 300px; height: auto; max-width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,.15); background: #fff; }
+.preview-side { font-size: 10px; color: #777; }
+
+/* DOM back-sheet preview (mm-sized, like relaybackprint) */
+.preview-page .sheet { background: #fff; position: relative; overflow: hidden; border: 1px solid #bbb; box-shadow: 0 2px 8px rgba(0,0,0,.15); flex: none; }
+.preview-page .sheet .fold { position: absolute; pointer-events: none; border: 0.2mm dashed #000; }
+.preview-page .sheet.vfold .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0.2mm; }
+.preview-page .sheet.hfold .fold { top: 50%; left: 0; width: 100%; border-width: 0.2mm 0 0 0; }
+.preview-page .sheet .half { position: absolute; overflow: hidden; text-align: center; isolation: isolate; }
+.preview-page .sheet .group { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.preview-page .sheet .group .num { font-weight: 900; line-height: 1; white-space: nowrap; }
+.preview-page .sheet .group .leg { font-family: monospace; font-size: 0.3em; font-weight: 700; letter-spacing: 0.35em; padding-left: 0.35em; margin-top: 0.05em; white-space: nowrap; }
+.preview-page .sheet .team-name { font-weight: 700; text-align: center; white-space: nowrap; color: #000; }
+
+.preview-page .sheet [data-lk][data-hidden="true"] { display: none !important; }
+.edit-mode .sheet [data-lk][data-hidden="true"] { display: block !important; opacity: .22; outline: 2px dotted #888 !important; pointer-events: all; }
+.edit-mode .sheet [data-lk] { outline: 2px dashed rgba(233,69,96,.6); cursor: move; user-select: none; min-width: 20px; min-height: 10px; }
+.edit-mode .sheet [data-lk]:hover { outline-color: #e94560; }
+.edit-mode .sheet [data-lk].selected { outline: 2px solid #e94560 !important; }
+
+/* Floating edit toolbar */
+#toolbar {
+  position: fixed; bottom: 20px; right: 20px;
+  background: #1a1a2e; border-radius: 10px; padding: 12px 14px;
+  display: none; flex-direction: column; gap: 8px;
+  z-index: 1000; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  color: #eee; font-size: 12px; min-width: 230px;
+}
+#toolbar.visible { display: flex; }
+#toolbar h4 { color: #7ec8e3; font-size: 11px; text-transform: uppercase; }
+.tb-row { display: flex; align-items: center; gap: 8px; }
+.tb-row span { flex: 1; font-size: 11px; color: #9aa; }
+.tb-val { min-width: 44px; text-align: center; font-size: 12px; color: #eee; }
+#toolbar input[type="number"] { width: 58px; padding: 3px 4px; background: #0f3460; border: 1px solid #334; border-radius: 4px; color: #eee; font-size: 12px; }
+
+@media (max-width: 960px) {
+  #top { position: static; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+  #main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="ps">
+    <div class="hdr-row">
+      <h3 data-i18n="step1Hdr"></h3>
+      <button class="bg btn-sm" id="langBtn" type="button" data-i18n="langBtn" style="margin-left:auto;"></button>
+    </div>
+    <label data-i18n="relayUrlLbl"></label>
+    <input type="text" id="relayUrl">
+    <div class="row">
+      <button class="bp" onclick="loadFromNavisport()" data-i18n="loadNavBtn"></button>
+    </div>
+    <div id="relayStatus" class="mono"></div>
+    <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
+      <label style="margin-top:0;" data-i18n="csvLbl"></label>
+      <input type="file" id="csvFile" accept=".csv">
+      <div id="bibCount" class="mono"></div>
+      <div id="csvExampleHint" class="hint"></div>
+    </div>
+  </div>
+
+  <div class="ps">
+    <h3 data-i18n="step2Hdr"></h3>
+    <label data-i18n="forkLbl"></label>
+    <input type="file" id="forkCsvFile" accept=".csv" onchange="loadForking(this)">
+    <div id="forkStatus" class="mono"></div>
+    <div id="forkExampleHint" class="hint"></div>
+    <label style="margin-top:10px;" data-i18n="mapsLbl"></label>
+    <input type="file" id="mapPdfInput" accept=".pdf" multiple onchange="loadMapPdfs(this.files)">
+    <div id="mapFileStatus" class="mono"></div>
+    <div id="mapList"></div>
+  </div>
+
+  <div class="ps">
+    <h3 data-i18n="step3Hdr"></h3>
+    <label data-i18n="filLeg"></label>
+    <select id="filterLeg"></select>
+    <label data-i18n="filNumbers"></label>
+    <input type="text" id="filterNumbers">
+    <label data-i18n="filParts"></label>
+    <input type="text" id="filterParts">
+    <label data-i18n="filSarja"></label>
+    <select id="filterSarja"></select>
+    <div class="row">
+      <button class="bp" onclick="generate()" data-i18n="generateBtn"></button>
+    </div>
+  </div>
+
+  <div class="ps">
+    <h3 data-i18n="step4Hdr"></h3>
+    <label data-i18n="marginLbl"></label>
+    <input type="number" id="optMargin" min="0" max="20" step="0.5" value="5">
+    <div class="hint" data-i18n="marginHint"></div>
+    <label style="margin-top:8px;" data-i18n="foldLbl"></label>
+    <select id="foldSel">
+      <option value="portrait" data-i18n="foldPortrait"></option>
+      <option value="landscape" data-i18n="foldLandscape"></option>
+    </select>
+    <div class="hint" data-i18n="foldHint"></div>
+    <label style="margin-top:8px;" data-i18n="halfLbl"></label>
+    <select id="halfSel"></select>
+    <div class="hint" data-i18n="halfHint"></div>
+    <label style="margin-top:8px;" data-i18n="frontSideLbl"></label>
+    <select id="frontSide">
+      <option value="map" data-i18n="frontMap"></option>
+      <option value="bib" data-i18n="frontBib"></option>
+    </select>
+    <label class="chk"><input type="checkbox" id="optShowTeam" checked> <span data-i18n="showTeam"></span></label>
+    <div class="row" style="border-top:1px solid #334;padding-top:8px;margin-top:8px;">
+      <button class="bg btn-sm" id="editBtn" type="button"></button>
+      <button class="bg btn-sm" id="resetLayoutBtn" type="button" data-i18n="resetLayout"></button>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="autoFitChk" checked>
+      <label for="autoFitChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;" data-i18n="autoFit"></label>
+    </div>
+    <div class="hint" data-i18n="autoFitHint"></div>
+    <div class="hint" data-i18n="backLayoutHint"></div>
+  </div>
+
+  <div class="ps">
+    <h3 data-i18n="step5Hdr"></h3>
+    <div id="summary" style="font-size:12px;color:#9aa;min-height:16px;"></div>
+    <div class="row">
+      <button class="bs" id="downloadBtn" style="width:100%;" onclick="exportPdf()" disabled data-i18n="downloadBtn"></button>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div class="panel">
+    <h2 data-i18n="mappingHdr"></h2>
+    <div id="mappingHint" class="hint" style="color:#667;margin-bottom:8px;" data-i18n="mappingHint"></div>
+    <div id="mappingList"></div>
+  </div>
+
+  <div class="panel">
+    <h2 data-i18n="previewHdr"></h2>
+    <div id="previewList"></div>
+  </div>
+</div>
+
+<!-- Floating edit-mode toolbar -->
+<div id="toolbar">
+  <h4 id="tb-name">—</h4>
+  <div class="tb-row">
+    <span data-i18n="tbFontSize"></span>
+    <button class="bg btn-sm" onclick="adj('fontSize',-2)">−</button>
+    <span class="tb-val" id="tb-fs">—</span>
+    <button class="bg btn-sm" onclick="adj('fontSize',+2)">+</button>
+  </div>
+  <div class="tb-row">
+    <span data-i18n="tbSpacing"></span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',-0.05)">−</button>
+    <span class="tb-val" id="tb-ls">—</span>
+    <button class="bg btn-sm" onclick="adj('letterSpacing',+0.05)">+</button>
+  </div>
+  <div class="tb-row">
+    <span data-i18n="tbRotate"></span>
+    <button class="bg btn-sm" onclick="rotateSel(-90)">⟲ 90</button>
+    <span class="tb-val" id="tb-rot">—</span>
+    <button class="bg btn-sm" onclick="rotateSel(+90)">⟳ 90</button>
+  </div>
+  <div class="tb-row">
+    <span data-i18n="tbVisible" id="tb-vis-lbl"></span>
+    <button class="bg btn-sm" id="tb-visible" onclick="toggleHidden()" style="min-width:52px;">—</button>
+  </div>
+  <div class="tb-row">
+    <span data-i18n="tbPos"></span>
+    <input type="number" id="tb-cx" step="0.1" min="0" max="100" onchange="setPos('cx', this.value)">
+    <input type="number" id="tb-y" step="0.1" min="0" max="100" onchange="setPos('y', this.value)">
+  </div>
+  <div class="tb-row">
+    <span data-i18n="tbDrag"></span>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@latest/dist/pdf-lib.min.js"></script>
+<script src="map_merger/crop.js"></script>
+<script src="map_merger/pdf-export.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// I18N
+// ═══════════════════════════════════════════════════════════════════
+const I18N = {
+  fi: {
+    title: 'Forking Print — hajontapainatukset',
+    langBtn: 'EN / FI',
+    step1Hdr: '1. Joukkuetiedot (viesti)',
+    relayUrlLbl: 'Navisport-tapahtuman URL tai slug',
+    relayUrlPh: 'https://navisport.com/events/…',
+    loadNavBtn: 'Lataa Navisportista',
+    csvLbl: 'tai lataa CSV (sama kuin selkäpainatus)',
+    csvExampleHint: 'Esimerkki: <a onclick="downloadExampleCSV(\'relay\')" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">viesti</a>',
+    step2Hdr: '2. Hajontakaavio + kartat',
+    forkLbl: 'Hajontataulukko-CSV (<code style="color:#7ec8e3;">Kilpailunumero, Osuus 1…3</code>)',
+    forkExampleHint: 'Sama muoto kuin Viestin hajontakaaviossa. Esimerkki: <a onclick="downloadExampleForkingCSV()" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">hajontataulukko</a>',
+    mapsLbl: 'Kartta-PDF:t (jokainen sivu = yksi kartta)',
+    step3Hdr: '3. Suodattimet & generointi',
+    filLeg: 'Vain tietty osuus (Osuus)',
+    filNumbers: 'Joukkuelukujen suodatin (esim. 1-5, 10)',
+    filParts: 'Suodatin osuusosalla (esim. 1,2)',
+    filSarja: 'Sarjan suodatin',
+    phNumbers: 'tyhjä = kaikki',
+    generateBtn: 'Luo tulostettavat sivut',
+    all: 'Kaikki',
+    allLegs: 'Kaikki osuudet',
+    legOption: 'Osuus {n}',
+    step4Hdr: '4. Asetukset',
+    marginLbl: 'Tulostinreunamarginaali (mm)',
+    marginHint: 'Ei skaalaa karttaa — leikkaa vain tulostimen painamattoman reunan (yleensä ~5 mm).',
+    foldLbl: 'Taittelu',
+    foldPortrait: 'Pystytaite — puoliskot pystyssä (taite pystysuoraan)',
+    foldLandscape: 'Vaakataite — puoliskot vaakatasossa (taite vaakasuoraan)',
+    foldHint: 'Arkki taitetaan puoliksi; numero on taitetussa puoliskossa. Katkoviiva näyttää taitekohdan.',
+    halfLbl: 'Numeron puolikas',
+    halfLeft: 'Vasen puolikas',
+    halfRight: 'Oikea puolikas',
+    halfTop: 'Yläpuolikas',
+    halfBottom: 'Alapuolikas',
+    halfHint: 'Kumpaan taitettuun puoliskoon numero tulostetaan (oletus: vasen pystysuunnassa, ylä vaakasuunnassa).',
+    frontSideLbl: 'Arkin etusivu',
+    frontMap: 'Kartta (etu) · selkäpainatus (taka)',
+    frontBib: 'Selkäpainatus (etu) · kartta (taka)',
+    showTeam: 'Joukkueen nimi selkäpainatukseen',
+    editLayout: 'Muokkaa asettelua',
+    exitEdit: 'Valmis asettelusta',
+    resetLayout: 'Palauta',
+    autoFit: 'Sovita numero taitettuun puoliskoon',
+    autoFitHint: 'Jos pois, käytä työkalurivin fonttikokoa (Edit Layout).',
+    backLayoutHint: 'Vedä numeroa/joukkuetta esikatselussa; työkaluriviltä koko, kierto ja piilotus. Asettelu tallennetaan selaimen localStorageen.',
+    step5Hdr: '5. Vienti',
+    downloadBtn: 'Lataa duplex-PDF (2 sivua / juoksija)',
+    dlName: 'hajontapainatus',
+    mappingHdr: 'Nimeäminen: hajontaleima → karttasivu',
+    mappingHint: 'Jos PDF-tiedostonimi ei vastaa hajontataulukon leimaa, valitse oikea karttasivu alasvetovalikosta. Eri PDF:t voivat käyttää eri nimiä samalle reitille.',
+    previewHdr: 'Esikatselu — 2 sivua / juoksija (etu + taka, alkuperäinen 1:1-koko)',
+    autoMatch: 'Auto-match nimet',
+    noMapOpt: '— ei karttaa —',
+    emptyHint: 'Valitse tiedot ja suodattimet, paina "Luo tulostettavat sivut". Jokainen juoksija = 2 sivua (etu + taka).',
+    emptyMapList: 'Ei karttasivuja.',
+    mappingEmpty: 'Lataa ensin joukkuetiedot ja hajontataulukko-CSV + kartta-PDF:t.',
+    mapFront: '● etu · kartta (1:1)',
+    mapBack: '○ taka · kartta (1:1)',
+    bibFront: '● etu · selkäpainatus',
+    bibBack: '○ taka · selkäpainatus',
+    summaryCount: '{runners} juoksijaa · {pages} sivua ({maps} kartalla)',
+    summaryMissing: 'kohdistamatta: {list}',
+    needTeams: 'Lataa ensin joukkuetiedot (CSV tai Navisport).',
+    needMaps: 'Lataa ensin kartta-PDF:t, jotta hajontaleimat voidaan kohdistaa sivuille.',
+    warnMissing: '⚠ kohdistamatta karttoihin: {list}',
+    summaryOk: '✓ {runners} juoksijaa · {pages} sivua.',
+    warnExportMissing: 'Kohdista puuttuvat kartat: {list}',
+    processing: 'Käsitellään…',
+    noPages: 'Ei sivuja.',
+    dlDone: '✓ PDF ladattu ({pages} sivua)',
+    err: 'Virhe: ',
+    pdfLibMissing: 'pdf-lib ei latautunut (tarkista verkkoyhteys).',
+    pdfjsMissing: 'pdf.js ei latautunut (tarkista verkkoyhteys).',
+    processingFile: 'Käsitellään {file} … {i}/{n}',
+    mapsLoaded: '✓ {n} karttasivua ladattu',
+    errFile: 'Tiedoston käsittely epäonnistui: ',
+    forkLoaded: '✓ {n} joukkuetta · {f}',
+    urlNeeded: 'Liitä Navisport-URL tai slug.',
+    loading: 'Ladataan…',
+    bibCount: '{teams} joukkuetta, {runners} juoksijaa',
+    tbGroup: 'numero + osuus',
+    tbFontSize: 'Fonttikoko',
+    tbSpacing: 'Kirjainväli',
+    tbRotate: 'Kierto',
+    tbVisible: 'Näkyvyys',
+    tbPos: 'Paikka x / y %',
+    tbDrag: 'Vedä elementtejä siirtääksesi',
+    show: 'Näytä',
+    hide: 'Piilota',
+  },
+  en: {
+    title: 'Forking Print — forking maps + bib backprints',
+    langBtn: 'FI / EN',
+    step1Hdr: '1. Team data (relay)',
+    relayUrlLbl: 'Navisport event URL or slug',
+    relayUrlPh: 'https://navisport.com/events/…',
+    loadNavBtn: 'Load from Navisport',
+    csvLbl: 'or load CSV (same as the bib backprint)',
+    csvExampleHint: 'Example: <a onclick="downloadExampleCSV(\'relay\')" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">relay</a>',
+    step2Hdr: '2. Forking table + maps',
+    forkLbl: 'Forking CSV (<code style="color:#7ec8e3;">Kilpailunumero, Osuus 1…3</code>)',
+    forkExampleHint: 'Same format as in the relay forking chart. Example: <a onclick="downloadExampleForkingCSV()" style="color:#7ec8e3;cursor:pointer;text-decoration:underline;">forking table</a>',
+    mapsLbl: 'Map PDFs (each page = one map)',
+    step3Hdr: '3. Filters & generate',
+    filLeg: 'Print only the chosen leg (Osuus)',
+    filNumbers: 'Filter team numbers (e.g. 1-5, 10)',
+    filParts: 'Filter by part / Osuus (e.g. 1,2)',
+    filSarja: 'Filter by class / Sarja',
+    phNumbers: 'empty = all',
+    generateBtn: 'Generate printable pages',
+    all: 'All',
+    allLegs: 'All legs',
+    legOption: 'Leg {n}',
+    step4Hdr: '4. Options',
+    marginLbl: 'Unprintable printer margin (mm)',
+    marginHint: 'Does not scale the map — it only cuts away the printer\'s unprintable edge (usually ~5 mm).',
+    foldLbl: 'Fold',
+    foldPortrait: 'Portrait — halves are portrait (fold down the middle)',
+    foldLandscape: 'Landscape — halves are landscape (fold across the middle)',
+    foldHint: 'The sheet is folded in half; the number sits in the folded half. The dotted line shows the fold point.',
+    halfLbl: 'Number half',
+    halfLeft: 'Left half',
+    halfRight: 'Right half',
+    halfTop: 'Top half',
+    halfBottom: 'Bottom half',
+    halfHint: 'Which folded half carries the number (default: left for portrait, top for landscape).',
+    frontSideLbl: 'Sheet front side',
+    frontMap: 'Map (front) · bib backprint (back)',
+    frontBib: 'Bib backprint (front) · map (back)',
+    showTeam: 'Team name on the bib backprint',
+    editLayout: 'Edit Layout',
+    exitEdit: 'Exit Edit Mode',
+    resetLayout: 'Reset',
+    autoFit: 'Fit number to folded half',
+    autoFitHint: 'If off, use the toolbar font size with the selected element in Edit Layout.',
+    backLayoutHint: 'Drag the number/team on the preview; use the toolbar for size, rotation and visibility. The layout is saved to localStorage.',
+    step5Hdr: '5. Export',
+    downloadBtn: 'Download duplex PDF (2 pages per runner)',
+    dlName: 'forking_print',
+    mappingHdr: 'Mapping: forking label → map page',
+    mappingHint: 'If a PDF filename does not match the forking table label, pick the right map page from the dropdown. Different PDFs may use different names for the same route.',
+    previewHdr: 'Preview — 2 pages / runner (front + back, original 1:1 size)',
+    autoMatch: 'Auto-match names',
+    noMapOpt: '— no map —',
+    emptyHint: 'Pick the data and filters, press "Generate printable pages". Each runner = 2 pages (front + back).',
+    emptyMapList: 'No map pages.',
+    mappingEmpty: 'Load team data and forking CSV + map PDFs first.',
+    mapFront: '● front · map (1:1)',
+    mapBack: '○ back · map (1:1)',
+    bibFront: '● front · bib backprint',
+    bibBack: '○ back · bib backprint',
+    summaryCount: '{runners} runners · {pages} pages ({maps} with a map)',
+    summaryMissing: 'unmapped: {list}',
+    needTeams: 'Load team data first (CSV or Navisport).',
+    needMaps: 'Load the map PDFs first so forking labels can be assigned to pages.',
+    warnMissing: '⚠ not mapped to maps: {list}',
+    summaryOk: '✓ {runners} runners · {pages} pages.',
+    warnExportMissing: 'Assign the missing maps: {list}',
+    processing: 'Processing…',
+    noPages: 'No pages.',
+    dlDone: '✓ PDF downloaded ({pages} pages)',
+    err: 'Error: ',
+    pdfLibMissing: 'pdf-lib failed to load (check network).',
+    pdfjsMissing: 'pdf.js failed to load (check network).',
+    processingFile: 'Processing {file} … {i}/{n}',
+    mapsLoaded: '✓ {n} map pages loaded',
+    errFile: 'Failed to process file: ',
+    forkLoaded: '✓ {n} teams · {f}',
+    urlNeeded: 'Paste a Navisport URL or slug.',
+    loading: 'Loading…',
+    bibCount: '{teams} teams, {runners} runners',
+    tbGroup: 'number + leg',
+    tbFontSize: 'Font size',
+    tbSpacing: 'Letter spacing',
+    tbRotate: 'Rotate',
+    tbVisible: 'Visible',
+    tbPos: 'Pos x / y %',
+    tbDrag: 'Drag elements to move',
+    show: 'Show',
+    hide: 'Hide',
+  },
+};
+
+function t(key, vars) {
+  let s = (I18N[state.lang] || I18N.fi)[key];
+  if (s === undefined) s = I18N.fi[key];
+  if (s === undefined) s = key;
+  if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]));
+  return s;
+}
+
+function applyLang() {
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.getAttribute('data-i18n')); });
+  el('relayUrl').placeholder = t('relayUrlPh');
+  el('filterNumbers').placeholder = t('phNumbers');
+  el('filterParts').placeholder = t('phNumbers');
+  el('csvExampleHint').innerHTML = t('csvExampleHint');
+  el('forkExampleHint').innerHTML = t('forkExampleHint');
+  el('editBtn').textContent = editMode ? t('exitEdit') : t('editLayout');
+  el('tb-vis-lbl').textContent = t('tbVisible');
+  populateFilters();
+  syncHalfUi();
+  updateAutoFitUI();
+  refreshSources();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let csvTeams   = [];
+let forkingData = {};       // kilpailunumero → { osuus1, osuus2, osuus3 }
+let mapPages   = [];        // { id, srcName, pageNo, original, wmm, hmm }
+let assignments = {};       // hajontaleima → mapPages.id (merkkijonona)
+let busy       = false;
+
+const state = {
+  lang: 'fi',
+  options: {
+    marginMm:  5,
+    frontSide: 'map',   // 'map' | 'bib' on the front page
+    fold:      'portrait',  // halves are portrait (vertical fold) by default
+    halfPos:   'left',      // folded half that carries the number
+    showTeam:  true,
+  },
+};
+
+const PDFJS_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+const RENDER_DPI = 300;
+const MAX_RENDER_PX = 4000;
+const MM_PER_PT = 25.4 / 72;
+const DEF_PAGE_W = 210, DEF_PAGE_H = 297;   // A4 portrait for runners without an assigned map
+
+function el(id) { return document.getElementById(id); }
+function esc(s)  { if (!s) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+function setStatus(msg, cls) { const s = el('status'); s.textContent = msg; s.className = cls || ''; }
+
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+// ═══════════════════════════════════════════════════════════════════
+// LAYOUT HELPER — kirjoita painotettu, hajautettu teksti kankaalle +
+// numeron taitetun puoliskon geometria
+// ═══════════════════════════════════════════════════════════════════
+function legText(runner) {
+  if (!runner.osuus) return '';
+  if (!runner.alaosuus) return runner.osuus;
+  return `${runner.osuus}\u2013${runner.alaosuus}`;
+}
+
+function drawSpaced(ctx, text, x, y, gap) {
+  const chars = Array.from(text);
+  const widths = chars.map(c => ctx.measureText(c).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (chars.length - 1);
+  let cur = x - total / 2;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  chars.forEach((c, i) => { ctx.fillText(c, cur, y); cur += widths[i] + gap; });
+}
+
+function measureSpaced(ctx, text, gap) {
+  const chars = Array.from(text);
+  const widths = chars.map(c => ctx.measureText(c).width);
+  return widths.reduce((a, b) => a + b, 0) + gap * (chars.length - 1);
+}
+
+/* halfDims(w, h, fold) — folded-half dimensions in mm for the sheet size.
+ * fold 'portrait'  → fold down the middle (halves are portrait, left/right).
+ * fold 'landscape' → fold across the middle (halves are landscape, top/bottom). */
+function halfDims(w, h, fold) {
+  if (fold === 'landscape') return { dir: 'h', halfW: w, halfH: h / 2 };
+  return { dir: 'v', halfW: w / 2, halfH: h };
+}
+
+/* numberHalf(fold, halfPos) — the valid half position for this fold
+ * (defaults: left for portrait, top for landscape). */
+function numberHalf(fold, halfPos) {
+  if (fold === 'landscape') return (halfPos === 'top' || halfPos === 'bottom') ? halfPos : 'top';
+  return (halfPos === 'left' || halfPos === 'right') ? halfPos : 'left';
+}
+
+/* halfRect(w, h, fold, halfPos) — the folded half that carries the number,
+ * in mm from the sheet top-left. */
+function halfRect(w, h, fold, halfPos) {
+  const pos  = numberHalf(fold, halfPos);
+  const d    = halfDims(w, h, fold);
+  let x = 0, y = 0;
+  if (d.dir === 'v') x = pos === 'right' ? w - d.halfW : 0;
+  else               y = pos === 'bottom' ? h - d.halfH : 0;
+  return { x, y, w: d.halfW, h: d.halfH, pos, dir: d.dir };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SELKÄPAINATUKSEN ASETTELU  (tallennetaan localStorageen)
+// ═══════════════════════════════════════════════════════════════════
+const GROUP_KEY = 'backGroup';
+const GROUP_MEMBERS = new Set(['numberArea', 'leg']);
+const LAYOUT_KEY = 'forkingBackLayout';
+
+const DEF_LAYOUT = {
+  backGroup:  { cx: 50, y: 46, rotate: 0, hidden: false, autoFit: true },
+  numberArea: { fontSize: 60, letterSpacing: 0 },
+  leg:        { hidden: false },
+  team:       { cx: 50, y: 72, fontSize: 7, letterSpacing: 0, rotate: 0, hidden: true },
+};
+
+function mergeLayout(imp) {
+  const base = deepClone(DEF_LAYOUT);
+  const out = {};
+  Object.keys(base).forEach(k => { out[k] = Object.assign({}, base[k], (imp && imp[k]) || {}); });
+  return out;
+}
+
+let layout = (function () {
+  try { return mergeLayout(JSON.parse(localStorage.getItem(LAYOUT_KEY))); }
+  catch (e) { return deepClone(DEF_LAYOUT); }
+})();
+
+function saveLayout() {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (e) {}
+}
+
+function resetLayout() {
+  layout = deepClone(DEF_LAYOUT);
+  saveLayout();
+  setStatus(t('resetLayout') + ' ✓');
+  clearSelection();
+  renderPreview();
+  updateSummary();
+  updateAutoFitUI();
+}
+
+function getLayoutRef(key) {
+  return Object.prototype.hasOwnProperty.call(layout, key) ? layout[key] : null;
+}
+
+/* renderBackprint(team, runner, wmm, hmm, fold, halfPos, opts) — full-sheet
+ * back print as a canvas. The number stack (num + leg) sits at the layout
+ * position (% of the folded half); font sizes are in mm so the physical size
+ * is consistent across different sheet sizes. Mirrors the DOM preview. */
+function renderBackprint(team, runner, wmm, hmm, fold, halfPos, opts) {
+  const px = 2;   // px per mm
+  const cv = document.createElement('canvas');
+  cv.width  = Math.max(1, Math.round(wmm * px));
+  cv.height = Math.max(1, Math.round(hmm * px));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#000';
+
+  const hr = halfRect(wmm, hmm, fold, halfPos);
+  const group = layout.backGroup;
+  const numL  = layout.numberArea;
+
+  if (!group.hidden) {
+    const bib = team.kilpailunumero;
+    if (bib) {
+      const leg = layout.leg.hidden ? '' : legText(runner);
+      const fsMm = group.autoFit ? autoFitNumMm(bib, leg, hr.w, hr.h) : numL.fontSize;
+      const fs = fsMm * px;
+      const cx = (hr.x + (group.cx / 100) * hr.w) * px;
+      const cy = (hr.y + (group.y  / 100) * hr.h) * px;
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (group.rotate) ctx.rotate((group.rotate * Math.PI) / 180);
+      let stackH = fs;
+      let legF = 0;
+      if (leg) {
+        legF = fs * 0.3;
+        stackH = fs + fs * 0.05 + legF;
+      }
+      const top = -stackH / 2;
+      ctx.font = `900 ${fs}px Arial, sans-serif`;
+      ctx.fillText(bib, 0, top + fs / 2);
+      if (leg) {
+        ctx.font = `700 ${legF}px 'Courier New', monospace`;
+        drawSpaced(ctx, leg, 0, top + fs + fs * 0.05 + legF / 2, legF * 0.35);
+      }
+      ctx.restore();
+    }
+  }
+
+  if (opts.showTeam && !layout.team.hidden && team.joukee) {
+    const tl = layout.team;
+    const cx = (hr.x + (tl.cx / 100) * hr.w) * px;
+    const cy = (hr.y + (tl.y  / 100) * hr.h) * px;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (tl.rotate) ctx.rotate((tl.rotate * Math.PI) / 180);
+    ctx.font = `700 ${(tl.fontSize || 6) * px}px Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(team.joukee, 0, 0);
+    ctx.restore();
+  }
+  return cv;
+}
+
+/* autoFitNumMm(bib, leg, halfWmm, halfHmm) — the largest number font size
+ * (mm) that fits in the folded half. Acts as "group font size" so the leg
+ * (0.3 em) is accounted for, exactly like the DOM fit. */
+function autoFitNumMm(bib, leg, halfWmm, halfHmm) {
+  const px = 2;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 4;
+  const ctx = cv.getContext('2d');
+  const availW = halfWmm * 0.95 * px;
+  const availH = halfHmm * px;
+  for (let fs = 130 * px; fs >= 8 * px; fs -= 1) {
+    ctx.font = `900 ${fs}px Arial, sans-serif`;
+    const numW = ctx.measureText(bib).width;
+    const lf = fs * 0.3;
+    let legW = 0, stackH = fs;
+    if (leg) {
+      ctx.font = `700 ${lf}px 'Courier New', monospace`;
+      legW = measureSpaced(ctx, leg, lf * 0.35);
+      stackH = fs + fs * 0.05 + lf;
+    }
+    if (Math.max(numW, legW) <= availW && stackH <= availH) return fs / px;
+  }
+  return 8;
+}
+
+/* fitHalf(sheet) — write the auto-fit size back into the layout (mm) so the
+ * toolbar always shows the real size. */
+function fitHalf(sheet) {
+  if (!layout.backGroup.autoFit) return;
+  const entry = sheet.__entry;
+  const group = sheet.querySelector('.group');
+  if (!group || !entry) return;
+  const bib = entry.team.kilpailunumero;
+  if (!bib) return;
+  const hr = halfRect(sheet.__wmm, sheet.__hmm, sheet.__fold, sheet.__halfPos);
+  const leg = layout.leg.hidden ? '' : legText(entry.runner);
+  layout.numberArea.fontSize = autoFitNumMm(bib, leg, hr.w, hr.h);
+  group.style.fontSize = layout.numberArea.fontSize + 'mm';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CSV-PARSINTA  (sama muoto kuin selkäpainatuksessa + hajontakaavio)
+// ═══════════════════════════════════════════════════════════════════
+function parseCSV(text) {
+  text = String(text || '').replace(/^\ufeff/, '');
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (c === '"') {
+      if (inQ && n === '"') { field += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      row.push(field); field = '';
+    } else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && n === '\n') i++;
+      if (field || row.length) { row.push(field); rows.push(row); }
+      row = []; field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function parseTeams(rows) {
+  if (rows.length < 2) return [];
+  const teams = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]?.trim()) continue;
+    const team = {
+      kilpailunumero: r[0]?.trim() || '',
+      sarja:          r[1]?.trim() || '',
+      joukee:         r[2]?.trim() || '',
+      seura:          r[4]?.trim() || '',
+      runners:        [],
+    };
+    for (let b = 0; b < 20; b++) {
+      const base = 6 + b * 8;
+      if (base >= r.length) break;
+      const nimi = r[base]?.trim();
+      if (!nimi || /^\s+$/.test(nimi)) continue;
+      team.runners.push({
+        nimi,
+        kilpailukortti: r[base + 1]?.trim() || '',
+        osuus:          r[base + 3]?.trim() || '',
+        alaosuus:       r[base + 4]?.trim() || '',
+        rata:           r[base + 5]?.trim() || '',
+        lahtöaika:      r[base + 6]?.trim() || '',
+      });
+    }
+    if (team.runners.length) teams.push(team);
+  }
+  return teams;
+}
+
+// Hajontataulukko-CSV: "Kilpailunumero,Osuus 1,Osuus 2,Osuus 3"
+function parseForkingCSV(rows) {
+  if (!rows.length) throw new Error('Tyhjä tiedosto');
+  const hdr = rows[0].map(h => String(h || '').trim());
+  const numIdx = hdr.findIndex(h => /kilpailu/i.test(h));
+  const o1 = hdr.findIndex(h => /osuus\s*1/i.test(h));
+  const o2 = hdr.findIndex(h => /osuus\s*2/i.test(h));
+  const o3 = hdr.findIndex(h => /osuus\s*3/i.test(h));
+  if (numIdx < 0) throw new Error('Saraketta "Kilpailunumero" ei löydy');
+  const data = {};
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i];
+    const num = (cols[numIdx] || '').trim();
+    if (!num) continue;
+    data[num] = {
+      osuus1: o1 >= 0 ? (cols[o1] || '').trim() : '',
+      osuus2: o2 >= 0 ? (cols[o2] || '').trim() : '',
+      osuus3: o3 >= 0 ? (cols[o3] || '').trim() : '',
+    };
+  }
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TIETOJEN LATAAMINEN
+// ═══════════════════════════════════════════════════════════════════
+function sortTeams() { csvTeams.sort((a, b) => +a.kilpailunumero - +b.kilpailunumero); }
+
+function populateFilters() {
+  const sarja = el('filterSarja');
+  const curS = sarja.value;
+  const classes = [...new Set(csvTeams.map(t => t.sarja).filter(Boolean))].sort();
+  sarja.innerHTML = '<option value="">' + esc(t('all')) + '</option>'
+    + classes.map(c => `<option value="${esc(c)}"${c === curS ? ' selected' : ''}>${esc(c)}</option>`).join('');
+
+  const leg = el('filterLeg');
+  const curL = leg.value;
+  const legs = [...new Set(csvTeams.flatMap(t => t.runners.map(r => r.osuus)).filter(Boolean))]
+    .sort((a, b) => +a - +b);
+  leg.innerHTML = '<option value="">' + esc(t('allLegs')) + '</option>'
+    + legs.map(l => `<option value="${esc(l)}"${l === curL ? ' selected' : ''}>${esc(t('legOption', { n: l }))}</option>`).join('');
+}
+
+function parseRanges(str) {
+  if (!str.trim()) return null;
+  const s = new Set();
+  for (const part of str.split(',')) {
+    const t = part.trim();
+    const m = t.match(/^(\d+)-(\d+)$/);
+    if (m) { for (let n = +m[1]; n <= +m[2]; n++) s.add(n); }
+    else if (/^\d+$/.test(t)) s.add(+t);
+  }
+  return s;
+}
+
+function getFilteredEntries() {
+  const numFilter  = parseRanges(el('filterNumbers').value);
+  const partFilter = parseRanges(el('filterParts').value);
+  const sarjaF     = el('filterSarja').value;
+  const legFilter  = el('filterLeg').value;
+  const list = [];
+  for (const team of csvTeams) {
+    if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
+    if (sarjaF && team.sarja !== sarjaF) continue;
+    for (const runner of team.runners) {
+      if (legFilter && runner.osuus !== legFilter) continue;
+      if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
+      list.push({ team, runner });
+    }
+  }
+  return list;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAVISPORT
+// ═══════════════════════════════════════════════════════════════════
+async function loadFromNavisport() {
+  const raw = el('relayUrl').value.trim();
+  if (!raw) { relayStatus(t('urlNeeded'), 'err'); return; }
+  relayStatus(t('loading'), 'ok');
+  const m = raw.match(/navisport\.com\/(?:events|tapahtumat)\/([^/?#\s]+)/i);
+  const slug = m ? m[1] : raw.trim();
+  try {
+    const json = await navFetch(slug);
+    const name = (json.name || slug).trim();
+    if (name) document.title = `Forking Print — ${name}`;
+    if (json.raceType === 'Relay') navLoadRelay(json);
+    else                            navLoadIndividual(json);
+    const total = csvTeams.reduce((s, t) => s + t.runners.length, 0);
+    el('bibCount').textContent = t('bibCount', { teams: csvTeams.length, runners: total });
+    relayStatus(`✓ ${name}`, 'ok');
+    populateFilters();
+    refreshSources();
+  } catch (e) {
+    relayStatus(t('err') + e.message, 'err');
+    console.error(e);
+  }
+}
+
+function relayStatus(msg, type) {
+  const s = el('relayStatus');
+  s.textContent = msg;
+  s.style.color = type === 'err' ? '#e94560' : '#7ec8e3';
+}
+
+async function navFetch(slug) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+    const res = await fetch(`https://navisport.com/api/events/${slug}`);
+    if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status}`);
+    return res.json();
+  }
+  const input = encodeURIComponent(JSON.stringify({ '0': slug }));
+  const url = `https://navisport.com/trpc/eventsTrpcRouter.getEvent,adsTrpcRouter.getAds?batch=1&input=${input}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Navisport returned HTTP ${res.status} for "${slug}"`);
+  const batch = await res.json();
+  const data = batch?.[0]?.result?.data;
+  if (!data) throw new Error('Unexpected Navisport response shape');
+  return data;
+}
+
+function navName(r) {
+  if (r.name?.trim()) return r.name.trim();
+  return `${r.surname || ''} ${r.givenName || ''}`.trim();
+}
+
+function navLoadRelay(json) {
+  const cc = {};
+  (json.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const results = json.results || [];
+  const teamsById = {};
+  results.filter(r => r.resultType === 'Team').forEach(r => { teamsById[r.id] = r; });
+  const teamMap = {};
+  const hasParentChild = Object.keys(teamsById).length > 0;
+  for (const r of results) {
+    if (r.resultType === 'Team') continue;
+    const parent = r.parentId ? teamsById[r.parentId] : null;
+    if (hasParentChild && !parent) continue;
+    const bibNum = parent?.bibNumber ?? r.bibNumber;
+    if (bibNum == null) continue;
+    const bib = String(bibNum);
+    if (!teamMap[bib]) {
+      teamMap[bib] = {
+        kilpailunumero: bib,
+        sarja:          cc[r.classId] || cc[parent?.classId] || '',
+        joukee:         parent?.name || r.club || '',
+        seura:          r.club || '',
+        runners:        [],
+      };
+    }
+    if (!teamMap[bib].sarja)   teamMap[bib].sarja   = cc[r.classId] || cc[parent?.classId] || '';
+    if (!teamMap[bib].joukee)  teamMap[bib].joukee  = parent?.name || r.club || '';
+    teamMap[bib].runners.push({
+      nimi:     navName(r),
+      osuus:    r.leg != null ? String(r.leg) : '',
+      alaosuus: r.subLeg != null ? String(r.subLeg) : '',
+    });
+  }
+  csvTeams = Object.values(teamMap);
+  csvTeams.forEach(t => { t.runners.sort((a, b) => +a.osuus - +b.osuus); });
+  sortTeams();
+}
+
+function navLoadIndividual(json) {
+  const cc = {};
+  (json.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  csvTeams = (json.results || [])
+    .filter(r => r.bibNumber != null && r.resultType !== 'Team')
+    .map(r => ({
+      kilpailunumero: String(r.bibNumber),
+      sarja:          cc[r.classId] || '',
+      joukee:         r.club || navName(r),
+      seura:          r.club || '',
+      runners: [{ nimi: navName(r), osuus: '', alaosuus: '', lahtöaika: '' }],
+    }));
+  sortTeams();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HAJONTATAULUKKO
+// ═══════════════════════════════════════════════════════════════════
+function loadForking(input) {
+  const f = input.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    try {
+      forkingData = parseForkingCSV(parseCSV(e.target.result));
+      assignments = {};
+      el('forkStatus').textContent = t('forkLoaded', { n: Object.keys(forkingData).length, f: f.name });
+      refreshSources();
+    } catch (err) {
+      el('forkStatus').textContent = t('err') + err.message;
+    }
+  };
+  rd.readAsText(f, 'UTF-8');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// KARTTA-PDF:t
+// ═══════════════════════════════════════════════════════════════════
+let pageSeq = 0;
+
+async function loadMapPdfs(files) {
+  if (!files || !files.length) return;
+  if (!window.pdfjsLib) { setStatus(t('pdfjsMissing'), 'err'); return; }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+  busy = true;
+  let ok = 0;
+  try {
+    for (const file of files) {
+      if (!/\.pdf$/i.test(file.name)) continue;
+      try {
+        const doc = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        const numPages = doc.numPages;
+        for (let i = 1; i <= numPages; i++) {
+          el('mapFileStatus').textContent = t('processingFile', { file: file.name, i, n: numPages });
+          const page = await doc.getPage(i);
+          const vp1 = page.getViewport({ scale: 1 });
+          const ptW = vp1.width, ptH = vp1.height;
+          const scale = Math.min(RENDER_DPI / 72, MAX_RENDER_PX / Math.max(ptW, ptH, 1));
+          const vp = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.max(1, Math.floor(vp.width));
+          canvas.height = Math.max(1, Math.floor(vp.height));
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp, background: 'rgb(255,255,255)' }).promise;
+          storePage(canvas, ptW * MM_PER_PT, ptH * MM_PER_PT, file.name, i);
+          ok++;
+        }
+      } catch (err) {
+        setStatus(t('errFile') + file.name + ' — ' + err.message, 'err');
+      }
+    }
+  } finally {
+    busy = false;
+    el('mapFileStatus').textContent = ok ? t('mapsLoaded', { n: ok }) : '';
+    refreshSources();
+  }
+}
+
+function storePage(canvas, wmm, hmm, srcName, pageNo) {
+  const p = { id: ++pageSeq, srcName, pageNo, original: canvas, wmm, hmm };
+  mapPages.push(p);
+  return p;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NIMEÄMINEN: hajontaleima → karttasivu
+// ═══════════════════════════════════════════════════════════════════
+function collectUsedLabels() {
+  const set = new Set();
+  csvTeams.forEach(t => t.runners.forEach(r => {
+    if (!r.osuus) return;
+    const f = forkingData[t.kilpailunumero];
+    const label = f ? (f['osuus' + r.osuus] || '') : '';
+    if (label) set.add(label);
+  }));
+  return [...set].sort();
+}
+
+function norm(s) {
+  return String(s || '').toLowerCase().replace(/[\s_\-]+/g, '').replace(/[^a-z0-9åäö]/gi, '');
+}
+
+function autoMatch(labels) {
+  const used = new Set();
+  const assign = {};
+  labels.forEach(label => {
+    const nl = norm(label);
+    if (!nl) return;
+    const scored = [];
+    mapPages.forEach(p => {
+      const base = norm(p.srcName.replace(/\.pdf$/i, ''));
+      const full = norm(p.srcName);
+      let score = 0;
+      if (nl && base.includes(nl)) score = 4;
+      else if (nl && full.includes(nl)) score = 3;
+      const toks = norm(p.srcName).split(/-|_/);
+      if (toks.includes(nl) && score < 3) score = 3;
+      if (score) scored.push({ p, score });
+    });
+    scored.sort((a, b) => b.score - a.score || (a.p.srcName.length + a.p.pageNo * 0.01) - (b.p.srcName.length + b.p.pageNo * 0.01));
+    const free = scored.find(s => !used.has(s.p.id));
+    const pick = free || scored[0];
+    if (pick && scored[0].score >= 3) { assign[label] = String(pick.p.id); used.add(pick.p.id); }
+  });
+  return assign;
+}
+
+function renderMapping() {
+  const box = el('mappingList');
+  box.innerHTML = '';
+  const labels = collectUsedLabels();
+  if (!labels.length) {
+    box.innerHTML = '<div class="empty-hint">' + esc(t('mappingEmpty')) + '</div>';
+    return;
+  }
+  labels.forEach(label => {
+    const row = document.createElement('div');
+    row.className = 'map-row';
+    const status = document.createElement('span');
+    updateStatusIcon(status, assignments[label]);
+    const lab = document.createElement('span');
+    lab.className = 'map-label';
+    lab.title = label;
+    lab.textContent = label;
+    const sel = document.createElement('select');
+    const none = document.createElement('option');
+    none.value = ''; none.textContent = t('noMapOpt');
+    sel.appendChild(none);
+    const multi = mapPages.some(p => mapPages.filter(x => x.srcName === p.srcName).length > 1);
+    const byFile = {};
+    mapPages.forEach(p => { (byFile[p.srcName] = byFile[p.srcName] || []).push(p); });
+    Object.keys(byFile).sort().forEach(fname => {
+      const pages = byFile[fname];
+      pages.forEach(p => {
+        const o = document.createElement('option');
+        o.value = String(p.id);
+        o.textContent = `${fname}${multi ? ' · s.' + p.pageNo : ''}`;
+        if (assignments[label] === String(p.id)) o.selected = true;
+        sel.appendChild(o);
+      });
+    });
+    sel.addEventListener('change', () => {
+      assignments[label] = sel.value;
+      updateStatusIcon(status, assignments[label]);
+      el('downloadBtn').disabled = sel.value === '' || busy;
+      renderPreview();
+      updateSummary();
+    });
+    row.appendChild(status);
+    row.appendChild(lab);
+    row.appendChild(sel);
+    box.appendChild(row);
+  });
+  if (mapPages.length) {
+    const auto = document.createElement('button');
+    auto.className = 'bg btn-sm';
+    auto.textContent = t('autoMatch');
+    auto.onclick = () => {
+      Object.assign(assignments, autoMatch(labels));
+      renderMapping();
+      renderPreview();
+      updateSummary();
+    };
+    box.appendChild(auto);
+  }
+}
+
+function updateStatusIcon(statusEl, val) {
+  statusEl.textContent = val ? '✓' : '?';
+  statusEl.className = 'map-status' + (val ? ' ok' : ' miss');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GENEROINTI + SHEET-MODEL
+// ═══════════════════════════════════════════════════════════════════
+function forkLabelFor(team, runner) {
+  if (!runner.osuus) return '';
+  const f = forkingData[team.kilpailunumero];
+  return f ? (f['osuus' + runner.osuus] || '') : '';
+}
+
+function buildEntries() {
+  const list = [];
+  getFilteredEntries().forEach(({ team, runner }) => {
+    const label = forkLabelFor(team, runner);
+    const page = label && assignments[label]
+      ? mapPages.find(p => String(p.id) === assignments[label])
+      : null;
+    list.push({ team, runner, label, page });
+  });
+  return list;
+}
+
+/* buildModel() — each runner becomes TWO sheets (front + back). Sheet size is
+ * the ORIGINAL PDF page size (wmm × hmm) — never scaled. kind tells whether a
+ * sheet carries the map (drawn from page.original at 1:1) or the bib
+ * backprint (rendered full sheet from the layout). */
+function buildModel() {
+  const entries = buildEntries();
+  const frontIsMap = state.options.frontSide === 'map';
+  const sheets = [];
+  entries.forEach(entry => {
+    const wmm  = entry.page ? entry.page.wmm : DEF_PAGE_W;
+    const hmm  = entry.page ? entry.page.hmm : DEF_PAGE_H;
+    const sheet = (side, kind) => ({
+      wmm, hmm,
+      fold: state.options.fold,
+      halfPos: state.options.halfPos,
+      side, kind,
+      entry,
+    });
+    if (frontIsMap) { sheets.push(sheet('front', 'map')); sheets.push(sheet('back', 'bib')); }
+    else            { sheets.push(sheet('front', 'bib')); sheets.push(sheet('back', 'map')); }
+  });
+  return sheets;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ESIKATSELU
+// ═══════════════════════════════════════════════════════════════════
+function renderMapList() {
+  const box = el('mapList');
+  box.innerHTML = '';
+  if (!mapPages.length) { box.innerHTML = '<div class="empty-hint">' + esc(t('emptyMapList')) + '</div>'; return; }
+  mapPages.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'map-item';
+    const t = MapMergerCrop.downscale(p.original, 140);
+    const cv = document.createElement('canvas');
+    cv.width = t.width; cv.height = t.height;
+    cv.getContext('2d').drawImage(t, 0, 0);
+    const cap = document.createElement('div');
+    cap.className = 'map-cap';
+    cap.textContent = `${p.srcName}${p.pageNo > 1 ? ' s.' + p.pageNo : ''}`;
+    item.appendChild(cv);
+    item.appendChild(cap);
+    box.appendChild(item);
+  });
+}
+
+function drawFoldLine(ctx, cv, sheet) {
+  const d = halfDims(sheet.wmm, sheet.hmm, sheet.fold);
+  const hr = halfRect(sheet.wmm, sheet.hmm, sheet.fold, sheet.halfPos);
+  const sx = sheet.wmm, sy = sheet.hmm;
+  ctx.strokeStyle = 'rgba(233,69,96,.55)';
+  ctx.setLineDash([3, 3]);
+  ctx.strokeRect(hr.x / sx * cv.width, hr.y / sy * cv.height, hr.w / sx * cv.width, hr.h / sy * cv.height);
+  ctx.strokeStyle = '#888';
+  ctx.beginPath();
+  if (d.dir === 'v') { ctx.moveTo(cv.width / 2, 0); ctx.lineTo(cv.width / 2, cv.height); }
+  else               { ctx.moveTo(0, cv.height / 2); ctx.lineTo(cv.width, cv.height / 2); }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function renderMapPage(sheet) {
+  const one = document.createElement('div');
+  one.className = 'preview-page';
+  const label = document.createElement('div');
+  label.className = 'preview-side';
+  label.textContent = sheet.side === 'front' ? t('mapFront') : t('mapBack');
+  const cv = document.createElement('canvas');
+  const px = 300 / Math.max(sheet.wmm, 1);
+  cv.width = Math.max(1, Math.round(sheet.wmm * px));
+  cv.height = Math.max(1, Math.round(sheet.hmm * px));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (sheet.entry.page) {
+    const src = MapMergerCrop.downscale(sheet.entry.page.original, 900);
+    const r = MapMergerExport.computeCellPlacement(src.width, src.height, { w: cv.width, h: cv.height }, {});
+    ctx.drawImage(src, r.x, r.y, r.w, r.h);
+  } else {
+    ctx.fillStyle = '#f2f2f2';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+  drawFoldLine(ctx, cv, sheet);
+  one.appendChild(cv);
+  one.appendChild(label);
+  return one;
+}
+
+/* buildBibSheet(entry, wmm, hmm, fold, halfPos) — DOM backprint page used for
+ * the preview. mm CSS units; scaled to fit via transform. Draggable in edit
+ * mode; layout written back to the canvas renderer. */
+function buildBibSheet(entry, wmm, hmm, fold, halfPos) {
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet' + (fold === 'landscape' ? ' hfold' : ' vfold');
+  sheet.style.width  = wmm + 'mm';
+  sheet.style.height = hmm + 'mm';
+  sheet.__entry = entry;
+  sheet.__wmm = wmm; sheet.__hmm = hmm; sheet.__fold = fold; sheet.__halfPos = halfPos;
+
+  const foldEl = document.createElement('div');
+  foldEl.className = 'fold';
+  sheet.appendChild(foldEl);
+
+  const half = document.createElement('div');
+  half.className = 'half';
+  const hr = halfRect(wmm, hmm, fold, halfPos);
+  half.style.left = hr.x + 'mm';
+  half.style.top  = hr.y + 'mm';
+  half.style.width  = hr.w + 'mm';
+  half.style.height = hr.h + 'mm';
+  sheet.appendChild(half);
+
+  const group = document.createElement('div');
+  group.className = 'group';
+  group.dataset.lk = GROUP_KEY;
+
+  const num = document.createElement('div');
+  num.className = 'num';
+  num.dataset.lk = 'numberArea';
+  num.textContent = entry.team.kilpailunumero;
+
+  const leg = document.createElement('div');
+  leg.className = 'leg';
+  leg.dataset.lk = 'leg';
+  leg.textContent = legText(entry.runner);
+  if (!leg.textContent) leg.dataset.hidden = 'true';
+
+  group.appendChild(num);
+  group.appendChild(leg);
+  half.appendChild(group);
+
+  const teamEl = document.createElement('div');
+  teamEl.className = 'team-name';
+  teamEl.dataset.lk = 'team';
+  teamEl.textContent = entry.team.joukee || '';
+  if (!teamEl.textContent) teamEl.dataset.hidden = 'true';
+  half.appendChild(teamEl);
+
+  applySheetLayout(sheet);
+  fitHalf(sheet);
+  if (editMode) { sheet.classList.add('edit-mode'); attachDrag(sheet); }
+  return sheet;
+}
+
+function renderBibPage(sheet) {
+  const one = document.createElement('div');
+  one.className = 'preview-page';
+  const label = document.createElement('div');
+  label.className = 'preview-side';
+  label.textContent = sheet.side === 'front' ? t('bibFront') : t('bibBack');
+  const holder = document.createElement('div');
+  holder.style.position = 'relative';
+  holder.style.overflow = 'hidden';
+  const sh = buildBibSheet(sheet.entry, sheet.wmm, sheet.hmm, sheet.fold, sheet.halfPos);
+  const k = Math.min(1, 300 / (sheet.wmm * 3.7795));
+  const wpx = sheet.wmm * 3.7795;
+  const hpx = sheet.hmm * 3.7795;
+  sh.style.transform = 'scale(' + k + ')';
+  sh.style.transformOrigin = 'top left';
+  holder.style.width  = Math.round(wpx * k) + 'px';
+  holder.style.height = Math.round(hpx * k) + 'px';
+  holder.appendChild(sh);
+  one.appendChild(holder);
+  one.appendChild(label);
+  return one;
+}
+
+function renderPreview() {
+  const box = el('previewList');
+  box.innerHTML = '';
+  const sheets = buildModel();
+  if (!sheets.length) {
+    box.innerHTML = '<div class="empty-hint">' + esc(t('emptyHint')) + '</div>';
+    return;
+  }
+  for (let i = 0; i < sheets.length; i += 2) {
+    const front = sheets[i], back = sheets[i + 1];
+    const entry = front.entry;
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-item';
+    const capRow = document.createElement('div');
+    capRow.className = 'sheet-cap';
+    capRow.textContent = `${entry.team.kilpailunumero} · osuus ${entry.runner.osuus || '–'}${entry.label ? ' · ' + entry.label : ''} — ${entry.team.joukee || entry.team.seura || ''}`;
+    wrap.appendChild(capRow);
+    const pair = document.createElement('div');
+    pair.className = 'preview-pair';
+    pair.appendChild(renderPage(front));
+    if (back) pair.appendChild(renderPage(back));
+    wrap.appendChild(pair);
+    box.appendChild(wrap);
+  }
+}
+
+function renderPage(sheet) {
+  if (sheet.kind === 'map') return renderMapPage(sheet);
+  return renderBibPage(sheet);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// YHTEENVETO + VIENTI
+// ═══════════════════════════════════════════════════════════════════
+function updateSummary() {
+  const entries = buildEntries();
+  const labels = collectUsedLabels();
+  const missing = labels.filter(l => !assignments[l]);
+  const withMap = entries.filter(e => e.page).length;
+  const total = entries.length;
+  const sum = el('summary');
+  sum.textContent = total ? t('summaryCount', { runners: total, pages: total * 2, maps: withMap }) : '';
+  sum.className = missing.length ? 'warn' : '';
+  if (missing.length) sum.textContent += ' ⚠ ' + t('summaryMissing', { list: missing.join(', ') });
+  el('downloadBtn').disabled = busy || !total || !!missing.length;
+}
+
+function generate() {
+  if (!csvTeams.length) { setStatus(t('needTeams'), 'warn'); return; }
+  const labels = collectUsedLabels();
+  if (labels.length && !mapPages.length) {
+    setStatus(t('needMaps'), 'warn');
+    return;
+  }
+  if (labels.length && mapPages.length) {
+    Object.assign(assignments, autoMatch(labels));
+    renderMapping();
+  }
+  renderPreview();
+  updateSummary();
+  setStatus(entriesCountMessage(), '');
+}
+
+function entriesCountMessage() {
+  const entries = buildEntries();
+  const labels = collectUsedLabels();
+  const missing = labels.filter(l => !assignments[l]);
+  if (missing.length) return t('warnMissing', { list: missing.join(', ') });
+  return t('summaryOk', { runners: entries.length, pages: entries.length * 2 });
+}
+
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
+}
+
+function downloadBlob(bytes, name) {
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function blankSheetCanvas(wmm, hmm) {
+  const px = 2;
+  const cv = document.createElement('canvas');
+  cv.width  = Math.max(1, Math.round(wmm * px));
+  cv.height = Math.max(1, Math.round(hmm * px));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  return cv;
+}
+
+async function exportPdf() {
+  const labels = collectUsedLabels();
+  const missing = labels.filter(l => !assignments[l]);
+  if (missing.length) { setStatus(t('warnExportMissing', { list: missing.join(', ') }), 'warn'); return; }
+  if (!window.PDFLib) { setStatus(t('pdfLibMissing'), 'err'); return; }
+  const sheets = buildModel();
+  if (!sheets.length) { setStatus(t('noPages'), 'warn'); return; }
+  busy = true;
+  el('downloadBtn').disabled = true;
+  setStatus(t('processing'));
+  try {
+    const pages = [];
+    for (const sheet of sheets) {
+      let canvas;
+      if (sheet.kind === 'bib') {
+        canvas = renderBackprint(sheet.entry.team, sheet.entry.runner, sheet.wmm, sheet.hmm, sheet.fold, sheet.halfPos, state.options);
+      } else {
+        canvas = blankSheetCanvas(sheet.wmm, sheet.hmm);
+        if (sheet.entry.page) {
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(sheet.entry.page.original, 0, 0, canvas.width, canvas.height);
+        }
+      }
+      const png = await MapMergerExport.canvasToPngBytes(canvas);
+      pages.push({ png, wmm: sheet.wmm, hmm: sheet.hmm });
+    }
+    const bytes = await MapMergerExport.createMapPdf(pages, { marginMm: state.options.marginMm });
+    downloadBlob(bytes, t('dlName') + '_' + stamp() + '.pdf');
+    setStatus(t('dlDone', { pages: sheets.length }));
+  } catch (e) {
+    console.error(e);
+    setStatus(t('err') + e.message, 'err');
+  } finally {
+    busy = false;
+    updateSummary();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ESIMERKKI-TIEDOSTOT
+// ═══════════════════════════════════════════════════════════════════
+function downloadBlobText(text, name) {
+  const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadExampleCSV(type) {
+  const q = v => `"${v}"`;
+  const S = q(' ');
+  const teamHdr = ['Kilpailunumero', 'Sarja', 'Joukkueen nimi', 'Kansalaisuus', 'Seura'].map(q).join(',');
+  const rHdr = n => [S, `Nimi-${n}`, `Kilpailukortti-${n}`, `Lainakortti-${n}`, `Osuus-${n}`, `Alaosuus-${n}`, `Rata-${n}`, `Lähtöaika-${n}`].map((v, i) => i === 0 ? v : q(v)).join(',');
+  const r = (nimi, chip, osuus, alaosuus, rata, aika) => [S, nimi, chip, '', osuus, (alaosuus || ''), rata, aika].map((v, i) => i === 0 ? v : q(v)).join(',');
+  if (type === 'relay') {
+    downloadBlobText([
+      teamHdr + ',' + [1, 2, 3].map(rHdr).join(','),
+      ['101', 'Jukola', 'Piipsjärven Pihinä', 'FIN', 'Club A'].map(q).join(',') + ',' + r('Astra Hyvärinen', '12345', '1', '', 'A', '10:00:00') + ',' + r('Anna Hyvärinen', '12346', '2', '', 'B', '') + ',' + r('Johanna Hyvärinen', '12347', '3', '', 'A', ''),
+      ['102', 'Venlat', 'Luontaisesti vahvat', 'FIN', 'Club B'].map(q).join(',') + ',' + r('Leo Hyvärinen', '23456', '1', '', 'B', '10:01:00') + ',' + r('Simo Hyvärinen', '23457', '2', '', 'A', '') + ',' + r('Ville Hyvärinen', '23458', '3', '', 'C', ''),
+    ].join('\r\n'), 'forking_example_relay.csv');
+  } else {
+    downloadBlobText([
+      teamHdr + ',' + rHdr(1),
+      ['101', 'D21', 'Kotkajuuri Kaisa', 'FIN', 'Club A'].map(q).join(',') + ',' + r('Kotkajuuri Kaisa', '12345', '', '', 'A', '10:00:00'),
+    ].join('\r\n'), 'forking_example_individual.csv');
+  }
+}
+
+function downloadExampleForkingCSV() {
+  downloadBlobText([
+    'Kilpailunumero,Osuus 1,Osuus 2,Osuus 3',
+    '101,A,B,A',
+    '102,B,A,C',
+    '103,A,A,B',
+  ].join('\r\n'), 'hajontataulukko_example.csv');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SAMAISTA LÄHTEET + MUOKKAUSTILA + KÄYNNISTYS
+// ═══════════════════════════════════════════════════════════════════
+function refreshSources() {
+  const labels = collectUsedLabels();
+  if (labels.length && mapPages.length) {
+    Object.assign(assignments, autoMatch(labels));
+  }
+  renderMapList();
+  renderMapping();
+  renderPreview();
+  updateSummary();
+}
+
+function syncHalfUi() {
+  const pos = numberHalf(state.options.fold, state.options.halfPos);
+  state.options.halfPos = pos;
+  const sel = el('halfSel');
+  sel.innerHTML = ''
+    + `<option value="left">${esc(t('halfLeft'))}</option>`
+    + `<option value="right">${esc(t('halfRight'))}</option>`
+    + `<option value="top">${esc(t('halfTop'))}</option>`
+    + `<option value="bottom">${esc(t('halfBottom'))}</option>`;
+  sel.value = pos;
+}
+
+function updateAutoFitUI() {
+  el('autoFitChk').checked = !!layout.backGroup.autoFit;
+}
+
+function onFoldOrHalfChange() {
+  syncHalfUi();
+  updateAutoFitUI();
+  if (editMode) exitEditMode(false);
+  renderPreview();
+  updateSummary();
+}
+
+// ═══════════ Edit-mode (number placement) ═══════════
+let editMode = false;
+let selectedKey = null;
+let selectedRef = null;
+
+function toggleEditMode() { if (!editMode) enterEditMode(); else exitEditMode(true); }
+
+function enterEditMode() {
+  editMode = true;
+  el('editBtn').textContent = t('exitEdit');
+  el('editBtn').className = 'bp';
+  document.querySelectorAll('.sheet').forEach(s => { s.classList.add('edit-mode'); attachDrag(s); });
+  el('toolbar').classList.add('visible');
+  syncLayout();
+}
+
+function exitEditMode(resetSelection) {
+  editMode = false;
+  el('editBtn').textContent = t('editLayout');
+  el('editBtn').className = 'bg btn-sm';
+  document.querySelectorAll('.sheet').forEach(s => { s.classList.remove('edit-mode'); detachDrag(s); });
+  el('toolbar').classList.remove('visible');
+  if (resetSelection) { selectedKey = null; selectedRef = null; clearSelection(); }
+}
+
+function attachDrag(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(elmEl => {
+    elmEl.removeEventListener('mousedown', onMD);
+    elmEl.addEventListener('mousedown', onMD);
+  });
+}
+
+function detachDrag(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(elmEl => elmEl.removeEventListener('mousedown', onMD));
+}
+
+let drag = null;
+
+function onMD(e) {
+  if (!editMode) return;
+  e.preventDefault(); e.stopPropagation();
+  const elmEl = e.currentTarget;
+  const key = elmEl.dataset.lk;
+  const half = elmEl.closest('.half');
+  const posKey = GROUP_MEMBERS.has(key) ? GROUP_KEY : key;
+  const posRef = getLayoutRef(posKey);
+  if (!posRef) return;
+
+  clearSelection();
+  elmEl.classList.add('selected');
+  selectedKey = key;
+  selectedRef = getLayoutRef(key);
+  updateToolbar();
+
+  const cr = half.getBoundingClientRect();
+  drag = { posRef, x0: e.clientX, y0: e.clientY, cx0: posRef.cx, y_0: posRef.y, cw: cr.width, ch: cr.height };
+
+  const mm = ev => {
+    if (!drag) return;
+    const dx = ((ev.clientX - drag.x0) / drag.cw) * 100;
+    const dy = ((ev.clientY - drag.y0) / drag.ch) * 100;
+    drag.posRef.cx = clamp(drag.cx0 + dx, 0, 100);
+    drag.posRef.y  = clamp(drag.y_0 + dy, 0, 100);
+    syncLayout();
+  };
+  const mu = () => {
+    drag = null;
+    saveLayout();
+    document.removeEventListener('mousemove', mm);
+    document.removeEventListener('mouseup',   mu);
+  };
+  document.addEventListener('mousemove', mm);
+  document.addEventListener('mouseup',   mu);
+}
+
+function clearSelection() {
+  document.querySelectorAll('[data-lk].selected').forEach(elmEl => elmEl.classList.remove('selected'));
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function applySheetLayout(sheet) {
+  sheet.querySelectorAll('[data-lk]').forEach(elmEl => applyPos(elmEl, elmEl.dataset.lk));
+}
+
+function applyPos(elmEl, key) {
+  const l = getLayoutRef(key); if (!l) return;
+  if (key === GROUP_KEY) {
+    elmEl.style.left = l.cx + '%';
+    elmEl.style.top  = l.y  + '%';
+    elmEl.style.transform = 'translate(-50%, -50%)' + (l.rotate ? ` rotate(${l.rotate}deg)` : '');
+  } else {
+    elmEl.style.left = l.cx + '%';
+    if (l.y !== undefined) elmEl.style.top = l.y + '%';
+    elmEl.style.transform = 'translateX(-50%)' + (l.rotate ? ` rotate(${l.rotate}deg)` : '');
+  }
+  if (key === 'numberArea') {
+    const g = elmEl.closest('.group');
+    if (g) g.style.fontSize = layout.numberArea.fontSize + 'mm';
+  } else if (l.fontSize !== undefined) {
+    elmEl.style.fontSize = l.fontSize + 'mm';
+  }
+  if (l.letterSpacing !== undefined) elmEl.style.letterSpacing = l.letterSpacing + 'em';
+  if (l.hidden) elmEl.dataset.hidden = 'true';
+  else         delete elmEl.dataset.hidden;
+}
+
+function syncLayout() {
+  document.querySelectorAll('.sheet').forEach(sheet => {
+    applySheetLayout(sheet);
+    fitHalf(sheet);
+  });
+  updateToolbar();
+}
+
+function adj(prop, delta) {
+  if (!selectedRef) return;
+  const l = selectedRef;
+  if (prop === 'letterSpacing') {
+    if (l.letterSpacing === undefined) return;
+    l.letterSpacing = parseFloat(clamp((l.letterSpacing || 0) + delta, -0.2, 1.0).toFixed(3));
+  } else if (prop === 'fontSize') {
+    const ref = l.fontSize !== undefined ? l : layout.numberArea;
+    ref.fontSize = clamp((ref.fontSize || 0) + delta, 2, 300);
+    if (layout.backGroup.autoFit) {
+      layout.backGroup.autoFit = false;
+      updateAutoFitUI();
+      setStatus(t('autoFitHint'), '');
+    }
+  } else {
+    return;
+  }
+  syncLayout();
+  saveLayout();
+}
+
+function rotateSel(delta) {
+  if (!selectedRef) return;
+  const add = ((delta % 360) + 360) % 360;
+  if (selectedKey === GROUP_KEY || GROUP_MEMBERS.has(selectedKey)) {
+    layout.backGroup.rotate = ((layout.backGroup.rotate || 0) + add) % 360;
+  } else if (selectedKey === 'team') {
+    layout.team.rotate = ((layout.team.rotate || 0) + add) % 360;
+  }
+  syncLayout();
+  saveLayout();
+}
+
+function toggleHidden() {
+  if (!selectedRef) return;
+  selectedRef.hidden = !selectedRef.hidden;
+  syncLayout();
+  saveLayout();
+}
+
+function setPos(prop, rawVal) {
+  const ref = (selectedRef && GROUP_MEMBERS.has(selectedKey)) ? getLayoutRef(GROUP_KEY) : selectedRef;
+  if (!ref || ref[prop] === undefined) return;
+  const v = parseFloat(rawVal);
+  if (!Number.isFinite(v)) return;
+  ref[prop] = clamp(v, 0, 100);
+  syncLayout();
+  saveLayout();
+}
+
+function updateToolbar() {
+  if (!selectedRef) return;
+  const l = selectedRef;
+  el('tb-name').textContent = selectedKey === GROUP_KEY ? t('tbGroup') : selectedKey;
+  const fs = selectedKey === GROUP_KEY || GROUP_MEMBERS.has(selectedKey)
+    ? layout.numberArea.fontSize
+    : (l.fontSize || 0);
+  el('tb-fs').textContent = fs ? Math.round(fs) + 'mm' : '—';
+  const ls = selectedKey === GROUP_KEY || selectedKey === 'numberArea' || selectedKey === 'leg'
+    ? (layout.numberArea.letterSpacing || 0)
+    : (l.letterSpacing || 0);
+  el('tb-ls').textContent = (ls != null ? ls.toFixed(2) : '—') + 'em';
+  const rot = (selectedKey === GROUP_KEY || GROUP_MEMBERS.has(selectedKey))
+    ? (layout.backGroup.rotate || 0)
+    : (l.rotate || 0);
+  el('tb-rot').textContent = Math.round(((rot % 360) + 360) % 360) + '°';
+
+  const posRef = GROUP_MEMBERS.has(selectedKey) ? getLayoutRef(GROUP_KEY) : l;
+  const cxIn = el('tb-cx'), cyIn = el('tb-y');
+  cxIn.disabled = cyIn.disabled = !posRef || posRef.cx === undefined;
+  if (!cxIn.disabled) { if (document.activeElement !== cxIn) cxIn.value = posRef.cx.toFixed(1); }
+  if (!cyIn.disabled) { if (document.activeElement !== cyIn) cyIn.value = posRef.y.toFixed(1); }
+  const visBtn = el('tb-visible');
+  visBtn.textContent = l.hidden ? t('show') : t('hide');
+  visBtn.style.color = l.hidden ? '#27ae60' : '#e94560';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// KÄYNNISTYS
+// ═══════════════════════════════════════════════════════════════════
+(function init() {
+  el('csvFile').addEventListener('change', function () {
+    const f = this.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = e => {
+      csvTeams = parseTeams(parseCSV(e.target.result));
+      sortTeams();
+      const total = csvTeams.reduce((s, t) => s + t.runners.length, 0);
+      el('bibCount').textContent = t('bibCount', { teams: csvTeams.length, runners: total });
+      populateFilters();
+      refreshSources();
+    };
+    rd.readAsText(f, 'UTF-8');
+  });
+
+  el('optMargin').addEventListener('change', e => { state.options.marginMm = Number(e.target.value) || 0; renderPreview(); updateSummary(); });
+  el('frontSide').addEventListener('change', e => { state.options.frontSide = e.target.value; if (editMode) exitEditMode(true); renderPreview(); updateSummary(); });
+  el('foldSel').addEventListener('change', e => { state.options.fold = e.target.value; onFoldOrHalfChange(); });
+  el('halfSel').addEventListener('change', e => { state.options.halfPos = e.target.value; onFoldOrHalfChange(); });
+  el('optShowTeam').addEventListener('change', e => { state.options.showTeam = e.target.checked; renderPreview(); updateSummary(); });
+  el('autoFitChk').addEventListener('change', e => { layout.backGroup.autoFit = e.target.checked; saveLayout(); renderPreview(); updateSummary(); });
+  el('langBtn').addEventListener('click', () => { state.lang = state.lang === 'fi' ? 'en' : 'fi'; applyLang(); });
+  el('editBtn').addEventListener('click', toggleEditMode);
+  el('resetLayoutBtn').addEventListener('click', resetLayout);
+  ['filterLeg', 'filterSarja'].forEach(id => el(id).addEventListener('change', () => { renderPreview(); updateSummary(); }));
+  ['filterNumbers', 'filterParts'].forEach(id => el(id).addEventListener('input', () => { renderPreview(); updateSummary(); }));
+
+  el('foldSel').value = state.options.fold;
+  el('frontSide').value = state.options.frontSide;
+  renderMapping();
+  renderPreview();
+  updateSummary();
+  applyLang();
+})();
+</script>
+</body>
+</html>

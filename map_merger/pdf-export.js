@@ -274,6 +274,65 @@
     return doc.save();
   }
 
+  /* createMapPdf(pages, opts) — one PDF page per entry at the page's own
+   * size (wmm × hmm), the map/bib placed at 1:1 (keepOriginal) over the full
+   * page. Geo borrowed from computeCellPlacement: the page rect is both cell
+   * and target, so a source that is already the full page lands at (0,0) and
+   * is only clipped by the printer margin. Used by the forking print tool,
+   * where "paper comes from the map" and nothing is ever scaled.
+   *
+   * pages: array of { png: Uint8Array, wmm, hmm } (the canvas must already be
+   *   the full page size).
+   * opts.marginMm: unprintable printer margin on all sides (default MARGIN_MM).
+   *
+   * Returns a Promise resolving to the PDF as Uint8Array.
+   */
+  async function createMapPdf(pages, opts) {
+    opts = opts || {};
+    var PDFLib = (typeof window !== 'undefined' && window.PDFLib) ||
+                 (typeof globalThis !== 'undefined' && globalThis.PDFLib);
+    if (!PDFLib) throw new Error('pdf-lib not loaded');
+    var doc = await PDFLib.PDFDocument.create();
+    var marginMm = normalizeMargin(opts.marginMm);
+
+    var embedded = await Promise.all((pages || []).map(function (pg) {
+      if (!pg || !pg.png) return Promise.resolve(null);
+      return doc.embedPng(pg.png);
+    }));
+
+    (pages || []).forEach(function (pg, i) {
+      var img = embedded[i];
+      var pw = pg && pg.wmm > 0 ? pg.wmm : A4.w;
+      var ph = pg && pg.hmm > 0 ? pg.hmm : A4.h;
+      var page = doc.addPage([pw * PT_PER_MM, ph * PT_PER_MM]);
+      page.drawRectangle({ x: 0, y: 0, width: pw * PT_PER_MM, height: ph * PT_PER_MM, color: PDFLib.rgb(1, 1, 1) });
+      if (!img) return;
+      // Printable area = page inset by the margin. Source is the full page, so
+      // keepOriginal placement resolves to the page rect shifted into the
+      // printable region (x/y land on 0), leaving only the clip to cut the rim.
+      var target = { x: marginMm, y: marginMm, w: Math.max(0, pw - 2 * marginMm), h: Math.max(0, ph - 2 * marginMm) };
+      var r = computeCellPlacement(pg.wmm, pg.hmm, target, { keepOriginal: true });
+      page.pushOperators(
+        PDFLib.pushGraphicsState(),
+        PDFLib.rectangle(
+          target.x * PT_PER_MM,
+          (ph - target.y - target.h) * PT_PER_MM,
+          target.w * PT_PER_MM,
+          target.h * PT_PER_MM
+        ),
+        PDFLib.clip(),
+        PDFLib.endPath()
+      );
+      var xPt = (target.x + r.x) * PT_PER_MM;
+      var wPt = Math.max(1, r.w * PT_PER_MM);
+      var hPt = Math.max(1, r.h * PT_PER_MM);
+      var yPt = (ph - (target.y + r.y) - r.h) * PT_PER_MM;
+      page.drawImage(img, { x: xPt, y: yPt, width: wPt, height: hPt });
+      page.pushOperators(PDFLib.popGraphicsState());
+    });
+    return doc.save();
+  }
+
   return {
     PT_PER_MM: PT_PER_MM,
     A4: A4,
@@ -290,5 +349,6 @@
     chunkPages: chunkPages,
     canvasToPngBytes: canvasToPngBytes,
     createA4Pdf: createA4Pdf,
+    createMapPdf: createMapPdf,
   };
 });
