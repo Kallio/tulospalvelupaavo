@@ -85,6 +85,30 @@ body.panel-collapsed #setup-panel { padding: 5px 12px; }
 }
 .sheet-cap { font-size: 11px; color: #556; text-align: center; margin-bottom: 2px; }
 
+/* Bib number list page(s): an A4 page appended after the sheets when the
+   "Print bib list page" option is on. Prints like any other page. */
+.list-page {
+  background: white;
+  box-sizing: border-box;
+  padding: 12mm;
+  border: 1px solid #bbb;
+  page-break-after: always;
+  page-break-inside: avoid;
+  flex-shrink: 0;
+  color: #000;
+}
+.list-page h4 { margin: 0 0 4mm; font-size: 12px; color: #556; }
+.list-table { width: 100%; border-collapse: collapse; }
+.list-table th, .list-table td {
+  border: 0.2mm solid #999;
+  padding: 1.2mm 2mm;
+  text-align: left;
+  font-size: 10px;
+}
+.list-table th { background: #eee; color: #333; }
+.list-table td.num { font-weight: 700; }
+.list-table tr { page-break-inside: avoid; }
+
 /* The folded half that carries the number: top half for a horizontal fold,
    left half for a vertical fold. Toggle via body.hfold / body.vfold. */
 .sheet .half {
@@ -196,10 +220,13 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
   body { background: white; }
   #print-area { padding: 0; gap: 0; }
   .sheet { border: none; margin: 0; box-shadow: none; }
+  .list-page { border: none; box-shadow: none; }
+  .list-table th, .list-table td { border-color: #000; }
   .sheet-cap { display: none; }
 }
 @media screen {
   .sheet { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+  .list-page { box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
 }
 </style>
 </head>
@@ -233,6 +260,15 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
         <a onclick="downloadExampleCSV('individual')">individual</a>
       </div>
     </div>
+    <div style="margin-top:8px;border-top:1px solid #334;padding-top:8px;">
+      <label style="margin-top:0;">or load forking CSV (hajontataulukko)</label>
+      <input type="file" id="forkCsvFile" accept=".csv">
+      <div id="forkStatus" style="font-size:11px;color:#7ec8e3;margin-top:6px;min-height:14px;"></div>
+      <div class="hint">
+        Format: Kilpailunumero, Osuus 1, Osuus 2, Osuus 3&nbsp;·&nbsp;
+        <a onclick="downloadExampleForkingCSV()">Download example</a>
+      </div>
+    </div>
   </div>
 
   <!-- 2. Filters + generate -->
@@ -246,7 +282,10 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
     <label>Filter parts / Osuus (e.g. 1,2)</label>
     <input type="text" id="filterParts" placeholder="empty = all">
     <label>Filter class / Sarja</label>
-    <select id="filterSarja"><option value="">All</option></select>
+    <select id="filterSarja" multiple size="6"></select>
+    <label>Filter forking labels / hajonta (e.g. A, B)</label>
+    <select id="filterFork" multiple size="6"></select>
+    <div class="hint">Multi-select: hold Ctrl/Cmd (or Shift) to pick several. No selection = all.</div>
     <div class="row">
       <button class="bp" onclick="generateBibs()">Generate</button>
     </div>
@@ -300,6 +339,10 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
       <option value="landscape-fold-portrait">A4 landscape · fold portrait</option>
     </select>
     <div class="hint">The A4 sheet is folded in half; the bib number sits in the folded half. Dotted line shows the fold point.</div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="listPageChk" onchange="regenerate()">
+      <label for="listPageChk" style="margin:0;color:#ccc;font-size:12px;cursor:pointer;">Print bib list page (from current selection)</label>
+    </div>
     <div style="margin-top:10px;border-top:1px solid #334;padding-top:8px;">
       <h3>Font</h3>
       <label>Number font</label>
@@ -382,6 +425,7 @@ body.vfold .sheet .fold { left: 50%; top: 0; height: 100%; border-width: 0 0 0 0
 // STATE
 // ═══════════════════════════════════════════
 let csvTeams   = [];
+let forkingData = {}; // kilpailunumero -> { osuus1, osuus2, osuus3 } fork labels
 let rawCsvText = null;
 let editMode   = false;
 let selectedKey = null;
@@ -494,6 +538,86 @@ function parseRanges(str) {
   return s;
 }
 
+// Values of selected <option>s in a multi-select. Falls back to reading .value
+// (used by the test stub / when only a plain value is set).
+function multiSelectValues(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return [];
+  const opts = sel.options || [];
+  const vals = [];
+  for (let i = 0; i < opts.length; i++) {
+    if (opts[i].selected && opts[i].value) vals.push(opts[i].value);
+  }
+  if (vals.length) return vals;
+  const v = String(sel.value || '').trim();
+  return v ? [v] : [];
+}
+
+// Forking CSV: "Kilpailunumero,Osuus 1,Osuus 2,Osuus 3" (same as forking-print)
+function parseForkingCSV(rows) {
+  if (!rows.length) throw new Error('Empty file');
+  const hdr = rows[0].map(h => String(h || '').trim());
+  const numIdx = hdr.findIndex(h => /kilpailu/i.test(h));
+  const o1 = hdr.findIndex(h => /osuus\s*1/i.test(h));
+  const o2 = hdr.findIndex(h => /osuus\s*2/i.test(h));
+  const o3 = hdr.findIndex(h => /osuus\s*3/i.test(h));
+  if (numIdx < 0) throw new Error('Column "Kilpailunumero" not found');
+  const data = {};
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i];
+    const num = (cols[numIdx] || '').trim();
+    if (!num) continue;
+    data[num] = {
+      osuus1: o1 >= 0 ? (cols[o1] || '').trim() : '',
+      osuus2: o2 >= 0 ? (cols[o2] || '').trim() : '',
+      osuus3: o3 >= 0 ? (cols[o3] || '').trim() : '',
+    };
+  }
+  return data;
+}
+
+// Split a forking cell into its individual fork maps. Cells hold a comma-
+// separated list because parallel runners on one leg each have their own map
+// (e.g. "RR 10, RR 10, RR 10" = three parallel runners on the same leg).
+function splitForkCell(cell) {
+  return String(cell || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// Fork map assigned to a runner, or '' when no forking data / no leg.
+// Parallel runners share the cell of their leg; entry i of the list belongs
+// to the i-th runner of the team on that leg.
+function forkLabelFor(team, runner) {
+  if (!runner.osuus) return '';
+  const f = forkingData[team.kilpailunumero];
+  if (!f) return '';
+  const maps = splitForkCell(f['osuus' + runner.osuus]);
+  if (!maps.length) return '';
+  if (maps.length === 1) return maps[0];
+  const legRunners = team.runners.filter(r => r.osuus === runner.osuus);
+  const idx = legRunners.findIndex(r => r === runner);
+  return idx >= 0 ? (maps[idx] || '') : maps[0];
+}
+
+// Distinct fork maps used by the loaded teams (sorted).
+function collectForkLabels() {
+  const set = new Set();
+  csvTeams.forEach(t => t.runners.forEach(r => {
+    const f = forkingData[t.kilpailunumero];
+    if (!f || !r.osuus) return;
+    splitForkCell(f['osuus' + r.osuus]).forEach(m => set.add(m));
+  }));
+  return [...set].sort();
+}
+
+function populateForkFilter() {
+  const sel = document.getElementById('filterFork');
+  const current = multiSelectValues('filterFork');
+  const labels = collectForkLabels();
+  sel.innerHTML = labels.length
+    ? labels.map(l => `<option value="${esc(l)}"${current.includes(l) ? ' selected' : ''}>${esc(l)}</option>`).join('')
+    : '<option value="" disabled>Load forking CSV first</option>';
+}
+
 function downloadExampleCSV(type) {
   const q = v => `"${v}"`;
   const S = q(' ');
@@ -525,15 +649,29 @@ function downloadExampleCSV(type) {
   URL.revokeObjectURL(url);
 }
 
+function downloadExampleForkingCSV() {
+  const content = [
+    'Kilpailunumero,Osuus 1,Osuus 2,Osuus 3',
+    '101,A,B,A',
+    '102,B,A,C',
+    '103,A,A,B',
+  ].join('\r\n');
+  const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'hajontataulukko_example.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ═══════════════════════════════════════════
 // FILTERS
 // ═══════════════════════════════════════════
 function populateSarjaFilter() {
   const sel = document.getElementById('filterSarja');
-  const current = sel.value;
+  const current = multiSelectValues('filterSarja');
   const classes = [...new Set(csvTeams.map(t => t.sarja).filter(Boolean))].sort();
-  sel.innerHTML = '<option value="">All</option>'
-    + classes.map(c => `<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`).join('');
+  sel.innerHTML = classes
+    .map(c => `<option value="${esc(c)}"${current.includes(c) ? ' selected' : ''}>${esc(c)}</option>`).join('');
 
   const leg = document.getElementById('filterLeg');
   const curLeg = leg.value;
@@ -541,22 +679,26 @@ function populateSarjaFilter() {
     .sort((a, b) => +a - +b);
   leg.innerHTML = '<option value="">All legs</option>'
     + legs.map(l => `<option value="${esc(l)}"${l === curLeg ? ' selected' : ''}>Leg ${esc(l)}</option>`).join('');
+
+  populateForkFilter();
 }
 
 // Returns the filtered list of {team, runner} pairs per the current filters.
 function getFilteredEntries() {
   const numFilter   = parseRanges(document.getElementById('filterNumbers').value);
   const partFilter  = parseRanges(document.getElementById('filterParts').value);
-  const sarjaFilter = document.getElementById('filterSarja').value;
+  const sarjaSet    = multiSelectValues('filterSarja');
   const legFilter   = document.getElementById('filterLeg').value;
+  const forkSet     = multiSelectValues('filterFork');
 
   const entries = [];
   for (const team of csvTeams) {
     if (numFilter && !numFilter.has(+team.kilpailunumero)) continue;
-    if (sarjaFilter && team.sarja !== sarjaFilter) continue;
+    if (sarjaSet.length && !sarjaSet.includes(team.sarja)) continue;
     for (const runner of team.runners) {
       if (legFilter && runner.osuus !== legFilter) continue;
       if (partFilter && runner.osuus && !partFilter.has(+runner.osuus)) continue;
+      if (forkSet.length && !forkSet.includes(forkLabelFor(team, runner))) continue;
       entries.push({ team, runner });
     }
   }
@@ -587,7 +729,8 @@ function legText(runner) {
 function buildSheet(team, runner, i, total, dims) {
   const cap = document.createElement('div');
   cap.className = 'sheet-cap';
-  cap.textContent = `A4 ${i + 1}/${total} — ${team.kilpailunumero} · osuus ${runner.osuus || '–'}`;
+  const lbl = forkLabelFor(team, runner);
+  cap.textContent = `A4 ${i + 1}/${total} — ${team.kilpailunumero} · osuus ${runner.osuus || '–'}${lbl ? ' · fork ' + lbl : ''}`;
 
   const sheet = document.createElement('div');
   sheet.className = 'sheet';
@@ -651,6 +794,51 @@ function buildSheet(team, runner, i, total, dims) {
   return sheet;
 }
 
+// A4 list page(s) of the bib numbers that would print with the current
+// selection, appended after the sheets. Splits into one page per
+// rowsPerPage so long lists don't overflow the printed page.
+function buildListPages(entries, f) {
+  const area = document.getElementById('print-area');
+  const sorted = entries.slice().sort((a, b) => +a.team.kilpailunumero - +b.team.kilpailunumero);
+  const rowsPerPage = Math.max(8, Math.floor((f.h - 30) / 6));
+  const pages = [];
+  for (let p = 0; p < sorted.length; p += rowsPerPage) {
+    const page = document.createElement('div');
+    page.className = 'list-page';
+    page.style.width  = f.w + 'mm';
+    page.style.height = f.h + 'mm';
+
+    const hd = document.createElement('h4');
+    hd.textContent = `Bib numbers — ${sorted.length} bibs`;
+    page.appendChild(hd);
+
+    const tbl = document.createElement('table');
+    tbl.className = 'list-table';
+    const head = document.createElement('thead');
+    head.innerHTML = '<tr><th>Bib</th><th>Sarja</th><th>Runner</th><th>Leg</th><th>Fork</th></tr>';
+    tbl.appendChild(head);
+
+    const tbody = document.createElement('tbody');
+    sorted.slice(p, p + rowsPerPage).forEach(({ team, runner }) => {
+      const tr = document.createElement('tr');
+      const leg = runner.osuus ? (runner.alaosuus ? runner.osuus + '\u2013' + runner.alaosuus : runner.osuus) : '';
+      [ [team.kilpailunumero, 'num'], [team.sarja, ''], [runner.nimi, ''], [leg, ''], [forkLabelFor(team, runner), ''] ]
+        .forEach(([txt, cls]) => {
+          const td = document.createElement('td');
+          if (cls) td.className = cls;
+          td.textContent = txt;
+          tr.appendChild(td);
+        });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    page.appendChild(tbl);
+    area.appendChild(page);
+    pages.push(page);
+  }
+  return pages;
+}
+
 function generateBibs() {
   if (!csvTeams.length) { alert('Load a CSV file first'); return; }
   const entries = getFilteredEntries();
@@ -676,8 +864,10 @@ function regenerate(entries) {
 
   const area = document.getElementById('print-area');
   area.innerHTML = '';
+  const withList = document.getElementById('listPageChk').checked;
   const sheets = [];
   const total = entries.length;
+  if (withList && entries.length) buildListPages(entries, f);
   entries.forEach(({ team, runner }, i) => {
     sheets.push(buildSheet(team, runner, i + 1, total, f));
   });
@@ -692,7 +882,7 @@ function regenerate(entries) {
     });
     const n = sheets.length;
     document.getElementById('status').textContent = n
-      ? `${n} bibs · ${n} A4 sheet${n === 1 ? '' : 's'}`
+      ? `${n} bibs · ${n} A4 sheet${n === 1 ? '' : 's'}${withList ? ' + list page' : ''}`
       : 'No bibs matched';
   });
 
@@ -1347,6 +1537,24 @@ document.getElementById('csvFile').addEventListener('change', function() {
     const total = csvTeams.reduce((s,t)=>s+t.runners.length,0);
     document.getElementById('bibCount').textContent = `${csvTeams.length} teams, ${total} runners`;
     populateSarjaFilter();
+  };
+  rd.readAsText(f, 'UTF-8');
+});
+
+document.getElementById('forkCsvFile').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    try {
+      forkingData = parseForkingCSV(parseCSV(e.target.result));
+      populateForkFilter();
+      document.getElementById('forkStatus').textContent =
+        `Forking: ${Object.keys(forkingData).length} teams`;
+    } catch (err) {
+      forkingData = {};
+      populateForkFilter();
+      document.getElementById('forkStatus').textContent = 'Error: ' + err.message;
+    }
   };
   rd.readAsText(f, 'UTF-8');
 });

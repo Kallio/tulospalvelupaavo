@@ -249,6 +249,16 @@ every sheet: an extra text line (e.g. emergency phone) and an event logo —
 both positionable and scalable in edit mode. Once loaded, the browser tab
 title shows the event name.
 
+Optionally load a forking table CSV (`Kilpailunumero,Osuus 1,Osuus 2,Osuus 3`,
+same format as the [Forking Print](#forking-print) tool) to filter sheets by
+forking label: class (`Sarja`) and forking label filters are multi-select, so
+you can print only, say, the leg-3 bibs of classes H21 and D21 that run on
+forking map A. When a leg has parallel runners, each one's own forking map is
+expected in the cell as a comma-separated list (one map per runner) and is
+assigned to the runners of that leg in order. A "print bib list page" option
+appends A4 page(s) listing the bib numbers (with class, runner, leg, and fork
+map) that the current selection would print.
+
 </details>
 
 ### IRMA Club Registry Fetcher

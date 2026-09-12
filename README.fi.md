@@ -255,6 +255,17 @@ tapahtuman logo — molemmat siirreltävissä ja kooltaan säädettävissä
 muokkaustilassa. Tapahtuman nimi näkyy selaimen välilehdessä latauksen
 jälkeen.
 
+Valinnaisesti voi ladata hajontataulukko-CSV:n (`Kilpailunumero,Osuus 1,
+Osuus 2,Osuus 3`, sama muoto kuin [Forking Print](#forking-print) -työkalussa)
+ja suodattaa arkit hajontaleiman mukaan: sarja- ja hajontaleimasuodattimet
+ovat monivalintoja, joten voi tulostaa esimerkiksi vain osuuden 3 numerot
+sarjoista H21 ja D21, jotka juoksevat hajontakartalla A. Kun osuudella on
+rinnakkaisjuoksijoita, kunkin juoksijan oma hajontakartta merkitään soluun
+pilkulla erotettuna listana (yksi kartta per juoksija), ja ne kohdistetaan
+osuuden juoksijoille järjestyksessä. "Tulosta numeroluettelo" -valinnalla
+tulostukseen liitetään A4-sivuja, joilla on luettelo numeroista (sarja,
+juoksija, osuus ja hajontakartta), jotka nykyinen valinta tulostaisi.
+
 </details>
 
 ### IRMA-seurarekisterin hakija
