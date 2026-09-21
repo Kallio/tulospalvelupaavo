@@ -148,7 +148,7 @@ Jakaa juoksijat automaattisesti mahdollisimman moneen kelvolliseen
 **Kilpasarja**-joukkueeseen, muodostaen **Avoin**-joukkueita lopuista.
 Halikko-viesti 2026 -säännöt on sisäänrakennettu: 15 juoksijaa joukkuetta kohti
 (osuus 1 yksin, osuudet 2–5 kolminkertaiset, osuudet 14–15 yksin), Kilpasarja
-vaatii ≥5 naista, osuuden 1 juoksijan (D / -H16 / H50-), osuuden 15 D-sarjalaisen
+vaatii ≥5 naista, osuuden 1 juoksijan (D-sarjalainen eli nainen / -H16 / H50-), osuuden 15 D-sarjalaisen
 ja osuuksien 2–5 kiintiöt (2 D, 2 (-H18/H45-/D), 3 (-H15/H55-/-D18/D40-),
 2 (-H13/H65-/-D15/D50-)); Avoin vaatii vain osuuden 1 rajoituksen. Tukee
 vedä-ja-pudota-säätöä, kipeän juoksijan automaattista korvaamista,

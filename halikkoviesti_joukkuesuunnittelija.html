@@ -152,7 +152,7 @@ table.scores { width: 100%; border-collapse: collapse; font-size: 12px; }
     </div>
     <label class="chk"><input type="checkbox" id="toiveFirst" style="width:auto;" checked> Toiveet ensin (muuten vahvuus ensin)</label>
     <label>Vahvuuskerroin nopeudelle: <input id="wSpeed" type="number" min="0" max="1" step="0.1" value="0.7"></label>
-    <label style="font-size:11px;color:#7ec8e3;">Kilpasarja muodostetaan ensin, avoimet lopuista (avoin: vain 1. osuuden vaatimus D / -H16 / H50-).</label>
+    <label style="font-size:11px;color:#7ec8e3;">Kilpasarja muodostetaan ensin, avoimet lopuista (avoin: vain 1. osuuden vaatimus D-sarjalainen eli nainen / -H16 / H50-).</label>
     </div>
   </div>
   <div class="ps" id="statusPanel"></div>
@@ -197,8 +197,8 @@ const RATA = {
   4:'violetti 3,7 km', 5:'violetti 5,5 km',
   14:'musta 6,5 km', 15:'musta 5,3 km'
 };
-const KILPA_INFO = { 1:'D / -H16 / H50-', 14:'vapaa', 15:'D-sarjalainen' };
-const AVOIN_INFO = { 1:'D / -H16 / H50-' };
+const KILPA_INFO = { 1:'D-sarjalainen (nainen) / -H16 / H50-', 14:'vapaa', 15:'D-sarjalainen (nainen)' };
+const AVOIN_INFO = { 1:'D-sarjalainen (nainen) / -H16 / H50-' };
 const TEAM_COLORS = ['#0f3460', '#7a1f1f', '#1f6f4a', '#5b3a8b'];
 
 function legInfo(osuus, mode) {
@@ -468,8 +468,8 @@ function generateTeams(runners, N, mode) {
     return { teams, leftovers: remaining.filter(r => !usedSet.has(r)), count: n };
   }
   return { error: mode === 'avoin'
-    ? 'Avoimen sarjan joukkuetta ei voitu muodostaa. Jokaisessa joukkuussa on oltava 1. osuudelle kelvollinen (D / -H16 / H50-).'
-    : 'Kilpasarjan joukkuetta ei voitu muodostaa. Tarkista pooli: joukkuussa on oltava vähintään 5 naista, osuuksille 2-5 riittävästi D-sarjalaisia ja -H18/H45-/D, -H15/H55-/-D18/D40- ja -H13/H65-/-D15/D50- suunnistajia, 1. osuudelle D / -H16 / H50- ja 15. osuudelle D-sarjalainen.' };
+    ? 'Avoimen sarjan joukkuetta ei voitu muodostaa. Jokaisessa joukkuussa on oltava 1. osuudelle kelvollinen (D-sarjalainen eli nainen / -H16 / H50-).'
+    : 'Kilpasarjan joukkuetta ei voitu muodostaa. Tarkista pooli: joukkuussa on oltava vähintään 5 naista, osuuksille 2-5 riittävästi D-sarjalaisia ja -H18/H45-/D, -H15/H55-/-D18/D40- ja -H13/H65-/-D15/D50- suunnistajia, 1. osuudelle D-sarjalainen (nainen) / -H16 / H50- ja 15. osuudelle D-sarjalainen (nainen).' };
 }
 
 function scoreState() {
@@ -651,7 +651,7 @@ function generateAll() {
   S.showPool = false;
   if (!S.teams.length) {
     renderAll();
-    showError('Joukkuetta ei voitu muodostaa. Kilpasarja tarvitsee vähintään 5 naista, kelvollisen 1. ja 15. osuuden juoksijan sekä osuuksille 2-5 riittävästi D-sarjalaisia ja nuoria/ikääntyneitä; avoin sarja vain 1. osuudelle kelvollisen (D / -H16 / H50-).');
+    showError('Joukkuetta ei voitu muodostaa. Kilpasarja tarvitsee vähintään 5 naista, kelvollisen 1. ja 15. osuuden juoksijan sekä osuuksille 2-5 riittävästi D-sarjalaisia ja nuoria/ikääntyneitä; avoin sarja vain 1. osuudelle kelvollisen (D-sarjalainen eli nainen / -H16 / H50-).');
     return;
   }
   updatePoolFromTeams();
@@ -1199,9 +1199,9 @@ function renderLegend() {
   const hasKilpa = S.kilpaCount > 0;
   const hasAvoin = S.teams.length > S.kilpaCount;
   let h = '';
-  if (hasKilpa) h += 'Kilpasarja: ≥5 naista · 1. osuus D / -H16 / H50- · 15. osuus D-sarjalainen · osuudet 2–5: 2 D · 2 (-H18/H45-/D) · 3 (-H15/H55-/-D18/D40-) · 2 (-H13/H65-/-D15/D50-)';
+  if (hasKilpa) h += 'Kilpasarja: ≥5 naista · 1. osuus D-sarjalainen (nainen) / -H16 / H50- · 15. osuus D-sarjalainen (nainen) · osuudet 2–5: 2 D-sarjalaista (naista) · 2 (-H18/H45-/D-sarjalainen) · 3 (-H15/H55-/-D18/D40-) · 2 (-H13/H65-/-D15/D50-)';
   if (hasKilpa && hasAvoin) h += '<br>';
-  if (hasAvoin) h += 'Avoin sarja: vain 1. osuuden vaatimus (D / -H16 / H50-).';
+  if (hasAvoin) h += 'Avoin sarja: vain 1. osuuden vaatimus (D-sarjalainen eli nainen / -H16 / H50-).';
   el.innerHTML = h;
 }
 

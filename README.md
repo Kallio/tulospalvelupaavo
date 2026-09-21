@@ -146,7 +146,7 @@ wish as a third field) and automatically splits the runners into as many valid
 **Kilpasarja** teams as possible, forming **Avoin** teams from the rest. Halikko-viesti
 2026 rules are built in: 15 runners per team (leg 1 single, legs 2–5 triple,
 legs 14–15 single), Kilpasarja requires ≥5 women, a leg-1 runner
-(D / -H16 / H50-), a leg-15 D-sarjalainen, and legs 2–5 quotas (2 D, 2
+(D-sarjalainen eli nainen / -H16 / H50-), a leg-15 D-sarjalainen, and legs 2–5 quotas (2 D-sarjalaista (naista), 2
 (-H18/H45-/D), 3 (-H15/H55-/-D18/D40-), 2 (-H13/H65-/-D15/D50-)); Avoin has
 only the leg-1 restriction. Supports drag-and-drop adjustment, sick-runner
 auto-replacement, per-runner scores and team wishes, [Navisport](#navisport) start-list CSV
