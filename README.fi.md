@@ -549,6 +549,7 @@ merkinnät:
 | [`seuroittain.html`](seuroittain.html) | Lähtölistan selausnäkymä seuroittain, live-kelloilla ja CSV-viennillä |
 | [`lahtoaikasort.js`](lahtoaikasort.js) | Bookmarklet työkalu, vanhan Pirilä-pohjaisten Lähtölistan taulukoiden lajitteluun lähtöajan mukaan ([asenna](#lahtoaikasortjs-kirjanmerkki)) |
 | [`fetch_seikkailusprintti_teams.py`](fetch_seikkailusprintti_teams.py) | Kaapii joukkuetiedot seikkailusprintti.comista CSV:ksi bibgeneratoria varten |
+| [`sprintticup-event_logo.html`](sprintticup-event_logo.html) | SprinttiCup-tapahtuman logokortin generaattori (1080×1080 PNG): tapahtuman tiedot Navisportista, karttatausta, upotettu virallinen logo, siirreltävä asettelu |
 | [`clubs_with_districts.json`](clubs_with_districts.json) | Valmiiksi rakennettu seura→alue-kartoitus (322 seuraa, 14 piiriä). Tuottaa [`fetch_irma_clubs_with_districts.py`](fetch_irma_clubs_with_districts.py) |
 
 ## Kirjanmerkit
