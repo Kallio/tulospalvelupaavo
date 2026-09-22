@@ -527,6 +527,34 @@ link that reloads the same analysis. UI available in Finnish and English.
 
 </details>
 
+### Karttatarpeet (map-count planner)
+
+File: [`karttatarpeet.html`](karttatarpeet.html)
+
+How many maps to print for each course across a whole season? Paste in a
+bunch of Navisport event identifiers and get a per-course print
+recommendation, no spreadsheet work.
+
+<details>
+<summary>Details</summary>
+
+Map-print/course-count planner for [Navisport](#navisport) events. Accepts event
+identifiers in any form: UUIDs, `navisport.com/fi/events/...`
+URLs, markdown links, plain slugs, or a pasted block of archive-page HTML.
+Loads all events in one go and reports per course the participant counts
+(every result row = a printed map) across events, with average, median, max,
+P90 and a print recommendation (`max + buffer %`, buffer is adjustable).
+Each event's flow is broken out too: first/last start, start window,
+first/last result, longest genuine time on course, and over-the-threshold
+"started but went home" cases (default 3 h, adjustable). Team results are
+counted for relays, multistage events are analysed stage-by-stage, and older
+season class names (BEG/short/long) normalize to current ones. Includes a
+date filter, CSV export, clean print layout, Finnish/English UI and a
+shareable `?events=uuid1,uuid2,…` link. Covered by zero-dependency Node
+tests (`tests/test_karttatarpeet.js`).
+
+</details>
+
 ## AM tools (Suunnistava Uusimaa)
 
 These tools target the Uusimaa district ("AM" = AlueMestaruus / area

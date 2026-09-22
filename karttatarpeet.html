@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Karttatarpeet / osallistujamäärät – Navisport-tapahtumat</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --fg: #1b2330;
+    --muted: #5b6b7c;
+    --primary: #1f3a5f;
+    --primary-light: #2e5a8a;
+    --primary-dark: #16283f;
+    --accent: #e67e22;
+    --accent-hover: #d06e15;
+    --card: #ffffff;
+    --border: #dde3ea;
+    --ok: #1e8e3e;
+    --warn: #b7791f;
+    --err: #c0392b;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(23, 35, 55, 0.08), 0 2px 8px rgba(23, 35, 55, 0.06);
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .topbar {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .mark {
+    width: 38px; height: 38px; background: var(--accent); border-radius: 9px;
+    display: grid; place-items: center; font-size: 17px; font-weight: 700; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(230, 126, 34, 0.35);
+  }
+  .brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+  .brand p { font-size: 12px; color: #9db4cc; font-weight: 400; }
+  .topbar .acts { margin-left: auto; display: flex; gap: 7px; }
+  .btn-hdr {
+    padding: 7px 13px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer;
+    font-weight: 600; font-family: inherit; transition: all 0.12s; white-space: nowrap;
+  }
+  .btn-hdr:active { transform: scale(0.97); }
+  .btn-hdr-accent { background: var(--accent); color: #fff; }
+  .btn-hdr-accent:hover { background: var(--accent-hover); }
+  .btn-hdr-sec { background: rgba(255, 255, 255, 0.12); color: #dfe9f3; }
+  .btn-hdr-sec:hover { background: rgba(255, 255, 255, 0.22); }
+  .btn-hdr-active { background: var(--accent); color: #fff; }
+
+  .urlbar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex; gap: 8px; align-items: center;
+    position: sticky; top: 0; z-index: 50;
+    box-shadow: var(--shadow);
+    flex-wrap: wrap;
+  }
+  .urlbar textarea {
+    flex: 1 1 340px;
+    padding: 9px 13px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--fg);
+    outline: none;
+    resize: vertical;
+    min-height: 52px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .urlbar textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(46, 90, 138, 0.12); }
+  .urlbar .opts { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .urlbar .opts label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .urlbar .opts input[type=number], .urlbar .opts input[type=date] {
+    width: 64px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: 12px; font-family: inherit; background: var(--bg); color: var(--fg);
+  }
+  .urlbar .opts input[type=date] { width: 128px; }
+  .urlbar .opts input[type=checkbox] { accent-color: var(--primary); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--radius);
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent-hover); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: var(--bg); border-color: var(--primary-light); }
+
+  .status { padding: 8px 24px; font-size: 13px; min-height: 34px; display: flex; align-items: center; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+
+  #output { max-width: 1200px; margin: 0 auto; padding: 20px 24px 60px; }
+
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .card {
+    flex: 1 1 170px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .card.hl { border-left: 4px solid var(--accent); }
+  .card.top { border-left: 4px solid var(--ok); background: #f2faf4; }
+  .card.top h4 { color: var(--ok); }
+  .topmark { color: var(--accent); font-weight: 700; }
+  .card.top .topmark { color: var(--ok); }
+  .card h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px; }
+  .card .num { font-size: 20px; font-weight: 700; }
+  .card .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 16px; overflow-x: auto;
+  }
+  .phead {
+    font-size: 14px; font-weight: 700; color: var(--primary);
+    border-bottom: 2px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+  }
+  .phead .ptag { font-size: 11px; font-weight: 700; color: #fff; background: var(--primary);
+    border-radius: 5px; padding: 1px 7px; margin-left: 8px; vertical-align: 1px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--border); white-space: nowrap;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #edf1f5; white-space: nowrap; }
+  tr:hover td { background: #f7fafc; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .subdim { display: block; font-size: 10px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .evcell { white-space: normal; max-width: 220px; }
+  .big { font-weight: 700; }
+  .totrow td { border-top: 2px solid var(--border); border-bottom: 2px solid var(--border); background: #f7fafc; font-weight: 600; }
+  .recrow td { border-bottom: 2px solid var(--border); background: #fdf6ee; font-weight: 700; }
+
+  .errbox {
+    background: #fcebe8; border: 1px solid #f0c2ba; border-left: 4px solid var(--err);
+    color: #7a2e23; border-radius: var(--radius); padding: 10px 14px; font-size: 12.5px;
+    line-height: 1.6; margin-bottom: 14px;
+  }
+  .warnbox {
+    background: #fdf3e7; border: 1px solid #f0d9b8; border-left: 4px solid var(--warn);
+    color: #7a5410; border-radius: var(--radius); padding: 10px 14px; font-size: 12.5px;
+    line-height: 1.6; margin-bottom: 14px;
+  }
+  .warnrow { display: block; }
+
+  .detail { margin: 6px 0 0; }
+  .detail summary { cursor: pointer; font-weight: 600; color: var(--primary); font-size: 12.5px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin-top: 6px; }
+  .hint code { background: rgba(127,143,160,.14); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+
+  @media print {
+    .topbar, .urlbar, .status, .noprint { display: none; }
+    body { background: #fff; }
+    #output { padding: 0; max-width: none; }
+    .panel { box-shadow: none; border-color: #ccc; break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="mark">K</div>
+  <div class="brand">
+    <h1>Tulospalvelupaavon karttatarvelaskuri</h1>
+    <p id="tagline">Ratojen osallistujamäärät useista Navisport-tapahtumista</p>
+  </div>
+  <div class="acts">
+    <button type="button" class="btn-hdr btn-hdr-sec" id="langBtn">EN</button>
+  </div>
+</div>
+
+<div class="urlbar noprint">
+  <textarea id="idsInput" spellcheck="false" placeholder="Liitä Navisport-kisojen tiedot: UUID:t, URL:t (navisport.com/fi/events/...), markdown-linkit [Tulokset](url) tai arkistosivun HTML-kappale – yksi per rivi tai pilkulla erotettuna."></textarea>
+  <div class="opts">
+    <label><input type="checkbox" id="dateFilterOn" checked> <span data-i18n="optDateOn"></span></label>
+    <label><span data-i18n="optFrom"></span> <input type="date" id="fromDate"></label>
+    <label><span data-i18n="optBuffer"></span> <input type="number" id="bufferPct" value="20" min="0" max="200" step="1"> %</label>
+    <label><span data-i18n="optQuit"></span> <input type="number" id="quitHours" value="3" min="1" max="24" step="0.5"> <span data-i18n="optQuitSuffix"></span></label>
+  </div>
+  <button type="button" class="btn btn-primary" id="analyzeBtn" data-i18n="btnFetch"></button>
+  <button type="button" class="btn btn-outline" id="clearBtn" data-i18n="btnClear"></button>
+  <button type="button" class="btn btn-outline" id="csvBtn" data-i18n="btnCsv"></button>
+  <button type="button" class="btn btn-outline" id="printBtn" data-i18n="btnPrint"></button>
+</div>
+
+<div class="status" id="status"></div>
+
+<div id="output"></div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════════════════
+//  Language strings (FI / EN)
+// ════════════════════════════════════════════════════════════════════
+const LANGS = {
+  fi: {
+    tagline: 'Ratojen osallistujamäärät useista Navisport-tapahtumista',
+    btnFetch: 'Hae ja laske',
+    btnClear: 'Tyhjennä',
+    btnCsv: 'CSV',
+    btnPrint: 'Tulosta',
+    statusReady: 'Liitä kisojen tunnisteet ja paina "Hae ja laske".',
+    statusLoading: 'Ladataan ja lasketaan',
+    statusPartial: 'osaa luki epäonnistui',
+    statusDone: 'Valmis',
+    inFab: 'tunnistetta löytyi',
+    inFabNone: 'Tunnisteita ei löytynyt – liitä UUID-tunnisteita, navisport.com/fi/events/-URL:ja tai arkistosivun HTML:ää.',
+    secSummary: 'Tulostussuositus per rata',
+    secMatrix: 'Tapahtumat ja radat',
+    secDetails: 'Tapahtumien tiedot',
+    secErrors: 'Latausvirheet',
+    cRec: 'Suositus (max + vara)',
+    cAvg: 'Keskiarvo',
+    cMax: 'Suurin',
+    cTotal: 'Yhteensä',
+    cMedian: 'Mediaani',
+    cP90: 'P90',
+    cOver3h: 'yli-rajan tapaukset',
+    hDate: 'Päivä',
+    hEvent: 'Tapahtuma',
+    hClass: 'Rata / sarja',
+    hTotal: 'Osallistujat (kaikki rivit)',
+    hOk: 'OK',
+    hRegistered: 'Ennakkoilmoitt.',
+    hSee: 'Yksityisk.',
+    hFirstStart: '1. lähtö',
+    hLastStart: 'Viimeinen lähtö',
+    hFirstResult: '1. tulos',
+    hLastResult: 'Viimeinen tulos',
+    hLongest: 'Pisin aika',
+    hOver3: 'Yli rajan',
+    firstStart: 'Ensimmäinen lähti',
+    lastStart: 'Viimeinen lähti',
+    firstResult: 'Tuloksia alkoi tulla',
+    lastResult: 'Viimeinen tulos',
+    longest: 'Pisin radalla vietetty aika',
+    over3: 'yli-rajana pidetyn ajan ylitys (= lähtenyt kesken, todennäköisesti lähtenyt kotiin)',
+    noTimes: 'Aikaleimoja ei saatavilla',
+    unknownClass: 'Ilman sarjaa',
+    totAll: 'kaikki',
+    detailsOpen: 'Näytä tapahtuman tiedot (rajat, lähtö/maali, yli rajan tapaukset)',
+    startWin: 'lähtöikkuna',
+    relayTag: 'VIESTI',
+    multistageTag: 'MONIOSA',
+    errBoxIntro: 'Seuraavia tapahtumia ei saatu ladattua (tarkista tunniste):',
+    csvEvents: 'Tapahtumat',
+    csvAgg: 'Yhteenveto ratoja kohti',
+    csvRec: 'Suositus (max + vara)',
+    recSub: 'rivi = yhden tapahtuman osallistujat (kaikki tuloslistan rivit)',
+    termsHint: 'Kaikki rivit = jokainen tuloslistan osallistuja, myös DNF/DSQ/DNS → tämä on karttamäärän perusta. Ennakkoilmoitt. = etukäteen ilmoittautuneet (osajoukko).',
+    quitSuffix: 'h = keskeytys',
+    mostCommon: 'yleisin',
+    eventsSuffix: 'tapahtumaa',
+    idsSuffix: 'tunnistetta',
+    inputPh: 'Liitä Navisport-kisojen tiedot: UUID:t, URL:t (navisport.com/fi/events/...), markdown-linkit [Tulokset](url) tai arkistosivun HTML-kappale – yksi per rivi tai pilkulla erotettuna.',
+    optDateOn: 'Vain jaksolta',
+    optFrom: 'alkaen',
+    optBuffer: 'vara',
+    optQuit: 'yli',
+    optQuitSuffix: 'h = keskeytys',
+  },
+  en: {
+    tagline: 'Per-course participant counts across Navisport events',
+    btnFetch: 'Fetch & analyze',
+    btnClear: 'Clear',
+    btnCsv: 'CSV',
+    btnPrint: 'Print',
+    statusReady: 'Paste event identifiers, then press "Fetch & analyze".',
+    statusLoading: 'Loading and analyzing',
+    statusPartial: 'failed to load',
+    statusDone: 'Done',
+    inFab: 'identifiers found',
+    inFabNone: 'No identifiers found – paste UUIDs, navisport.com/fi/events/ URLs or archive HTML.',
+    secSummary: 'Print recommendation per course',
+    secMatrix: 'Events and courses',
+    secDetails: 'Event details',
+    secErrors: 'Load errors',
+    cRec: 'Recommendation (max + buffer)',
+    cAvg: 'Average',
+    cMax: 'Max',
+    cTotal: 'Total',
+    cMedian: 'Median',
+    cP90: 'P90',
+    cOver3h: 'over-the-limit cases',
+    hDate: 'Date',
+    hEvent: 'Event',
+    hClass: 'Course / class',
+    hTotal: 'Participants (all rows)',
+    hOk: 'OK',
+    hRegistered: 'Pre-registered',
+    hSee: 'Details',
+    hFirstStart: 'First start',
+    hLastStart: 'Last start',
+    hFirstResult: 'First result',
+    hLastResult: 'Last result',
+    hLongest: 'Longest',
+    hOver3: 'Over limit',
+    firstStart: 'First starter',
+    lastStart: 'Last starter',
+    firstResult: 'First result arrived',
+    lastResult: 'Last result',
+    longest: 'Longest time on course',
+    over3: 'over the quit-threshold (= started but quit, likely went home)',
+    noTimes: 'No timestamps available',
+    unknownClass: 'No class',
+    totAll: 'all',
+    detailsOpen: 'Show event details (courses, start/finish, over-the-limit cases)',
+    startWin: 'start window',
+    relayTag: 'RELAY',
+    multistageTag: 'MULTISTAGE',
+    errBoxIntro: 'The following events could not be loaded (check identifiers):',
+    csvEvents: 'Events',
+    csvAgg: 'Per-course summary',
+    csvRec: 'Recommendation (max + buffer)',
+    recSub: 'row = participants of one event (all result rows)',
+    termsHint: 'All rows = every person on the results list, incl. DNF/DSQ/DNS → this is the basis for the map count. Pre-registered = signed up in advance (a subset).',
+    quitSuffix: 'h = quit',
+    mostCommon: 'most common',
+    eventsSuffix: 'events',
+    idsSuffix: 'identifiers',
+    inputPh: 'Paste event data: UUIDs, URLs (navisport.com/fi/events/...), markdown links like [Results](url) or a block of archive-page HTML – one per line or comma-separated.',
+    optDateOn: 'Only since',
+    optFrom: 'from',
+    optBuffer: 'buffer',
+    optQuit: 'over',
+    optQuitSuffix: 'h = quit',
+  },
+};
+
+let lang = 'fi';
+function T(key) { const v = (LANGS[lang] || LANGS.fi)[key]; return v != null ? v : LANGS.fi[key]; }
+function applyLangUI() {
+  const btn = $('langBtn');
+  if (btn) btn.textContent = lang === 'fi' ? 'EN' : 'FI';
+  const tg = $('tagline');
+  if (tg) tg.textContent = T('tagline');
+  const ta = $('idsInput');
+  if (ta) ta.placeholder = T('inputPh');
+  if (document.querySelectorAll) {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const k = el.getAttribute('data-i18n');
+      if (k && T(k) != null) el.textContent = T(k);
+    });
+  }
+}
+function setLang(l) {
+  lang = l === 'en' ? 'en' : 'fi';
+  applyLangUI();
+  if (state.analyzed) render(readOpts());
+  renderStatus(state.analyzed === true);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Small helpers
+// ════════════════════════════════════════════════════════════════════
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function parseTS(iso) {
+  if (iso == null || iso === '') return null;
+  const t = new Date(iso).getTime();
+  return isFinite(t) ? t : null;
+}
+function p2(x) { return String(x).padStart(2, '0'); }
+function fmtClock(ts) {
+  if (ts == null) return '';
+  const d = new Date(ts);
+  return p2(d.getHours()) + ':' + p2(d.getMinutes());
+}
+function fmtDur(sec) {
+  if (sec == null || !isFinite(sec)) return '';
+  const s = Math.max(0, Math.round(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return h ? h + ':' + p2(m) + ':' + p2(ss) : m + ':' + p2(ss);
+}
+function dateStr(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return Number(m[3]) + '.' + Number(m[2]) + '.' + m[1];
+}
+function initials(name) {
+  return String(name == null ? '' : name).trim().split(/\s+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase()).join('');
+}
+function setStatus(msg, type) {
+  const el = $('status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status ' + (type === 'err' ? 'err' : type === 'ok' ? 'ok' : '');
+}
+function renderStatus(analyzed) {
+  if (!analyzed) { setStatus(T('statusReady'), ''); return; }
+  const e = state.errors.length || 0;
+  const doneMsg = T('statusDone') + ' — ' + state.summaries.length + ' ' + T('eventsSuffix') + ' / ' + state.ids.length + ' ' + T('idsSuffix');
+  setStatus(e ? doneMsg + ' (' + e + ' ' + T('statusPartial') + ')' : doneMsg, e ? 'err' : 'ok');
+}
+function median(arr) {
+  if (!arr.length) return null;
+  const s = arr.slice().sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function percentile(arr, p) {
+  if (!arr.length) return null;
+  const s = arr.slice().sort((a, b) => a - b);
+  const k = (s.length - 1) * (p / 100);
+  const lo = Math.floor(k), hi = Math.ceil(k);
+  if (lo === hi) return s[lo];
+  return s[lo] + (s[hi] - s[lo]) * (k - lo);
+}
+function recommend(max, bufferPct) {
+  if (max == null) return null;
+  return Math.ceil(max * (1 + (bufferPct == null ? 20 : bufferPct) / 100));
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Status classification
+// ════════════════════════════════════════════════════════════════════
+const STATUS_OK = 'OK';
+function classifyStatus(status) {
+  const s = String(status == null ? '' : status).trim().toLowerCase();
+  if (!s) return 'OTHER';
+  if (s === 'ok' || s === 'fin') return 'OK';
+  if (s === 'dnf') return 'DNF';
+  if (s === 'dns') return 'DNS';
+  if (s === 'dsq' || s === 'dis' || s === 'disq') return 'DSQ';
+  if (s === 'mp' || s === 'mis') return 'MP';
+  if (s === 'competing' || s === 'on course' || s === 'in progress' || s === 'running') return 'COMPETING';
+  if (s === 'no time' || s === 'otl' || s === 'over') return 'NOTIME';
+  return 'OTHER';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Extract event identifiers from pasted text (URLs / UUIDs / slugs /
+//  markdown links / raw archive HTML)
+// ════════════════════════════════════════════════════════════════════
+function extractIds(text) {
+  const out = [];
+  const seen = {};
+  const add = id => { if (id && !seen[id]) { seen[id] = 1; out.push(id); } };
+  const s = String(text == null ? '' : text);
+  // URLs pointing at events (navisport.com / navisport.fi). The id
+  // segment stops at any quote/bracket so markdown & pasted HTML don't leak
+  // trailing markup into the id.
+  const urlRe = /(?:https?:\/\/)?(?:www\.)?navisport\.(?:com|fi)\/(?:events|tapahtumat)\/([^\/?#\s"<>()\[\]]+)/gi;
+  let m;
+  while ((m = urlRe.exec(s))) add(cleanId(m[1]));
+  // Bare UUIDs
+  const uuRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  while ((m = uuRe.exec(s))) add(cleanId(m[0]));
+  // Anything that is not in a URL or a digit/hyphen slug of the URL's own
+  // text: fall back to a plain slug-style token, but only when it looks like
+  // an identifier (contains a digit or a hyphen/underscore), so prose words
+  // such as "Tulokset" or "Livelox" are never treated as event ids.
+  s.split(/[\s,;]+/).forEach(tok => {
+    tok = cleanId(tok);
+    if (!tok) return;
+    if (!/[-_]/.test(tok) && !/\d/.test(tok)) return;
+    if (/^[a-z0-9][a-z0-9._-]*$/.test(tok) && !tok.includes('.html') && !tok.includes('.fi') && !tok.includes('.com')) add(tok);
+  });
+  return out;
+}
+function cleanId(raw) {
+  let t = String(raw == null ? '' : raw).trim().replace(/[?#].*$/, '');
+  // Strip trailing punctuation that is not part of an id (e.g. ")", '"', ">",
+  // "]", "." from markdown links / pasted HTML).
+  t = t.replace(/[^a-z0-9]+$/i, '').toLowerCase();
+  if (t === '' || t === 'registration' || t === 'results') return '';
+  return t;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Class-name normalization (aliases across seasons)
+// ════════════════════════════════════════════════════════════════════
+const CLASS_ALIASES = {
+  'aloittelija': 'Beginner', 'aloitus': 'Beginner', 'beginner': 'Beginner', 'beg': 'Beginner', 'b': 'Beginner',
+  'elite short': 'Elite Short', 'short': 'Elite Short', 'sprint short': 'Elite Short', 'kort': 'Elite Short', 'elite kort': 'Elite Short',
+  'elite long': 'Elite Long', 'long': 'Elite Long', 'lång': 'Elite Long', 'elite lång': 'Elite Long',
+};
+function canonClass(name) {
+  const key = String(name == null ? '' : name).trim().toLowerCase().replace(/\s+/g, ' ');
+  if (key && CLASS_ALIASES[key]) return CLASS_ALIASES[key];
+  return String(name == null ? '' : name).trim();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Navisport fetch
+// ════════════════════════════════════════════════════════════════════
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Adaptive, jittered delay between Navisport requests: more events in the
+// batch → both the floor and ceiling rise (capped at 2×), and each request
+// jitters within its range so concurrent users don't sync into bursts.
+function politeDelayBounds(total) {
+  const n = Math.max(1, total || 1);
+  const factor = Math.min(2, 1 + Math.sqrt(n - 1) / 6);
+  return { lo: Math.round(250 * factor), hi: Math.round(600 * factor) };
+}
+function politeDelayMs(total) {
+  const b = politeDelayBounds(total);
+  return b.lo + Math.round(Math.random() * (b.hi - b.lo));
+}
+
+async function fetchEventJSON(url, label) {
+  let data;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status + (label ? ' for ' + label : ''));
+    data = await res.json();
+  } finally {
+    await sleep(politeDelayMs(state.gentleTotal || 1));
+  }
+  return data;
+}
+async function fetchEventById(id) {
+  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(id), id);
+}
+function isMultistageEvent(event) {
+  return event.eventKind === 'Multistage event' || (event.events || []).length > 1;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Per-event statistics
+// ════════════════════════════════════════════════════════════════════
+const DEFAULT_QUIT_H = 3;
+
+function rowsForCounting(event) {
+  const results = event.results || [];
+  if (event.raceType === 'Relay') {
+    const teams = results.filter(r => r.resultType === 'Team');
+    if (teams.length) return teams;
+  }
+  return results.filter(r => r.resultType !== 'Team');
+}
+
+// Each row's start/finish/duration, derived like kilpailuanalyysi: prefer
+// explicit timestamps, else finishTime − time.
+function rowTimes(r) {
+  let dur = (r.time != null && r.time > 0) ? r.time : null;
+  let finish = parseTS(r.finishTime);
+  let start = parseTS(r.startTime);
+  if (start == null && finish != null && dur != null) start = finish - dur * 1000;
+  return { start, finish, dur };
+}
+
+function perEventStats(event, classes) {
+  const cc = {};
+  (event.courseClasses || []).forEach(c => { cc[c.id] = c.name; });
+  const rows = rowsForCounting(event);
+  const quitH = (classes && classes.quitH) || DEFAULT_QUIT_H;
+  const quitSec = quitH * 3600;
+
+  // ── per-class counts (all result rows = printed maps) ──
+  const byClassHash = {};
+  rows.forEach(r => {
+    const className = canonClass(cc[r.classId] || r.classId || '');
+    const key = className || T('unknownClass');
+    const st = classifyStatus(r.status);
+    const t = rowTimes(r);
+    const isOver = t.dur != null && t.dur > quitSec;
+    const c = byClassHash[key] || (byClassHash[key] = { name: key, total: 0, ok: 0, dnf: 0, dsq: 0, dns: 0, competing: 0, notime: 0, other: 0, over3: 0, registered: 0 });
+    c.total++;
+    if (st === STATUS_OK && !isOver) c.ok++;
+    else if (st === 'DNF') c.dnf++;
+    else if (st === 'DSQ') c.dsq++;
+    else if (st === 'DNS') c.dns++;
+    else if (st === 'COMPETING') c.competing++;
+    else if (st === 'NOTIME') c.notime++;
+    else c.other++;
+    if (isOver) c.over3++;
+    if (r.registered === true) c.registered++;
+  });
+
+  // ── flow facts ──
+  const recs = rows.map(r => ({ r, t: rowTimes(r) }))
+    .filter(x => x.t.start != null || x.t.finish != null || x.t.dur != null);
+  const byStart = recs.filter(x => x.t.start != null).slice().sort((a, b) => a.t.start - b.t.start);
+  const byFinish = recs.filter(x => x.t.finish != null).slice().sort((a, b) => a.t.finish - b.t.finish);
+  const dur = recs.map(x => x.t.dur).filter(d => d != null);
+  const over3 = recs.filter(x => x.t.dur != null && x.t.dur > quitSec);
+  const genuine = dur.filter(d => d <= quitSec);
+  const longestSec = genuine.length ? Math.max(...genuine) : null;
+  const longestRow = longestSec != null
+    ? recs.find(x => x.t.dur === longestSec) : null;
+
+  const mkWho = x => x ? { clock: fmtClock(x.t.start), who: initials(x.r.name), cls: canonClass(cc[x.r.classId] || x.r.classId || '') } : null;
+
+  const firstStart = byStart.length ? byStart[0] : null;
+  const lastStart = byStart.length ? byStart[byStart.length - 1] : null;
+  // First result = earliest finish (when results began to appear).
+  const firstResult = byFinish.length ? byFinish[0] : null;
+  const lastResult = byFinish.length ? byFinish[byFinish.length - 1] : null;
+
+  const flow = {
+    firstStart: mkWho(firstStart),
+    lastStart: mkWho(lastStart),
+    firstResult: firstResult ? { clock: fmtClock(firstResult.t.finish), who: initials(firstResult.r.name) } : null,
+    lastResult: lastResult ? { clock: fmtClock(lastResult.t.finish) } : null,
+    startWindowMin: firstStart && lastStart ? Math.round((lastStart.t.start - firstStart.t.start) / 60000) : null,
+    longestSec,
+    longest: longestRow ? {
+      sec: longestSec,
+      clock: fmtClock(longestRow.t.finish != null ? longestRow.t.finish : longestRow.t.start),
+      who: initials(longestRow.r.name),
+      cls: canonClass(cc[longestRow.r.classId] || longestRow.r.classId || ''),
+    } : null,
+    over3Count: over3.length,
+    over3: over3.map(x => ({
+      sec: x.t.dur,
+      clock: fmtClock(x.t.finish != null ? x.t.finish : x.t.start),
+      who: initials(x.r.name),
+      cls: canonClass(cc[x.r.classId] || x.r.classId || ''),
+    })).sort((a, b) => b.sec - a.sec),
+  };
+
+  // Preserve organizer's own class order (courseClasses order), append unknown.
+  const ordered = [];
+  (event.courseClasses || []).forEach(c => {
+    const k = canonClass(c.name);
+    if (byClassHash[k] && byClassHash[k].seen !== true) { byClassHash[k].seen = true; ordered.push(byClassHash[k]); }
+  });
+  Object.keys(byClassHash).forEach(k => { if (byClassHash[k].seen !== true) { byClassHash[k].seen = true; ordered.push(byClassHash[k]); } });
+
+  return {
+    id: event.id,
+    name: event.name,
+    begin: event.begin,
+    date: dateStr(event.begin),
+    raceType: event.raceType,
+    isRelay: event.raceType === 'Relay',
+    classes: ordered,
+    flow,
+    totalRows: rows.length,
+  };
+}
+
+function sortClassesKeep(orderedNames) {
+  const idx = {};
+  orderedNames.forEach((n, i) => { if (!(n in idx)) idx[n] = i; });
+  return (a, b) => (idx[a.name] != null ? idx[a.name] : 1e9) - (idx[b.name] != null ? idx[b.name] : 1e9) || a.name.localeCompare(b.name, 'fi');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Aggregates
+// ════════════════════════════════════════════════════════════════════
+function aggregateSummaries(summaries, bufferPct, quitH) {
+  const order = [];
+  const seen = {};
+  const acc = {};
+  summaries.forEach(s => {
+    s.classes.forEach(c => {
+      const n = c.name;
+      if (!(n in seen)) { seen[n] = 1; order.push(n); }
+      (acc[n] = acc[n] || []).push(c.total);
+    });
+  });
+  const rows = order.map(n => {
+    const arr = acc[n];
+    const m = Math.max(...arr);
+    return {
+      name: n,
+      n: arr.length,
+      total: arr.reduce((a, b) => a + b, 0),
+      avg: arr.reduce((a, b) => a + b, 0) / arr.length,
+      min: Math.min(...arr),
+      max: m,
+      median: median(arr),
+      p90: percentile(arr, 90),
+      recommended: recommend(m, bufferPct),
+    };
+  });
+  const over3Count = summaries.reduce((a, s) => a + (s.flow.over3Count || 0), 0);
+  const maxN = rows.length ? Math.max(...rows.map(r => r.n)) : 0;
+  rows.forEach(r => { r.isTop = maxN > 0 && r.n === maxN; });
+  return {
+    rows,
+    over3Count,
+    over3Avg: summaries.length ? over3Count / summaries.length : 0,
+    events: summaries.length,
+    quitH,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Orchestration
+// ════════════════════════════════════════════════════════════════════
+const state = { summaries: [], errors: [], ids: [], analyzed: false };
+
+function shouldIncludeEvent(event, opts) {
+  if (!opts || !opts.filterOn || !opts.fromDate) return true;
+  const b = String(event && event.begin ? event.begin : '').slice(0, 10);
+  return b >= opts.fromDate;
+}
+
+function readOpts() {
+  let bufferPct = 20;
+  let quitH = DEFAULT_QUIT_H;
+  let fromDate = null;
+  let filterOn = false;
+  const bp = $('bufferPct');
+  if (bp) { const v = parseInt(bp.value, 10); if (isFinite(v) && v >= 0) bufferPct = v; }
+  const qh = $('quitHours');
+  if (qh) { const v = parseFloat(qh.value); if (isFinite(v) && v > 0) quitH = v; }
+  const fd = $('fromDate');
+  if (fd && fd.value) { fromDate = fd.value; filterOn = $('dateFilterOn') && $('dateFilterOn').checked; }
+  return { bufferPct, quitH, fromDate, filterOn };
+}
+
+async function addEventSummary(event, summaries, label) {
+  const s = perEventStats(event, { quitH: readOpts().quitH });
+  if (label) s.name = label + ' – ' + (s.name || '');
+  summaries.push(s);
+}
+
+async function analyzeAll() {
+  const input = $('idsInput') ? $('idsInput').value : '';
+  const ids = extractIds(input);
+  state.ids = ids;
+  state.summaries = [];
+  state.errors = [];
+  if (!ids.length) { state.analyzed = false; setStatus(T('inFabNone'), 'err'); return; }
+  state.gentleTotal = ids.length;
+  const opts = readOpts();
+  setStatus(T('statusLoading') + ' … (0/' + ids.length + ')', 'ok');
+  const summaries = [];
+  const errors = [];
+  for (let i = 0; i < ids.length; i++) {
+    setStatus(T('statusLoading') + ' … (' + (i + 1) + '/' + ids.length + ')', 'ok');
+    const id = ids[i];
+    try {
+      const event = await fetchEventById(id);
+      if (!shouldIncludeEvent(event, opts)) continue;
+      if (isMultistageEvent(event)) {
+        const stages = event.events || [];
+        if (stages.length) {
+          let any = false;
+          for (let j = 0; j < stages.length; j++) {
+            try {
+              const se = await fetchEventByUUID(stages[j].id);
+              await addEventSummary(se, summaries, (event.name || '') + ' · osuus ' + (stages[j].stageNumber != null ? stages[j].stageNumber : j + 1));
+              any = true;
+            } catch (e) {
+              console.warn('Stage load failed:', stages[j].id, e);
+            }
+          }
+          if (!any) errors.push(id);
+        } else if (event.results && event.results.length) {
+          await addEventSummary(event, summaries);
+        } else {
+          errors.push(id);
+        }
+      } else {
+        await addEventSummary(event, summaries);
+      }
+    } catch (e) {
+      console.error(id, e);
+      errors.push(id);
+    }
+  }
+  state.summaries = summaries;
+  state.errors = errors;
+  state.analyzed = true;
+  render(opts);
+  renderStatus(true);
+}
+
+async function fetchEventByUUID(uuid) {
+  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(uuid), uuid);
+}
+
+// ── Shareable prefill: ?events=uuid1,uuid2,… ──
+function prefillFromUrl() {
+  if (typeof location === 'undefined') return;
+  const qs = new URLSearchParams(location.search);
+  const ev = qs.get('events');
+  if (!ev) return;
+  const ids = extractIds(ev.replace(/\+/g, ','));
+  if (ids.length && $('idsInput')) {
+    $('idsInput').value = ids.join('\n');
+    analyzeAll();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Rendering
+// ════════════════════════════════════════════════════════════════════
+function cardHtml(title, num, sub) {
+  return '<div class="card"><h4>' + esc(title) + '</h4><span class="num">' + esc(num) + '</span>' +
+    (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') + '</div>';
+}
+
+function classColumns(summaries) {
+  const order = [];
+  const seen = {};
+  summaries.forEach(s => s.classes.forEach(c => {
+    if (!(c.name in seen)) { seen[c.name] = 1; order.push(c.name); }
+  }));
+  return order;
+}
+
+function render(opts) {
+  const out = $('output');
+  if (!out) return;
+  const summaries = state.summaries;
+  const errors = state.errors;
+  if (!summaries.length && !errors.length) { out.innerHTML = ''; return; }
+  let html = '';
+
+  if (errors.length) {
+    html += '<div class="errbox"><b>' + esc(T('secErrors')) + '</b>' +
+      '<div>' + esc(T('errBoxIntro')) + '</div>' +
+      errors.map(e => '<span class="warnrow">' + esc(e) + '</span>').join('') + '</div>';
+  }
+
+  if (summaries.length) {
+    const agg = aggregateSummaries(summaries, opts.bufferPct, opts.quitH);
+    html += summaryCards(agg);
+    html += '<div class="hint">' + esc(T('termsHint')) + '</div>';
+    html += recommendationPanel(agg, opts);
+    html += matrixPanel(summaries, opts.quitH);
+    html += detailsPanel(summaries, opts.quitH);
+  } else {
+    html += '<div class="empty">' + esc(T('inFabNone')) + '</div>';
+  }
+  out.innerHTML = html;
+}
+
+function summaryCards(agg) {
+  const cards = [
+    cardHtml(T('cTotal'), agg.events, 'tapahtumaa'),
+  ];
+  agg.rows.forEach(r => {
+    cards.push('<div class="card hl' + (r.isTop ? ' top' : '') + '"><h4>' + esc(r.name) + (r.isTop ? ' <span class="topmark">▲</span>' : '') + '</h4><span class="num">' + r.recommended + '</span>' +
+      '<span class="sub">' + esc(T('cRec')) + ' · ' + esc(Math.round(r.avg)) + ' KA · max ' + r.max + (r.isTop ? ' · <b>' + esc(T('mostCommon')) + '</b>' : '') + '</span></div>');
+  });
+  if (agg.over3Count) {
+    cards.push(cardHtml(T('cOver3h'), agg.over3Count, agg.quitH + ' h'));
+  }
+  return '<div class="cards">' + cards.join('') + '</div>';
+}
+
+function recommendationPanel(agg, opts) {
+  let html = '<div class="panel"><div class="phead">' + esc(T('secSummary')) + ' <span class="subdim">' + esc(T('csvRec')) + ': ' + opts.bufferPct + ' % · ' + esc(T('recSub')) + ' · P90 = 90 % tapahtumista tällä tai alle</span></div>';
+  html += '<table><thead><tr>' +
+    '<th>' + esc(T('hClass')) + '</th><th class="num">' + esc(T('hTotal')) + '</th>' +
+    '<th class="num">' + esc(T('cAvg')) + '</th><th class="num">' + esc(T('cMedian')) + '</th>' +
+    '<th class="num">' + esc(T('cMax')) + '</th><th class="num">' + esc(T('cP90')) + '</th>' +
+    '<th class="num">' + esc(T('cRec')) + '</th><th class="num">' + esc(T('cRec')) + ' (P90)</th></tr></thead><tbody>';
+  agg.rows.forEach(r => {
+    html += '<tr' + (r.isTop ? ' class="recrow"' : '') + '><td class="big">' + esc(r.name) +
+      (r.isTop ? ' <span class="topmark" title="' + esc(T('mostCommon')) + '">▲</span>' : '') + '</td>' +
+      '<td class="num">' + r.total + '</td>' +
+      '<td class="num">' + Math.round(r.avg) + '</td>' +
+      '<td class="num">' + fmtNum(r.median) + '</td>' +
+      '<td class="num">' + r.max + '</td>' +
+      '<td class="num">' + fmtNum(r.p90) + '</td>' +
+      '<td class="num big">' + r.recommended + '</td>' +
+      '<td class="num">' + (r.p90 != null ? recommend(r.p90, opts.bufferPct) : '') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+function fmtNum(v) { return v == null ? '' : (Math.round(v * 10) / 10); }
+
+function matrixPanel(summaries, quitH) {
+  const cls = classColumns(summaries);
+  let html = '<div class="panel"><div class="phead">' + esc(T('secMatrix')) + '</div>';
+  html += '<table><thead><tr><th>' + esc(T('hDate')) + '</th><th>' + esc(T('hEvent')) + '</th>';
+  cls.forEach(c => html += '<th class="num">' + esc(c) + '</th>');
+  html += '<th class="num">' + esc(T('hFirstStart')) + '</th><th class="num">' + esc(T('hLastStart')) + '</th>' +
+    '<th class="num">' + esc(T('hFirstResult')) + '</th><th class="num">' + esc(T('hLastResult')) + '</th>' +
+    '<th class="num">' + esc(T('hLongest')) + '</th><th class="num">' + esc(T('hOver3')) + '</th>' +
+    '<th class="num">' + esc(T('hOk')) + '</th></tr></thead><tbody>';
+  summaries.forEach(s => {
+    const byCls = {};
+    s.classes.forEach(c => byCls[c.name] = c);
+    const okTot = s.classes.reduce((a, c) => a + c.ok, 0);
+    html += '<tr><td>' + esc(s.date) + '</td><td class="evcell">' + esc(s.name) + (s.isRelay ? ' <span class="subdim">' + esc(T('relayTag')) + '</span>' : '') + '</td>';
+    cls.forEach(c => {
+      const cc = byCls[c];
+      html += '<td class="num">' + (cc ? cc.total : '') + '</td>';
+    });
+    html += '<td class="num">' + esc(s.flow.firstStart ? s.flow.firstStart.clock : '') + '</td>' +
+      '<td class="num">' + esc(s.flow.lastStart ? s.flow.lastStart.clock : '') + '</td>' +
+      '<td class="num">' + esc(s.flow.firstResult ? s.flow.firstResult.clock : '') + '</td>' +
+      '<td class="num">' + esc(s.flow.lastResult ? s.flow.lastResult.clock : '') + '</td>' +
+      '<td class="num">' + esc(fmtDur(s.flow.longestSec)) + '</td>' +
+      '<td class="num">' + (s.flow.over3Count ? s.flow.over3Count : '') + '</td>' +
+      '<td class="num">' + okTot + '</td></tr>';
+  });
+  // Totals row
+  html += '<tr class="totrow"><td>' + esc(T('totAll')) + '</td><td>' + summaries.length + ' tapahtumaa</td>';
+  cls.forEach(c => {
+    const sum = summaries.reduce((a, s) => a + (s.classes.find(x => x.name === c) || {}).total, 0);
+    html += '<td class="num">' + sum + '</td>';
+  });
+  html += '<td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function detailsPanel(summaries, quitH) {
+  let html = '<div class="panel"><div class="phead">' + esc(T('secDetails')) + '</div>';
+  summaries.forEach(s => {
+    html += '<div class="detail"><details><summary>' + esc(s.date) + ' · ' + esc(s.name) +
+      (s.isRelay ? ' (' + esc(T('relayTag')) + ')' : '') + '</summary>';
+    html += '<table style="margin-top:10px"><thead><tr>' +
+      '<th>' + esc(T('hClass')) + '</th><th class="num">' + esc(T('hTotal')) + '</th>' +
+      '<th class="num">' + esc(T('hOk')) + '</th><th class="num">DNF</th><th class="num">DSQ</th><th class="num">DNS/NT</th><th class="num">' + esc(T('hRegistered')) + '</th></tr></thead><tbody>';
+    s.classes.forEach(c => {
+      html += '<tr><td>' + esc(c.name) + '</td><td class="num big">' + c.total + '</td>' +
+        '<td class="num">' + c.ok + '</td><td class="num">' + c.dnf + '</td><td class="num">' + c.dsq + '</td>' +
+        '<td class="num">' + (c.dns + c.notime) + '</td><td class="num">' + c.registered + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += flowBlock(s.flow, quitH);
+    html += '</details></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function flowBlock(flow, quitH) {
+  const li = (label, val) => '<tr><td>' + esc(label) + '</td><td>' + esc(val) + '</td></tr>';
+  let html = '<table style="margin-top:12px"><tbody>';
+  if (flow.firstStart) html += li(T('firstStart'), flow.firstStart.clock + ' (' + flow.firstStart.who + ', ' + flow.firstStart.cls + ')');
+  if (flow.lastStart) {
+    let extra = flow.startWindowMin != null ? ' · ' + T('startWin') + ' ' + flow.startWindowMin + ' min' : '';
+    html += li(T('lastStart'), flow.lastStart.clock + ' (' + flow.lastStart.who + ', ' + flow.lastStart.cls + ')' + extra);
+  }
+  if (flow.firstResult) html += li(T('firstResult'), flow.firstResult.clock + ' (' + flow.firstResult.who + ')');
+  if (flow.lastResult) html += li(T('lastResult'), flow.lastResult.clock);
+  if (flow.longest) html += li(T('longest'), fmtDur(flow.longest.sec) + ' (' + flow.longest.who + ', ' + flow.longest.cls + ')');
+  else html += li(T('longest'), T('noTimes'));
+  html += '</tbody></table>';
+  if (flow.over3Count) {
+    html += '<div class="warnbox"><b>' + esc(T('cOver3h')) + ': ' + flow.over3Count + '</b> (' + quitH + ' h)<br><span class="subdim">' + esc(T('over3')) + '</span>' +
+      flow.over3.map(o => '<span class="warnrow">' + esc(fmtDur(o.sec)) + ' · ' + esc(o.who) + ' · ' + esc(o.cls) + ' · ' + esc(o.clock) + '</span>').join('') + '</div>';
+  }
+  return html;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  CSV export
+// ════════════════════════════════════════════════════════════════════
+function toCSV(rows) {
+  return rows.map(r => r.map(cell => {
+    const s = String(cell == null ? '' : cell);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(';')).join('\r\n');
+}
+
+function buildCSV(summaries, opts) {
+  const rows = [];
+  const cls = classColumns(summaries);
+  rows.push([T('csvEvents')]);
+  rows.push([T('hDate'), T('hEvent'), T('hClass'), T('hTotal'), T('hOk'), 'DNF', 'DSQ', 'DNS/NT', T('hRegistered'),
+    T('hFirstStart'), T('hLastStart'), T('hFirstResult'), T('hLastResult'), T('hLongest'), T('hOver3')]);
+  summaries.forEach(s => {
+    s.classes.forEach(c => {
+      rows.push([s.date, s.name, c.name, c.total, c.ok, c.dnf, c.dsq, c.dns + c.notime, c.registered,
+        s.flow.firstStart ? s.flow.firstStart.clock : '',
+        s.flow.lastStart ? s.flow.lastStart.clock : '',
+        s.flow.firstResult ? s.flow.firstResult.clock : '',
+        s.flow.lastResult ? s.flow.lastResult.clock : '',
+        fmtDur(s.flow.longestSec),
+        s.flow.over3Count || '']);
+    });
+  });
+  rows.push([]);
+  const agg = aggregateSummaries(summaries, opts.bufferPct, opts.quitH);
+  rows.push([T('csvAgg')]);
+  rows.push([T('hClass'), T('hTotal'), T('cAvg'), T('cMedian'), T('cMax'), T('cP90'), T('csvRec')]);
+  agg.rows.forEach(r => rows.push([r.name, r.total, Math.round(r.avg), fmtNum(r.median), r.max, fmtNum(r.p90), r.recommended]));
+  rows.push([]);
+  rows.push([T('cOver3h'), agg.over3Count, agg.quitH + ' h']);
+  return toCSV(rows);
+}
+
+function exportCSV() {
+  if (!state.summaries.length) return;
+  const opts = readOpts();
+  const content = buildCSV(state.summaries, opts);
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'karttatarpeet.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════════════════
+function wireUI() {
+  setLang('fi');
+  const fd = $('fromDate');
+  if (fd) {
+    const d = new Date();
+    d.setFullYear(new Date().getFullYear() - 2, 0, 1);
+    fd.value = d.toISOString().slice(0, 10);
+  }
+  const ab = $('analyzeBtn');
+  if (ab) ab.addEventListener('click', analyzeAll);
+  const cb = $('clearBtn');
+  if (cb) cb.addEventListener('click', () => {
+    const inp = $('idsInput'); if (inp) inp.value = '';
+    state.summaries = []; state.errors = []; state.ids = []; state.analyzed = false;
+    const out = $('output'); if (out) out.innerHTML = '';
+    setStatus(T('statusReady'), '');
+  });
+  const csv = $('csvBtn');
+  if (csv) csv.addEventListener('click', exportCSV);
+  const pb = $('printBtn');
+  if (pb) pb.addEventListener('click', () => { try { window.print(); } catch (e) {} });
+  const lb = $('langBtn');
+  if (lb) lb.addEventListener('click', () => setLang(lang === 'fi' ? 'en' : 'fi'));
+  setStatus(T('statusReady'), '');
+  prefillFromUrl();
+}
+
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('DOMContentLoaded', wireUI);
+}
+</script>
+</body>
+</html>

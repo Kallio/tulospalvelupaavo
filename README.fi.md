@@ -524,6 +524,36 @@ saatavilla suomeksi ja englanniksi.
 
 </details>
 
+### Karttatarpeet (karttatarvelaskuri)
+
+Tiedosto: [`karttatarpeet.html`](karttatarpeet.html)
+
+Kuinka monta karttaa kullekin radalle tulostetaan koko kaudella? Liitä
+joukko Navisport-tapahtumien tunnisteita ja saat ratoittaisen
+tulostussuosituksen ilman spreadsheet-puuhaa.
+
+<details>
+<summary>Yksityiskohdat</summary>
+
+Karttatulostus-/osallistujamääräsuunnittelija [Navisport](#navisport)-tapahtumille.
+Hyväksyy tapahtumatunnisteet missä muodossa tahansa: UUID:t,
+`navisport.com/fi/events/...`-URL:t, markdown-linkit, pelkät
+sluget tai liitetyn kappaleen arkistosivun HTML:ää. Lataa kaikki tapahtumat
+yhdellä kertaa ja raportoi ratojen osallistujamäärät (jokainen tulossarake =
+yksi tulostettu kartta) tapahtumien yli: keskiarvo, mediaani, maksimi, P90 ja
+tulostussuositus (`maksimi + vara`, vara-%. säädettävissä). Jokaisesta
+tapahtumasta näytetään myös kulku: ensimmäinen/viimeinen lähtö,
+lähtöikkuna, ensimmäinen/viimeinen tulos, pisin aito rataan käytetty aika ja
+yli-kynnyksen "lähtenyt mutta lähtenyt kotiin" -tapaukset (oletus 3 h,
+säädettävissä). Viestien tuloksissa lasketaan joukkuerivit, moniosaiset
+tapahtumat analysoidaan osuus kerrallaan ja vanhemman kauden sarjanimet
+(BEG/short/long) normalisoidaan nykyisiksi. Mukana päiväsuodatin,
+CSV-vienti, siisti tulostus, suomi/englanti-käyttöliittymä ja jaettava
+`?events=uuid1,uuid2,…`-linkki. Testattu riippuvuuksettomilla Node-testeillä
+(`tests/test_karttatarpeet.js`).
+
+</details>
+
 ## AM-työkalut (Suunnistava Uusimaa)
 
 Nämä työkalut on suunnattu Uudenmaan piiriin ("AM" = AlueMestaruus / alueellinen
