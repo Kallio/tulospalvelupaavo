@@ -165,6 +165,9 @@
 
   .detail { margin: 6px 0 0; }
   .detail summary { cursor: pointer; font-weight: 600; color: var(--primary); font-size: 12.5px; }
+  .detaillink { margin: 10px 0 0; font-size: 12.5px; }
+  .detaillink a { color: var(--primary-light); font-weight: 600; text-decoration: none; }
+  .detaillink a:hover { text-decoration: underline; }
   .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
   .hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin-top: 6px; }
   .hint code { background: rgba(127,143,160,.14); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
@@ -174,6 +177,15 @@
     body { background: #fff; }
     #output { padding: 0; max-width: none; }
     .panel { box-shadow: none; border-color: #ccc; break-inside: avoid; }
+    /* the event-details panel is taller than a page, so let it flow and keep
+       each event's block (summary + tables) intact instead of an orphan line */
+    .panel-details { break-inside: auto; }
+    .panel-details .detail { break-inside: avoid; }
+    tr { break-inside: avoid; }
+    th, td { white-space: normal; }
+    th, td { padding: 5px 7px; }
+    table { font-size: 11px; }
+    details::details-content { display: block; }
   }
 </style>
 </head>
@@ -231,7 +243,9 @@ const LANGS = {
     secMatrix: 'Tapahtumat ja radat',
     secDetails: 'Tapahtumien tiedot',
     secErrors: 'Latausvirheet',
-    cRec: 'Suositus (max + vara)',
+    cRec: 'Suositus (max)',
+    cRecP90: 'Suositus (P90)',
+    recLegend: 'Vara {b} % · Suositus (max) = suurin osallistujamäärä + vara · Suositus (P90) = riittää 90 %:lle tapahtumista · Ennakkoilmoitt. % = ilmoittautuneiden osuus osallistujista',
     cAvg: 'Keskiarvo',
     cMax: 'Suurin',
     cTotal: 'Yhteensä',
@@ -242,6 +256,7 @@ const LANGS = {
     hEvent: 'Tapahtuma',
     hClass: 'Rata / sarja',
     hTotal: 'Osallistujat (kaikki rivit)',
+    hRegPct: 'Ennakkoilmoitt. %',
     hOk: 'OK',
     hRegistered: 'Ennakkoilmoitt.',
     hSee: 'Yksityisk.',
@@ -267,8 +282,9 @@ const LANGS = {
     errBoxIntro: 'Seuraavia tapahtumia ei saatu ladattua (tarkista tunniste):',
     csvEvents: 'Tapahtumat',
     csvAgg: 'Yhteenveto ratoja kohti',
-    csvRec: 'Suositus (max + vara)',
+    csvRec: 'Suositus (max)',
     recSub: 'rivi = yhden tapahtuman osallistujat (kaikki tuloslistan rivit)',
+    eventLink: 'Avaa Navisportissa',
     termsHint: 'Kaikki rivit = jokainen tuloslistan osallistuja, myös DNF/DSQ/DNS → tämä on karttamäärän perusta. Ennakkoilmoitt. = etukäteen ilmoittautuneet (osajoukko).',
     quitSuffix: 'h = keskeytys',
     mostCommon: 'yleisin',
@@ -297,7 +313,9 @@ const LANGS = {
     secMatrix: 'Events and courses',
     secDetails: 'Event details',
     secErrors: 'Load errors',
-    cRec: 'Recommendation (max + buffer)',
+    cRec: 'Recommendation (max)',
+    cRecP90: 'Recommendation (P90)',
+    recLegend: '{b} % buffer · Recommendation (max) = largest count + buffer · Recommendation (P90) = enough for 90 % of events · Pre-registered % = share that signed up in advance',
     cAvg: 'Average',
     cMax: 'Max',
     cTotal: 'Total',
@@ -308,6 +326,7 @@ const LANGS = {
     hEvent: 'Event',
     hClass: 'Course / class',
     hTotal: 'Participants (all rows)',
+    hRegPct: 'Pre-registered %',
     hOk: 'OK',
     hRegistered: 'Pre-registered',
     hSee: 'Details',
@@ -333,8 +352,9 @@ const LANGS = {
     errBoxIntro: 'The following events could not be loaded (check identifiers):',
     csvEvents: 'Events',
     csvAgg: 'Per-course summary',
-    csvRec: 'Recommendation (max + buffer)',
+    csvRec: 'Recommendation (max)',
     recSub: 'row = participants of one event (all result rows)',
+    eventLink: 'Open in Navisport',
     termsHint: 'All rows = every person on the results list, incl. DNF/DSQ/DNS → this is the basis for the map count. Pre-registered = signed up in advance (a subset).',
     quitSuffix: 'h = quit',
     mostCommon: 'most common',
@@ -403,10 +423,6 @@ function dateStr(iso) {
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return '';
   return Number(m[3]) + '.' + Number(m[2]) + '.' + m[1];
-}
-function initials(name) {
-  return String(name == null ? '' : name).trim().split(/\s+/).filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase()).join('');
 }
 function setStatus(msg, type) {
   const el = $('status');
@@ -509,6 +525,18 @@ function canonClass(name) {
   return String(name == null ? '' : name).trim();
 }
 
+// Resolve a result row's class to a human-readable name: prefer the event's
+// own courseClasses map; fall back to the raw value only when it looks like a
+// real name, never an id-shaped token (e.g. an orphan UUID referenced by a
+// single row but defined nowhere in the event → bucket under "no class").
+function resolveClassName(cc, classId) {
+  const known = cc[classId];
+  if (known) return known;
+  const raw = String(classId == null ? '' : classId);
+  if (raw && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) return raw;
+  return '';
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  Navisport fetch
 // ════════════════════════════════════════════════════════════════════
@@ -579,7 +607,7 @@ function perEventStats(event, classes) {
   // ── per-class counts (all result rows = printed maps) ──
   const byClassHash = {};
   rows.forEach(r => {
-    const className = canonClass(cc[r.classId] || r.classId || '');
+    const className = canonClass(resolveClassName(cc, r.classId));
     const key = className || T('unknownClass');
     const st = classifyStatus(r.status);
     const t = rowTimes(r);
@@ -609,7 +637,7 @@ function perEventStats(event, classes) {
   const longestRow = longestSec != null
     ? recs.find(x => x.t.dur === longestSec) : null;
 
-  const mkWho = x => x ? { clock: fmtClock(x.t.start), who: initials(x.r.name), cls: canonClass(cc[x.r.classId] || x.r.classId || '') } : null;
+  const mkWho = x => x ? { clock: fmtClock(x.t.start), cls: canonClass(resolveClassName(cc, x.r.classId)) } : null;
 
   const firstStart = byStart.length ? byStart[0] : null;
   const lastStart = byStart.length ? byStart[byStart.length - 1] : null;
@@ -620,22 +648,20 @@ function perEventStats(event, classes) {
   const flow = {
     firstStart: mkWho(firstStart),
     lastStart: mkWho(lastStart),
-    firstResult: firstResult ? { clock: fmtClock(firstResult.t.finish), who: initials(firstResult.r.name) } : null,
+    firstResult: firstResult ? { clock: fmtClock(firstResult.t.finish) } : null,
     lastResult: lastResult ? { clock: fmtClock(lastResult.t.finish) } : null,
     startWindowMin: firstStart && lastStart ? Math.round((lastStart.t.start - firstStart.t.start) / 60000) : null,
     longestSec,
     longest: longestRow ? {
       sec: longestSec,
       clock: fmtClock(longestRow.t.finish != null ? longestRow.t.finish : longestRow.t.start),
-      who: initials(longestRow.r.name),
-      cls: canonClass(cc[longestRow.r.classId] || longestRow.r.classId || ''),
+      cls: canonClass(resolveClassName(cc, longestRow.r.classId)),
     } : null,
     over3Count: over3.length,
     over3: over3.map(x => ({
       sec: x.t.dur,
       clock: fmtClock(x.t.finish != null ? x.t.finish : x.t.start),
-      who: initials(x.r.name),
-      cls: canonClass(cc[x.r.classId] || x.r.classId || ''),
+      cls: canonClass(resolveClassName(cc, x.r.classId)),
     })).sort((a, b) => b.sec - a.sec),
   };
 
@@ -673,21 +699,27 @@ function aggregateSummaries(summaries, bufferPct, quitH) {
   const order = [];
   const seen = {};
   const acc = {};
+  const regAcc = {};
   summaries.forEach(s => {
     s.classes.forEach(c => {
       const n = c.name;
       if (!(n in seen)) { seen[n] = 1; order.push(n); }
       (acc[n] = acc[n] || []).push(c.total);
+      (regAcc[n] = regAcc[n] || []).push(c.registered || 0);
     });
   });
   const rows = order.map(n => {
     const arr = acc[n];
     const m = Math.max(...arr);
+    const registered = regAcc[n].reduce((a, b) => a + b, 0);
+    const total = arr.reduce((a, b) => a + b, 0);
     return {
       name: n,
       n: arr.length,
-      total: arr.reduce((a, b) => a + b, 0),
-      avg: arr.reduce((a, b) => a + b, 0) / arr.length,
+      total,
+      registered,
+      regPct: total > 0 ? Math.round(registered / total * 100) : null,
+      avg: total / arr.length,
       min: Math.min(...arr),
       max: m,
       median: median(arr),
@@ -866,16 +898,18 @@ function summaryCards(agg) {
 }
 
 function recommendationPanel(agg, opts) {
-  let html = '<div class="panel"><div class="phead">' + esc(T('secSummary')) + ' <span class="subdim">' + esc(T('csvRec')) + ': ' + opts.bufferPct + ' % · ' + esc(T('recSub')) + ' · P90 = 90 % tapahtumista tällä tai alle</span></div>';
+  let html = '<div class="panel"><div class="phead">' + esc(T('secSummary')) + ' <span class="subdim">' + esc(T('recLegend').replace('{b}', opts.bufferPct)) + ' · ' + esc(T('recSub')) + '</span></div>';
   html += '<table><thead><tr>' +
     '<th>' + esc(T('hClass')) + '</th><th class="num">' + esc(T('hTotal')) + '</th>' +
+    '<th class="num">' + esc(T('hRegPct')) + '</th>' +
     '<th class="num">' + esc(T('cAvg')) + '</th><th class="num">' + esc(T('cMedian')) + '</th>' +
     '<th class="num">' + esc(T('cMax')) + '</th><th class="num">' + esc(T('cP90')) + '</th>' +
-    '<th class="num">' + esc(T('cRec')) + '</th><th class="num">' + esc(T('cRec')) + ' (P90)</th></tr></thead><tbody>';
+    '<th class="num">' + esc(T('cRec')) + '</th><th class="num">' + esc(T('cRecP90')) + '</th></tr></thead><tbody>';
   agg.rows.forEach(r => {
     html += '<tr' + (r.isTop ? ' class="recrow"' : '') + '><td class="big">' + esc(r.name) +
       (r.isTop ? ' <span class="topmark" title="' + esc(T('mostCommon')) + '">▲</span>' : '') + '</td>' +
       '<td class="num">' + r.total + '</td>' +
+      '<td class="num">' + (r.regPct != null ? r.regPct + ' %' : '') + '</td>' +
       '<td class="num">' + Math.round(r.avg) + '</td>' +
       '<td class="num">' + fmtNum(r.median) + '</td>' +
       '<td class="num">' + r.max + '</td>' +
@@ -890,13 +924,15 @@ function fmtNum(v) { return v == null ? '' : (Math.round(v * 10) / 10); }
 
 function matrixPanel(summaries, quitH) {
   const cls = classColumns(summaries);
+  const showOver3 = summaries.some(s => (s.flow.over3Count || 0) > 0);
   let html = '<div class="panel"><div class="phead">' + esc(T('secMatrix')) + '</div>';
   html += '<table><thead><tr><th>' + esc(T('hDate')) + '</th><th>' + esc(T('hEvent')) + '</th>';
   cls.forEach(c => html += '<th class="num">' + esc(c) + '</th>');
   html += '<th class="num">' + esc(T('hFirstStart')) + '</th><th class="num">' + esc(T('hLastStart')) + '</th>' +
     '<th class="num">' + esc(T('hFirstResult')) + '</th><th class="num">' + esc(T('hLastResult')) + '</th>' +
-    '<th class="num">' + esc(T('hLongest')) + '</th><th class="num">' + esc(T('hOver3')) + '</th>' +
-    '<th class="num">' + esc(T('hOk')) + '</th></tr></thead><tbody>';
+    '<th class="num">' + esc(T('hLongest')) + '</th>';
+  if (showOver3) html += '<th class="num">' + esc(T('hOver3')) + '</th>';
+  html += '<th class="num">' + esc(T('hOk')) + '</th></tr></thead><tbody>';
   summaries.forEach(s => {
     const byCls = {};
     s.classes.forEach(c => byCls[c.name] = c);
@@ -910,23 +946,26 @@ function matrixPanel(summaries, quitH) {
       '<td class="num">' + esc(s.flow.lastStart ? s.flow.lastStart.clock : '') + '</td>' +
       '<td class="num">' + esc(s.flow.firstResult ? s.flow.firstResult.clock : '') + '</td>' +
       '<td class="num">' + esc(s.flow.lastResult ? s.flow.lastResult.clock : '') + '</td>' +
-      '<td class="num">' + esc(fmtDur(s.flow.longestSec)) + '</td>' +
-      '<td class="num">' + (s.flow.over3Count ? s.flow.over3Count : '') + '</td>' +
-      '<td class="num">' + okTot + '</td></tr>';
+      '<td class="num">' + esc(fmtDur(s.flow.longestSec)) + '</td>';
+    if (showOver3) html += '<td class="num">' + (s.flow.over3Count ? s.flow.over3Count : '') + '</td>';
+    html += '<td class="num">' + okTot + '</td></tr>';
   });
   // Totals row
   html += '<tr class="totrow"><td>' + esc(T('totAll')) + '</td><td>' + summaries.length + ' tapahtumaa</td>';
   cls.forEach(c => {
-    const sum = summaries.reduce((a, s) => a + (s.classes.find(x => x.name === c) || {}).total, 0);
+    const sum = summaries.reduce((a, s) => {
+      const cc = s.classes.find(x => x.name === c);
+      return a + (cc ? cc.total : 0);
+    }, 0);
     html += '<td class="num">' + sum + '</td>';
   });
-  html += '<td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+  html += '<td></td>'.repeat(6 + (showOver3 ? 1 : 0)) + '</tr>';
   html += '</tbody></table></div>';
   return html;
 }
 
 function detailsPanel(summaries, quitH) {
-  let html = '<div class="panel"><div class="phead">' + esc(T('secDetails')) + '</div>';
+  let html = '<div class="panel panel-details"><div class="phead">' + esc(T('secDetails')) + '</div>';
   summaries.forEach(s => {
     html += '<div class="detail"><details><summary>' + esc(s.date) + ' · ' + esc(s.name) +
       (s.isRelay ? ' (' + esc(T('relayTag')) + ')' : '') + '</summary>';
@@ -939,6 +978,7 @@ function detailsPanel(summaries, quitH) {
         '<td class="num">' + (c.dns + c.notime) + '</td><td class="num">' + c.registered + '</td></tr>';
     });
     html += '</tbody></table>';
+    html += '<div class="detaillink"><a href="https://navisport.com/events/' + encodeURIComponent(s.id) + '" target="_blank" rel="noopener">' + esc(T('eventLink')) + ' ↗</a></div>';
     html += flowBlock(s.flow, quitH);
     html += '</details></div>';
   });
@@ -949,19 +989,19 @@ function detailsPanel(summaries, quitH) {
 function flowBlock(flow, quitH) {
   const li = (label, val) => '<tr><td>' + esc(label) + '</td><td>' + esc(val) + '</td></tr>';
   let html = '<table style="margin-top:12px"><tbody>';
-  if (flow.firstStart) html += li(T('firstStart'), flow.firstStart.clock + ' (' + flow.firstStart.who + ', ' + flow.firstStart.cls + ')');
+  if (flow.firstStart) html += li(T('firstStart'), flow.firstStart.clock + (flow.firstStart.cls ? ' (' + flow.firstStart.cls + ')' : ''));
   if (flow.lastStart) {
     let extra = flow.startWindowMin != null ? ' · ' + T('startWin') + ' ' + flow.startWindowMin + ' min' : '';
-    html += li(T('lastStart'), flow.lastStart.clock + ' (' + flow.lastStart.who + ', ' + flow.lastStart.cls + ')' + extra);
+    html += li(T('lastStart'), flow.lastStart.clock + (flow.lastStart.cls ? ' (' + flow.lastStart.cls + ')' : '') + extra);
   }
-  if (flow.firstResult) html += li(T('firstResult'), flow.firstResult.clock + ' (' + flow.firstResult.who + ')');
+  if (flow.firstResult) html += li(T('firstResult'), flow.firstResult.clock);
   if (flow.lastResult) html += li(T('lastResult'), flow.lastResult.clock);
-  if (flow.longest) html += li(T('longest'), fmtDur(flow.longest.sec) + ' (' + flow.longest.who + ', ' + flow.longest.cls + ')');
+  if (flow.longest) html += li(T('longest'), fmtDur(flow.longest.sec) + (flow.longest.cls ? ' (' + flow.longest.cls + ')' : ''));
   else html += li(T('longest'), T('noTimes'));
   html += '</tbody></table>';
   if (flow.over3Count) {
     html += '<div class="warnbox"><b>' + esc(T('cOver3h')) + ': ' + flow.over3Count + '</b> (' + quitH + ' h)<br><span class="subdim">' + esc(T('over3')) + '</span>' +
-      flow.over3.map(o => '<span class="warnrow">' + esc(fmtDur(o.sec)) + ' · ' + esc(o.who) + ' · ' + esc(o.cls) + ' · ' + esc(o.clock) + '</span>').join('') + '</div>';
+      flow.over3.map(o => '<span class="warnrow">' + esc(fmtDur(o.sec)) + (o.cls ? ' · ' + esc(o.cls) : '') + ' · ' + esc(o.clock) + '</span>').join('') + '</div>';
   }
   return html;
 }
@@ -996,8 +1036,8 @@ function buildCSV(summaries, opts) {
   rows.push([]);
   const agg = aggregateSummaries(summaries, opts.bufferPct, opts.quitH);
   rows.push([T('csvAgg')]);
-  rows.push([T('hClass'), T('hTotal'), T('cAvg'), T('cMedian'), T('cMax'), T('cP90'), T('csvRec')]);
-  agg.rows.forEach(r => rows.push([r.name, r.total, Math.round(r.avg), fmtNum(r.median), r.max, fmtNum(r.p90), r.recommended]));
+  rows.push([T('hClass'), T('hTotal'), T('hRegPct'), T('cAvg'), T('cMedian'), T('cMax'), T('cP90'), T('csvRec')]);
+  agg.rows.forEach(r => rows.push([r.name, r.total, r.regPct != null ? r.regPct + ' %' : '', Math.round(r.avg), fmtNum(r.median), r.max, fmtNum(r.p90), r.recommended]));
   rows.push([]);
   rows.push([T('cOver3h'), agg.over3Count, agg.quitH + ' h']);
   return toCSV(rows);
@@ -1042,6 +1082,25 @@ function wireUI() {
   if (pb) pb.addEventListener('click', () => { try { window.print(); } catch (e) {} });
   const lb = $('langBtn');
   if (lb) lb.addEventListener('click', () => setLang(lang === 'fi' ? 'en' : 'fi'));
+  // Expand event details for printing (works with the toolbar button and Ctrl+P),
+  // then restore the user's original open/closed state afterwards.
+  let printOpenState = [];
+  if (window.addEventListener) {
+    window.addEventListener('beforeprint', () => {
+      const ds = document.querySelectorAll && document.querySelectorAll('#output details');
+      if (!ds) return;
+      printOpenState = Array.prototype.map.call(ds, d => d.open);
+      Array.prototype.forEach.call(ds, d => d.setAttribute('open', ''));
+    });
+    window.addEventListener('afterprint', () => {
+      const ds = document.querySelectorAll && document.querySelectorAll('#output details');
+      if (!ds) return;
+      Array.prototype.forEach.call(ds, (d, i) => {
+        if (printOpenState[i]) d.setAttribute('open', '');
+        else d.removeAttribute('open');
+      });
+    });
+  }
   setStatus(T('statusReady'), '');
   prefillFromUrl();
 }

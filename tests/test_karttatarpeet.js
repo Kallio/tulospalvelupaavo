@@ -136,10 +136,11 @@ let P = null;
 try {
   eval(code + `
     global.KP = {
-      T, esc, parseTS, fmtClock, fmtDur, dateStr, initials, median, percentile, recommend,
+      T, esc, parseTS, fmtClock, fmtDur, dateStr, median, percentile, recommend,
       extractIds, canonClass, classifyStatus, STATUS_OK, isMultistageEvent,
+      resolveClassName,
       rowsForCounting, rowTimes, perEventStats, aggregateSummaries, buildCSV, toCSV,
-      shouldIncludeEvent, readOpts, DEFAULT_QUIT_H, analyzeAll,
+      matrixPanel, shouldIncludeEvent, readOpts, DEFAULT_QUIT_H, analyzeAll,
       setLang, applyLangUI, renderStatus, sleep, politeDelayBounds, politeDelayMs,
     };
   `);
@@ -224,14 +225,13 @@ P = global.KP;
 
   // flow facts
   assert('flow: firstResult clock', s.flow.firstResult && s.flow.firstResult.clock === '16:04', s.flow.firstResult);
-  assert('flow: first starter initials (derived start)', s.flow.firstStart.who === 'MM', s.flow.firstStart);
-  assert('flow: first starter at 15:33 (finish−time)', s.flow.firstStart.clock === '15:33', s.flow.firstStart);
+  assert('flow: first starter (derived start, longest course)', s.flow.firstStart.clock === '15:33' && s.flow.firstStart.cls === 'Elite Long' && s.flow.firstStart.who === undefined, s.flow.firstStart);
   assert('flow: last starter clock', s.flow.lastStart.clock === '15:55', s.flow.lastStart);
   assert('flow: start window 22 min', s.flow.startWindowMin === 22, s.flow.startWindowMin);
   assert('flow: longest real time = 25 min', s.flow.longestSec === 1500, s.flow.longestSec);
   assert('flow: longest row belongs to elite long', s.flow.longest.cls === 'Elite Long', s.flow.longest);
   assert('flow: over-3h count = 1', s.flow.over3Count === 1, s.flow.over3Count);
-  assert('flow: over-3h flagged', s.flow.over3.length === 1 && s.flow.over3[0].who === 'MM' && s.flow.over3[0].sec === 13000, s.flow.over3);
+  assert('flow: over-3h flagged', s.flow.over3.length === 1 && s.flow.over3[0].cls === 'Elite Long' && s.flow.over3[0].sec === 13000, s.flow.over3);
   assert('flow: last result = the >3h finish', s.flow.lastResult.clock === '19:10', s.flow.lastResult);
 }
 
@@ -257,6 +257,54 @@ P = global.KP;
   assert('relay: longest = 4200s', s.flow.longestSec === 4200, s.flow.longestSec);
 }
 
+// ── phantom class id must not surface as a course/class ─────────────
+{
+  const orphanEvent = {
+    id: 'ev-x', name: 'Orpo', begin: '2026-04-01T10:00:00.000Z',
+    raceType: 'Individual', eventKind: 'Event',
+    courseClasses: [{ id: 'cs1', name: 'Beginner' }],
+    results: [
+      { id: 'o1', classId: 'cs1', name: 'A A', status: 'Ok', time: 600, finishTime: '2026-04-01T10:10:00.000Z' },
+      // orphan: classId/courseId reference ids defined nowhere in the event (like navisport anonymous "N.N." rows)
+      { id: 'o2', classId: 'ef257e24-3bd2-410e-b7a7-e68d597dbb03', courseId: 'b317e4a4-9c81-4304-ad7f-2ab1dfb640a6', name: 'N.N.', status: 'Competing' },
+      { id: 'o3', classId: null, name: 'Ei Sarjaa', status: 'Dns' },
+      // a human-named fallback (classId used directly as the class name) still resolves
+      { id: 'o4', classId: 'H18', name: 'H H', status: 'Ok', time: 700, finishTime: '2026-04-01T10:12:00.000Z' },
+    ],
+  };
+  const s = P.perEventStats(orphanEvent, { quitH: 3 });
+  const names = s.classes.map(c => c.name);
+  const uuid = 'ef257e24-3bd2-410e-b7a7-e68d597dbb03';
+  assert('orphan: phantom uuid never becomes a class', names.indexOf(uuid) === -1, names);
+  assert('orphan: classes = Beginner, H18, no-class', JSON.stringify(names.slice().sort()) === JSON.stringify(['Beginner', 'H18', 'Ilman sarjaa']), names);
+  const unknown = s.classes.find(c => c.name === 'Ilman sarjaa');
+  assert('orphan: orphan+null rows bucket to no-class, total 2', unknown && unknown.total === 2, unknown);
+  assert('orphan: resolveClassName → "" for unknown uuid', P.resolveClassName({ cs1: 'Beginner' }, 'ef257e24-3bd2-410e-b7a7-e68d597dbb03') === '');
+  assert('orphan: resolveClassName keeps human fallback', P.resolveClassName({}, 'H18') === 'H18');
+  assert('orphan: resolveClassName prefers known name', P.resolveClassName({ cs1: 'Beginner' }, 'cs1') === 'Beginner');
+}
+
+// ── matrix totals sum real values (never NaN), "over limit" column hidden when empty ──
+{
+  const mkSum = (name, clsArr, over3) => ({
+    id: 'i', name, date: '1.1.2026', isRelay: false,
+    classes: clsArr.map(c => ({ name: c.name, total: c.total, ok: c.ok || 0 })),
+    flow: { firstStart: null, lastStart: null, firstResult: null, lastResult: null, longestSec: null, over3Count: over3 || 0 },
+  });
+  const eA = mkSum('Eka', [{ name: 'Beginner', total: 80 }], 0);                                      // has no unknown-class runners at all
+  const eB = mkSum('Toka', [{ name: 'Beginner', total: 60 }, { name: 'Ilman sarjaa', total: 4 }], 0); // 4 runners took a map w/o class
+  const m = P.matrixPanel([eA, eB], 3);
+  const tot = m.slice(m.indexOf('totrow'), m.indexOf('</tbody>'));
+  assert('matrix: no NaN in totals row', m.indexOf('NaN') === -1, m);
+  assert('matrix: totals show real sum (4) for a course missing from one event', tot.indexOf('<td class="num">4</td>') !== -1, tot);
+  assert('matrix: totals never collapse the real count to 0', tot.indexOf('<td class="num">4</td>') !== -1 && tot.indexOf('>0<') === -1, tot);
+  assert('matrix: no over-limit values anywhere → column hidden', m.indexOf(P.T('hOver3')) === -1, m);
+
+  const eC = mkSum('Kolmas', [{ name: 'Elite Long', total: 3 }], 2);
+  const m2 = P.matrixPanel([eA, eB, eC], 3);
+  assert('matrix: any over-limit value → column shown', m2.indexOf(P.T('hOver3')) !== -1, m2);
+}
+
 // ── aggregate + recommendation ────────────────────────────────────────
 {
   const s1 = P.perEventStats(indEvent, { quitH: 3 });
@@ -272,6 +320,11 @@ P = global.KP;
   // Elite Long: 3 and 1
   assert('agg: Elite Long total 4', byName['Elite Long'].total === 4, byName['Elite Long']);
   assert('agg: over3 total 1', agg.over3Count === 1, agg);
+
+  // pre-registration share: indEvent Beginner has 1 of its 2 rows registered (legacyEvent: none)
+  assert('agg: Beginner registered total 1', byName['Beginner'].registered === 1, byName['Beginner']);
+  assert('agg: Beginner pre-registered share 25 %', byName['Beginner'].regPct === 25, byName['Beginner']);
+  assert('agg: Elite Long nobody pre-registered → share 0 %', byName['Elite Long'].registered === 0 && byName['Elite Long'].regPct === 0, byName['Elite Long']);
 
   assert('recommend: ceil semantics', P.recommend(101, 20) === 122, P.recommend(101, 20));
   assert('recommend: buffer 0', P.recommend(10, 0) === 10);
@@ -317,6 +370,7 @@ P = global.KP;
   assert('csv: event rows present', csv.indexOf('Eteläinen Tapiola') !== -1 && csv.indexOf('Kauniaisten Kasavuori') !== -1);
   assert('csv: course headers', csv.indexOf('Beginner') !== -1 && csv.indexOf('Elite Short') !== -1 && csv.indexOf('Elite Long') !== -1);
   assert('csv: aggregate section', csv.indexOf('Yhteenveto ratoja kohti') !== -1);
+  assert('csv: pre-registered % column in aggregate', csv.indexOf(P.T('hRegPct')) !== -1 && csv.indexOf('25 %') !== -1, csv);
   assert('csv: semicolon separated', csv.split('\r\n')[1].split(';').length > 5, csv.split('\r\n')[1]);
   assert('csv: participant vs pre-registered headers distinguished', csv.indexOf('Osallistujat (kaikki rivit)') !== -1 && csv.indexOf('Ennakkoilmoitt.') !== -1, csv);
 }
@@ -336,6 +390,8 @@ P = global.KP;
   (await global.KP.analyzeAll().catch(e => { console.error('e2e threw: ' + e.message); fail++; }));
   assert('e2e: output rendered for the event', typeof out.innerHTML === 'string' && out.innerHTML.indexOf('Eteläinen Tapiola') !== -1, out.innerHTML);
   assert('e2e: terms hint explains results vs pre-registration', out.innerHTML.indexOf('tuloslistan osallistuja') !== -1, out.innerHTML);
+  assert('e2e: details panel marked panel-details (print pagination hook)', out.innerHTML.indexOf('panel panel-details') !== -1, out.innerHTML);
+  assert('print: details blocks break-inside avoid so no orphan page line', html.indexOf('.panel-details .detail { break-inside: avoid; }') !== -1, html);
   global.KP.setLang('en');
   assert('lang: EN re-renders with English header', out.innerHTML.indexOf('Print recommendation per course') !== -1, out.innerHTML);
   assert('lang: EN status message in English', getEl('status').textContent.indexOf('Done') !== -1, getEl('status').textContent);
