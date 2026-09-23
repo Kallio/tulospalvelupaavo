@@ -544,6 +544,10 @@ URLs, markdown links, plain slugs, or a pasted block of archive-page HTML.
 Loads all events in one go and reports per course the participant counts
 (every result row = a printed map) across events, with average, median, max,
 P90 and a print recommendation (`max + buffer %`, buffer is adjustable).
+An optional "group by distance" mode buckets each course into whole-km labels
+(2 km / 3 km / 4 km / 6 km …) so identically-routed courses that are named
+differently per event (e.g. `2km`, `D - 2km`, `D`) merge into one row, while
+the per-event details still show each course's original name and length.
 Each event's flow is broken out too: first/last start, start window,
 first/last result, longest genuine time on course, and over-the-threshold
 "started but went home" cases (default 3 h, adjustable). Team results are

@@ -115,17 +115,32 @@ const archiveHtml = '<div class="evento"><a href="https://navisport.com/events/6
   '<a href="https://navisport.appspot.com/events/5f7d6f38-bdd7-438d-be73-ffa59f1a727c/">Tulokset</a>' +
   '<a href="https://irma.suunnistusliitto.fi/embed/viewEvent/22433#results">IRMA</a>';
 
+// A dedicated event for cache tests (distinct from the fixtures used by the
+// e2e runs below) so the memo starts clean for those ids.
+const cacheEvent = {
+  id: '11111111-2222-3333-4444-555555555555', name: 'Cache Event',
+  begin: '2024-06-01T15:00:00.000Z', ending: '2024-06-01T18:00:00.000Z',
+  raceType: 'Individual', eventKind: 'Event',
+  courseClasses: [{ id: 'cb', name: 'Beginner' }],
+  courses: [{ id: 'cob', name: 'Beginner', distance: 1500, controls: [] }],
+  results: [
+    { id: 'r1', classId: 'cb', courseId: 'cob', name: 'A A', status: 'Ok', time: 500, finishTime: '2024-06-01T15:08:00.000Z' },
+  ],
+};
+
 // ── mock fetch: map event id → event JSON ─────────────────────────────
 const eventsById = {
   'ev-1': indEvent,
   'ev-2': legacyEvent,
   'ev-3': relayEvent,
   '6efc07b8-74a4-4ef8-bc48-4a92060635db': indEvent, // live-resolution smoke
+  '11111111-2222-3333-4444-555555555555': cacheEvent,
 };
 // navisport.com/events/<slug> pages resolve through the tRPC getEvent router;
 // mirror a slug → UUID lookup the same way the real endpoint answers it.
 const slugToUuid = {
   'espoon-suunnan-kuntosuunnistukset-oittaa-2026-05-13': '6efc07b8-74a4-4ef8-bc48-4a92060635db',
+  'cache-test-slug': '11111111-2222-3333-4444-555555555555',
 };
 global.fetch = (url) => {
   if (url.indexOf('/trpc/eventsTrpcRouter.getEvent') !== -1) {
@@ -149,10 +164,11 @@ try {
     global.KP = {
       T, esc, parseTS, fmtClock, fmtDur, dateStr, median, percentile, recommend,
       extractIds, canonClass, classifyStatus, STATUS_OK, isMultistageEvent,
-      resolveClassName,
+      resolveClassName, distanceBucket,
       rowsForCounting, rowTimes, perEventStats, aggregateSummaries, buildCSV, toCSV,
-      matrixPanel, shouldIncludeEvent, readOpts, DEFAULT_QUIT_H, analyzeAll,
+      matrixPanel, detailsPanel, shouldIncludeEvent, readOpts, DEFAULT_QUIT_H, analyzeAll,
       setLang, applyLangUI, renderStatus, sleep, politeDelayBounds, politeDelayMs,
+      fetchEventCached, state,
     };
   `);
 } catch (e) { threw = e; }
@@ -271,6 +287,101 @@ P = global.KP;
   assert('relay: 3 teams counted', cls && cls.total === 3, s.classes);
   assert('relay: ok = 2 (Dnf excluded)', cls && cls.ok === 2, cls);
   assert('relay: longest = 4200s', s.flow.longestSec === 4200, s.flow.longestSec);
+}
+
+// ── distance bucketing (optional "group by distance") ─────────────────
+{
+  assert('bucket: 1900 m → 2 km', P.distanceBucket(1900, null) === '2 km');
+  assert('bucket: 2000 m → 2 km', P.distanceBucket(2000, null) === '2 km');
+  assert('bucket: 2970 m → 3 km', P.distanceBucket(2970, null) === '3 km');
+  assert('bucket: 4022 m → 4 km', P.distanceBucket(4022, null) === '4 km');
+  assert('bucket: 5500 m → 6 km', P.distanceBucket(5500, null) === '6 km');
+  assert('bucket: 6300 m → 6 km', P.distanceBucket(6300, null) === '6 km');
+  assert('bucket: no distance → null', P.distanceBucket(null, null) === null);
+  assert('bucket: name "<n> km" fallback', P.distanceBucket(null, 'Kunto 4 km') === '4 km');
+  assert('bucket: name without km → null', P.distanceBucket(null, 'A') === null);
+  assert('bucket: 0 → null', P.distanceBucket(0, null) === null);
+
+  // Two real-world-shaped events from the Es-Suunta kuntosuunnistus series:
+  // differing class names but the same underlying courses.
+  const kuntoA = {
+    id: 'g1', name: 'Oittaa', begin: '2026-05-13T14:30:00.000Z', raceType: 'Individual', eventKind: 'Event',
+    courseClasses: [
+      { id: 'c2', name: '2km' }, { id: 'c3', name: '3km' }, { id: 'c4', name: '4km' }, { id: 'c6', name: '6km' },
+    ],
+    courses: [
+      { id: 'co2', name: '2km', distance: 1900 }, { id: 'co3', name: '3km', distance: 3000 },
+      { id: 'co4', name: '4km', distance: 4000 }, { id: 'co6', name: '6km', distance: 5500 },
+    ],
+    results: [
+      { id: 'a1', classId: 'c2', courseId: 'co2', name: 'A', status: 'Ok', time: 700 },
+      { id: 'a2', classId: 'c2', courseId: 'co2', name: 'B', status: 'Ok', time: 750 },
+      { id: 'a3', classId: 'c4', courseId: 'co4', name: 'C', status: 'Ok', time: 1500 },
+      { id: 'a4', classId: 'c6', courseId: 'co6', name: 'D', status: 'Dnf' },
+    ],
+  };
+  const kuntoB = {
+    id: 'g2', name: 'Vanttila', begin: '2026-05-20T14:30:00.000Z', raceType: 'Individual', eventKind: 'Event',
+    courseClasses: [
+      { id: 'dA', name: 'A - 6km' }, { id: 'dB', name: 'B - 4km' }, { id: 'dC', name: 'C - 3km' }, { id: 'dD', name: 'D - 2km' },
+    ],
+    courses: [
+      { id: 'coA', name: 'A - 6km', distance: 6000 }, { id: 'coB', name: 'B - 4km', distance: 4400 },
+      { id: 'coC', name: 'C - 3km', distance: 3300 }, { id: 'coD', name: 'D - 2km', distance: 1900 },
+    ],
+    results: [
+      { id: 'b1', classId: 'dA', courseId: 'coA', name: 'E', status: 'Ok', time: 2000 },
+      { id: 'b2', classId: 'dD', courseId: 'coD', name: 'F', status: 'Ok', time: 600 },
+      // no class / no course → must stay ungrouped, not become a km bucket
+      { id: 'b3', classId: null, courseId: null, name: 'G', status: 'Dns' },
+    ],
+  };
+
+  const ungrouped = P.perEventStats(kuntoA, { quitH: 3 });
+  assert('group off: exact class names kept', JSON.stringify(ungrouped.classes.map(c => c.name)) === JSON.stringify(['2km', '4km', '6km']), ungrouped.classes.map(c => c.name));
+
+  const ga = P.perEventStats(kuntoA, { quitH: 3, groupByDistance: true });
+  const gaNames = ga.classes.map(c => c.name);
+  assert('group on: merged to km buckets (2,4,6)', JSON.stringify(gaNames) === JSON.stringify(['2 km', '4 km', '6 km']), gaNames);
+  const gAcls = {};
+  ga.classes.forEach(c => gAcls[c.name] = c);
+  const gA2 = gAcls['2 km'], gA6 = gAcls['6 km'];
+  assert('group on: count carried over (2km=2)', gA2.total === 2, gA2);
+  assert('group on: 6km row is Dnf', gA6.total === 1 && gA6.dnf === 1, gA6);
+  assert('group on: original name kept (orig=2km)', gA2.orig === '2km', gA2);
+  assert('group on: distance kept (2km=1900 m)', gA2.dist === 1900, gA2);
+
+  const gb = P.perEventStats(kuntoB, { quitH: 3, groupByDistance: true });
+  const gbNames = gb.classes.map(c => c.name);
+  assert('group on B: A - 6km → 6 km, D - 2km → 2 km, unknown stays', JSON.stringify(gbNames) === JSON.stringify(['6 km', '2 km', 'Ilman sarjaa']), gbNames);
+  const gB6 = gb.classes[0];
+  assert('group on B: orig = A - 6km, dist = 6000', gB6.orig === 'A - 6km' && gB6.dist === 6000, gB6);
+  assert('group on B: ungrouped no-class row kept', gb.classes[2].total === 1 && gb.classes[2].name === 'Ilman sarjaa', gb.classes[2]);
+
+  // Aggregation across the two events merges the same km bucket into one row.
+  const agg = P.aggregateSummaries([ga, gb], 20, 3);
+  const byName = {};
+  agg.rows.forEach(r => byName[r.name] = r);
+  assert('agg group: 2 km spans both events (2+1=3)', byName['2 km'].total === 3 && byName['2 km'].n === 2, byName['2 km']);
+  assert('agg group: 6 km spans both events', byName['6 km'].total === 2 && byName['6 km'].n === 2, byName['6 km']);
+  assert('agg group: ungrouped row kept', byName['Ilman sarjaa'] && byName['Ilman sarjaa'].total === 1, byName);
+
+  // readOpts surfaces the checkbox (checked state).
+  const gd = getEl('groupByDistance');
+  gd.checked = true;
+  assert('readOpts: groupByDistance from checkbox', P.readOpts().groupByDistance === true, P.readOpts());
+  gd.checked = false;
+  assert('readOpts: default off', P.readOpts().groupByDistance === false, P.readOpts());
+
+  // CSV keeps the "6 km (orig)" combined label so the mapping survives export.
+  const csv = P.buildCSV([ga, gb], { bufferPct: 20, quitH: 3 });
+  assert('csv group: combined label present', csv.indexOf('6 km (A - 6km)') !== -1 && csv.indexOf('2 km (2km)') !== -1, csv);
+
+  // Details panel shows the original name as a sublabel under the bucket.
+  const det = P.matrixPanel([ga], 3);
+  assert('matrix group: bucket column used', det.indexOf('6 km') !== -1 && det.indexOf('A - 6km') === -1, det);
+  const dp = P.detailsPanel([ga], 3);
+  assert('details group: bucket + orig sublabel + metres', dp.indexOf('6 km') !== -1 && dp.indexOf('2km') !== -1 && dp.indexOf('1900 m') !== -1, dp);
 }
 
 // ── phantom class id must not surface as a course/class ─────────────
@@ -400,6 +511,30 @@ P = global.KP;
 
 // ── end-to-end via analyzeAll on stubbed DOM ──────────────────────────
 (async () => {
+  // ── event cache: memo dedupe + force refresh ────
+  // Same uuid, its uppercase form and its slug must resolve to the SAME
+  // memoized event (one field fetch); only the force=true re-run hits the
+  // network again. localStorage is absent in this harness, so only the
+  // in-memory layer is exercised.
+  const cacheUuid = '11111111-2222-3333-4444-555555555555';
+  const origFetch = global.fetch;
+  let net = 0;
+  global.fetch = (u) => { net++; return origFetch(u); };
+  const hits0 = global.KP.state.cacheHits;
+  await global.KP.fetchEventCached(cacheUuid);
+  await global.KP.fetchEventCached(cacheUuid);
+  await global.KP.fetchEventCached(cacheUuid.toUpperCase());
+  await global.KP.fetchEventCached('cache-test-slug');
+  await global.KP.fetchEventCached('cache-test-slug', true);
+  global.fetch = origFetch;
+  assert('cache: uuid+uppercase+slug served from memo, only first+force hit network', net === 3, net);
+  assert('cache: non-forced servings counted as three cache hits', global.KP.state.cacheHits - hits0 === 3, global.KP.state.cacheHits - hits0);
+  const ffEl = getEl('forceFresh');
+  assert('readOpts: forceFresh default off', global.KP.readOpts().forceFresh === false);
+  ffEl.checked = true;
+  assert('readOpts: forceFresh from checkbox', global.KP.readOpts().forceFresh === true);
+  ffEl.checked = false;
+
   const inp = getEl('idsInput');
   const out = getEl('output');
   inp.value = 'https://navisport.com/events/6efc07b8-74a4-4ef8-bc48-4a92060635db';
@@ -422,6 +557,18 @@ P = global.KP;
   (await global.KP.analyzeAll().catch(e => { console.error('e2e slug threw: ' + e.message); fail++; }));
   assert('e2e slug: resolves and renders the event', out.innerHTML.indexOf('Eteläinen Tapiola') !== -1, out.innerHTML);
   assert('e2e slug: no load errors reported', getEl('status').textContent.indexOf('Valmis') !== -1 && getEl('status').textContent.indexOf('epäonnistui') === -1, getEl('status').textContent);
+
+  // Group-by-distance through analyzeAll: the sprintticup courses carry real
+  // distances (Beginner 1700 → 2 km, Elite Short 3000 → 3 km, Elite Long
+  // 4500 → 5 km), so the summary should aggregate into km buckets and the
+  // original names disappear from the rendered class rows.
+  global.KP.setLang('fi');
+  getEl('groupByDistance').checked = true;
+  (await global.KP.analyzeAll().catch(e => { console.error('e2e group threw: ' + e.message); fail++; }));
+  assert('e2e group: bucket rows rendered', out.innerHTML.indexOf('2 km') !== -1 && out.innerHTML.indexOf('5 km') !== -1, out.innerHTML);
+  assert('e2e group: recommendation rows use buckets, not original names', out.innerHTML.indexOf('<td class="big">5 km') !== -1 && out.innerHTML.indexOf('<td class="big">Elite Long') === -1, out.innerHTML);
+  assert('e2e group: details keeps original name as sublabel', out.innerHTML.indexOf('5 km<span class="subdim">Elite Long · 4500 m</span>') !== -1, out.innerHTML);
+  getEl('groupByDistance').checked = false;
 })().then(() => {
   console.log('karttatarpeet: ' + pass + ' passed, ' + fail + ' failed');
   if (fail) process.exit(1);

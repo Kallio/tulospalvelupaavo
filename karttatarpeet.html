@@ -209,6 +209,8 @@
     <label><span data-i18n="optFrom"></span> <input type="date" id="fromDate"></label>
     <label><span data-i18n="optBuffer"></span> <input type="number" id="bufferPct" value="20" min="0" max="200" step="1"> %</label>
     <label><span data-i18n="optQuit"></span> <input type="number" id="quitHours" value="3" min="1" max="24" step="0.5"> <span data-i18n="optQuitSuffix"></span></label>
+    <label><input type="checkbox" id="groupByDistance"> <span data-i18n="optGroup"></span></label>
+    <label><input type="checkbox" id="forceFresh"> <span data-i18n="optForce"></span></label>
   </div>
   <button type="button" class="btn btn-primary" id="analyzeBtn" data-i18n="btnFetch"></button>
   <button type="button" class="btn btn-outline" id="clearBtn" data-i18n="btnClear"></button>
@@ -296,6 +298,9 @@ const LANGS = {
     optBuffer: 'vara',
     optQuit: 'yli',
     optQuitSuffix: 'h = keskeytys',
+    optGroup: 'Ryhmitä matkan mukaan (km)',
+    optForce: 'Päivitä (ohita välimuisti)',
+    fromCache: 'välimuistista',
   },
   en: {
     tagline: 'Per-course participant counts across Navisport events',
@@ -366,6 +371,9 @@ const LANGS = {
     optBuffer: 'buffer',
     optQuit: 'over',
     optQuitSuffix: 'h = quit',
+    optGroup: 'Group by distance (km)',
+    optForce: 'Refresh (bypass cache)',
+    fromCache: 'from cache',
   },
 };
 
@@ -433,7 +441,8 @@ function setStatus(msg, type) {
 function renderStatus(analyzed) {
   if (!analyzed) { setStatus(T('statusReady'), ''); return; }
   const e = state.errors.length || 0;
-  const doneMsg = T('statusDone') + ' — ' + state.summaries.length + ' ' + T('eventsSuffix') + ' / ' + state.ids.length + ' ' + T('idsSuffix');
+  const doneMsg = T('statusDone') + ' — ' + state.summaries.length + ' ' + T('eventsSuffix') + ' / ' + state.ids.length + ' ' + T('idsSuffix') +
+    (state.cacheHits ? ' · ' + state.cacheHits + ' ' + T('fromCache') : '');
   setStatus(e ? doneMsg + ' (' + e + ' ' + T('statusPartial') + ')' : doneMsg, e ? 'err' : 'ok');
 }
 function median(arr) {
@@ -537,6 +546,20 @@ function resolveClassName(cc, classId) {
   return '';
 }
 
+// Optional "group by distance" mode: bucket a course/class into a whole-km
+// label so the same course across events (e.g. "2km", "D - 2km", "D") merges
+// into one row. Distance comes from the course's metres; falls back to a
+// "<n> km" class-name pattern. Null → the class stays under its own name.
+function distanceBucket(meters, className) {
+  if (meters == null) {
+    const m = String(className == null ? '' : className).toLowerCase().match(/(\d+(?:[.,]\d+)?)\s*km/);
+    if (m) meters = parseFloat(m[1].replace(',', '.')) * 1000;
+  }
+  if (meters == null || !(meters > 0)) return null;
+  const km = Math.round(meters / 1000);
+  return km >= 1 ? km + ' km' : null;
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  Navisport fetch
 // ════════════════════════════════════════════════════════════════════
@@ -557,6 +580,135 @@ function politeDelayMs(total) {
 
 function isUuid(s) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Event cache (localStorage + in-memory memo)
+//  ────────────────────────────────────────────────────────────────────
+//  Navisport event JSON is treated as mostly immutable once the event's
+//  date has passed, so past events can be cached for a long time; events
+//  that are still live/ongoing (begin date = today or later) must refresh
+//  often because their results keep changing. The memo layer guarantees
+//  the same event is never fetched twice in one session (e.g. pasted as
+//  both a URL slug and a UUID, or duplicated across re-runs), and the
+//  persistent layer makes re-runs and shared ?events= links instant across
+//  page reloads. "Päivitä (ohita välimuisti)" forces a fresh network fetch
+//  that is written straight through to both cache layers.
+// ════════════════════════════════════════════════════════════════════
+const EV_CACHE_KEY = 'karttatarpeet_ev_v1';
+const SLUG_CACHE_KEY = 'karttatarpeet_slug_v1';
+const EV_CACHE_MAX = 50;
+const EV_CACHE_MAX_BYTES = 3500000;
+const EV_TTL_PAST = 90 * 24 * 3600 * 1000;
+const EV_TTL_RECENT = 2 * 3600 * 1000;
+
+// Fast session path. Keyed by lowercase UUID; a slug → uuid mapping lets a
+// URL pasted before its UUID (and vice versa) resolve to the same event.
+const memEvents = {};
+const memSlugs = {};
+
+function evLocalDate() {
+  try { return new Date().toISOString().substring(0, 10); } catch (e) { return ''; }
+}
+function evEventDate(event) {
+  return event && event.begin ? String(event.begin).substring(0, 10) : '';
+}
+function evCacheTtl(date) {
+  const today = evLocalDate();
+  return String(date || '') < today ? EV_TTL_PAST : EV_TTL_RECENT;
+}
+function evEntryBytes(data) {
+  try { return JSON.stringify(data).length; } catch (e) { return 0; }
+}
+function evCacheRead() {
+  try {
+    const raw = localStorage.getItem(EV_CACHE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+function evCacheWrite(list) {
+  try { localStorage.setItem(EV_CACHE_KEY, JSON.stringify(list.slice(0, EV_CACHE_MAX))); } catch (e) {}
+}
+function evCacheGet(uuid) {
+  const key = String(uuid || '').toLowerCase();
+  const now = Date.now();
+  const list = evCacheRead();
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    if (!entry || entry.key !== key) continue;
+    if (now - entry.ts <= evCacheTtl(entry.date)) {
+      if (i > 0) { list.splice(i, 1); list.unshift(entry); evCacheWrite(list); }
+      return entry.data;
+    }
+    list.splice(i, 1);
+    evCacheWrite(list);
+    return null;
+  }
+  return null;
+}
+function evCacheSet(event) {
+  if (!event || !event.id) return;
+  const key = String(event.id).toLowerCase();
+  const list = evCacheRead();
+  let bytes = evEntryBytes(event);
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].key === key) { bytes -= list[i].bytes || 0; list.splice(i, 1); }
+  }
+  list.unshift({ key, date: evEventDate(event), ts: Date.now(), bytes, data: event });
+  while (list.length > EV_CACHE_MAX || bytes > EV_CACHE_MAX_BYTES) {
+    const old = list.pop();
+    if (!old) break;
+    bytes -= old.bytes || 0;
+  }
+  evCacheWrite(list);
+}
+function slugCacheRead() {
+  try {
+    const raw = localStorage.getItem(SLUG_CACHE_KEY);
+    const m = raw ? JSON.parse(raw) : {};
+    return (m && typeof m === 'object') ? m : {};
+  } catch (e) { return {}; }
+}
+function slugCacheSet(slug, uuid) {
+  const m = slugCacheRead();
+  m[slug] = String(uuid).toLowerCase();
+  const keys = Object.keys(m);
+  if (keys.length > 500) {
+    keys.slice(0, keys.length - 500).forEach(k => { delete m[k]; });
+  }
+  try { localStorage.setItem(SLUG_CACHE_KEY, JSON.stringify(m)); } catch (e) {}
+}
+
+// Single entry point for every event fetch (top-level ids and multistage
+// stage uuids). Serves the memo, then the persistent cache, then the
+// network – unless `force` is set, which always hits Navisport and writes
+// the result through to both layers. Never bothers to wait out the polite
+// delay, since that only lives inside fetchEventJSON.
+async function fetchEventCached(identifier, force) {
+  const input = String(identifier == null ? '' : identifier).trim();
+  if (!input) return null;
+  let uuid = isUuid(input) ? input.toLowerCase() : null;
+  if (!uuid) {
+    uuid = memSlugs[input] || slugCacheRead()[input] || null;
+    if (!uuid) {
+      uuid = String(await resolveSlugToUuid(input)).toLowerCase();
+      memSlugs[input] = uuid;
+      slugCacheSet(input, uuid);
+    }
+  }
+  if (!force) {
+    if (memEvents[uuid]) { state.cacheHits++; return memEvents[uuid]; }
+    const cached = evCacheGet(uuid);
+    if (cached) { memEvents[uuid] = cached; state.cacheHits++; return cached; }
+  }
+  const event = await fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(uuid), input);
+  if (event && event.id) {
+    memEvents[uuid] = event;
+    memEvents[String(event.id).toLowerCase()] = event;
+    evCacheSet(event);
+  }
+  return event;
 }
 
 // Navisport /api/events/ only serves UUIDs; the shareable /events/<slug>
@@ -584,10 +736,6 @@ async function fetchEventJSON(url, label) {
     await sleep(politeDelayMs(state.gentleTotal || 1));
   }
   return data;
-}
-async function fetchEventById(id) {
-  const uuid = isUuid(id) ? id : await resolveSlugToUuid(id);
-  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(uuid), id);
 }
 function isMultistageEvent(event) {
   return event.eventKind === 'Multistage event' || (event.events || []).length > 1;
@@ -623,16 +771,42 @@ function perEventStats(event, classes) {
   const rows = rowsForCounting(event);
   const quitH = (classes && classes.quitH) || DEFAULT_QUIT_H;
   const quitSec = quitH * 3600;
+  const group = !!(classes && classes.groupByDistance);
+
+  // Optional distance grouping: classId → course metres (via each row's
+  // courseId) so the whole-km bucket can be derived. Falls back to a "<n> km"
+  // class-name parse inside distanceBucket; rows without any distance keep
+  // their original class name as a separate bucket.
+  const metresById = {};
+  const coursesById = {};
+  (event.courses || []).forEach(c => { coursesById[c.id] = c; });
+  rows.forEach(r => {
+    if (r.classId && metresById[r.classId] == null) {
+      const co = coursesById[r.courseId];
+      if (co && co.distance > 0) metresById[r.classId] = co.distance;
+    }
+  });
+  // Keep a coarse class-order map for the organizer's ordering pass below.
+  const classToKey = {};
 
   // ── per-class counts (all result rows = printed maps) ──
   const byClassHash = {};
   rows.forEach(r => {
-    const className = canonClass(resolveClassName(cc, r.classId));
-    const key = className || T('unknownClass');
+    const rawName = resolveClassName(cc, r.classId);
+    const className = canonClass(rawName);
+    const base = className || T('unknownClass');
+    let key = base;
+    let dist = null;
+    if (group) {
+      dist = r.classId != null ? (metresById[r.classId] != null ? metresById[r.classId] : null) : null;
+      const g = distanceBucket(dist, className);
+      if (g) key = g;
+      if (r.classId != null && className) classToKey[className] = key;
+    }
     const st = classifyStatus(r.status);
     const t = rowTimes(r);
     const isOver = t.dur != null && t.dur > quitSec;
-    const c = byClassHash[key] || (byClassHash[key] = { name: key, total: 0, ok: 0, dnf: 0, dsq: 0, dns: 0, competing: 0, notime: 0, other: 0, over3: 0, registered: 0 });
+    const c = byClassHash[key] || (byClassHash[key] = { name: key, orig: group ? (rawName || base) : key, dist: dist, total: 0, ok: 0, dnf: 0, dsq: 0, dns: 0, competing: 0, notime: 0, other: 0, over3: 0, registered: 0 });
     c.total++;
     if (st === STATUS_OK && !isOver) c.ok++;
     else if (st === 'DNF') c.dnf++;
@@ -688,7 +862,8 @@ function perEventStats(event, classes) {
   // Preserve organizer's own class order (courseClasses order), append unknown.
   const ordered = [];
   (event.courseClasses || []).forEach(c => {
-    const k = canonClass(c.name);
+    const cn = canonClass(c.name);
+    const k = classToKey[cn] != null ? classToKey[cn] : cn;
     if (byClassHash[k] && byClassHash[k].seen !== true) { byClassHash[k].seen = true; ordered.push(byClassHash[k]); }
   });
   Object.keys(byClassHash).forEach(k => { if (byClassHash[k].seen !== true) { byClassHash[k].seen = true; ordered.push(byClassHash[k]); } });
@@ -762,7 +937,7 @@ function aggregateSummaries(summaries, bufferPct, quitH) {
 // ════════════════════════════════════════════════════════════════════
 //  Orchestration
 // ════════════════════════════════════════════════════════════════════
-const state = { summaries: [], errors: [], ids: [], analyzed: false };
+const state = { summaries: [], errors: [], ids: [], cacheHits: 0, analyzed: false };
 
 function shouldIncludeEvent(event, opts) {
   if (!opts || !opts.filterOn || !opts.fromDate) return true;
@@ -775,17 +950,24 @@ function readOpts() {
   let quitH = DEFAULT_QUIT_H;
   let fromDate = null;
   let filterOn = false;
+  let groupByDistance = false;
+  let forceFresh = false;
   const bp = $('bufferPct');
   if (bp) { const v = parseInt(bp.value, 10); if (isFinite(v) && v >= 0) bufferPct = v; }
   const qh = $('quitHours');
   if (qh) { const v = parseFloat(qh.value); if (isFinite(v) && v > 0) quitH = v; }
   const fd = $('fromDate');
   if (fd && fd.value) { fromDate = fd.value; filterOn = $('dateFilterOn') && $('dateFilterOn').checked; }
-  return { bufferPct, quitH, fromDate, filterOn };
+  const gd = $('groupByDistance');
+  if (gd) groupByDistance = gd.checked;
+  const ff = $('forceFresh');
+  if (ff) forceFresh = ff.checked;
+  return { bufferPct, quitH, fromDate, filterOn, groupByDistance, forceFresh };
 }
 
 async function addEventSummary(event, summaries, label) {
-  const s = perEventStats(event, { quitH: readOpts().quitH });
+  const opts = readOpts();
+  const s = perEventStats(event, { quitH: opts.quitH, groupByDistance: opts.groupByDistance });
   if (label) s.name = label + ' – ' + (s.name || '');
   summaries.push(s);
 }
@@ -796,6 +978,7 @@ async function analyzeAll() {
   state.ids = ids;
   state.summaries = [];
   state.errors = [];
+  state.cacheHits = 0;
   if (!ids.length) { state.analyzed = false; setStatus(T('inFabNone'), 'err'); return; }
   state.gentleTotal = ids.length;
   const opts = readOpts();
@@ -806,7 +989,7 @@ async function analyzeAll() {
     setStatus(T('statusLoading') + ' … (' + (i + 1) + '/' + ids.length + ')', 'ok');
     const id = ids[i];
     try {
-      const event = await fetchEventById(id);
+      const event = await fetchEventCached(id, opts.forceFresh);
       if (!shouldIncludeEvent(event, opts)) continue;
       if (isMultistageEvent(event)) {
         const stages = event.events || [];
@@ -814,7 +997,7 @@ async function analyzeAll() {
           let any = false;
           for (let j = 0; j < stages.length; j++) {
             try {
-              const se = await fetchEventByUUID(stages[j].id);
+              const se = await fetchEventCached(stages[j].id, opts.forceFresh);
               await addEventSummary(se, summaries, (event.name || '') + ' · osuus ' + (stages[j].stageNumber != null ? stages[j].stageNumber : j + 1));
               any = true;
             } catch (e) {
@@ -840,10 +1023,6 @@ async function analyzeAll() {
   state.analyzed = true;
   render(opts);
   renderStatus(true);
-}
-
-async function fetchEventByUUID(uuid) {
-  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(uuid), uuid);
 }
 
 // ── Shareable prefill: ?events=uuid1,uuid2,… ──
@@ -993,7 +1172,8 @@ function detailsPanel(summaries, quitH) {
       '<th>' + esc(T('hClass')) + '</th><th class="num">' + esc(T('hTotal')) + '</th>' +
       '<th class="num">' + esc(T('hOk')) + '</th><th class="num">DNF</th><th class="num">DSQ</th><th class="num">DNS/NT</th><th class="num">' + esc(T('hRegistered')) + '</th></tr></thead><tbody>';
     s.classes.forEach(c => {
-      html += '<tr><td>' + esc(c.name) + '</td><td class="num big">' + c.total + '</td>' +
+      const sub = (c.orig && c.orig !== c.name) ? '<span class="subdim">' + esc(c.orig) + (c.dist != null ? ' · ' + c.dist + ' m' : '') + '</span>' : '';
+      html += '<tr><td>' + esc(c.name) + sub + '</td><td class="num big">' + c.total + '</td>' +
         '<td class="num">' + c.ok + '</td><td class="num">' + c.dnf + '</td><td class="num">' + c.dsq + '</td>' +
         '<td class="num">' + (c.dns + c.notime) + '</td><td class="num">' + c.registered + '</td></tr>';
     });
@@ -1044,7 +1224,8 @@ function buildCSV(summaries, opts) {
     T('hFirstStart'), T('hLastStart'), T('hFirstResult'), T('hLastResult'), T('hLongest'), T('hOver3')]);
   summaries.forEach(s => {
     s.classes.forEach(c => {
-      rows.push([s.date, s.name, c.name, c.total, c.ok, c.dnf, c.dsq, c.dns + c.notime, c.registered,
+      const name = (c.orig && c.orig !== c.name) ? c.name + ' (' + c.orig + ')' : c.name;
+      rows.push([s.date, s.name, name, c.total, c.ok, c.dnf, c.dsq, c.dns + c.notime, c.registered,
         s.flow.firstStart ? s.flow.firstStart.clock : '',
         s.flow.lastStart ? s.flow.lastStart.clock : '',
         s.flow.firstResult ? s.flow.firstResult.clock : '',
