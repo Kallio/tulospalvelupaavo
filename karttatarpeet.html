@@ -555,6 +555,25 @@ function politeDelayMs(total) {
   return b.lo + Math.round(Math.random() * (b.hi - b.lo));
 }
 
+function isUuid(s) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
+// Navisport /api/events/ only serves UUIDs; the shareable /events/<slug>
+// pages resolve a slug through the SPA's tRPC router (same trick as
+// kilpailuanalyysi). Resolve the slug to its UUID, then fetch the canonical
+// REST JSON so a slug URL and its UUID always produce identical counts.
+async function resolveSlugToUuid(slug) {
+  const enc = encodeURIComponent(JSON.stringify({ '0': slug }));
+  const url = 'https://navisport.com/trpc/eventsTrpcRouter.getEvent?batch=1&input=' + enc;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' for "' + slug + '"');
+  const batch = await res.json();
+  const data = batch && batch[0] && batch[0].result && batch[0].result.data;
+  if (!data || !data.id) throw new Error('No event id for "' + slug + '"');
+  return data.id;
+}
+
 async function fetchEventJSON(url, label) {
   let data;
   try {
@@ -567,7 +586,8 @@ async function fetchEventJSON(url, label) {
   return data;
 }
 async function fetchEventById(id) {
-  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(id), id);
+  const uuid = isUuid(id) ? id : await resolveSlugToUuid(id);
+  return fetchEventJSON('https://navisport.com/api/events/' + encodeURIComponent(uuid), id);
 }
 function isMultistageEvent(event) {
   return event.eventKind === 'Multistage event' || (event.events || []).length > 1;

@@ -122,7 +122,18 @@ const eventsById = {
   'ev-3': relayEvent,
   '6efc07b8-74a4-4ef8-bc48-4a92060635db': indEvent, // live-resolution smoke
 };
+// navisport.com/events/<slug> pages resolve through the tRPC getEvent router;
+// mirror a slug → UUID lookup the same way the real endpoint answers it.
+const slugToUuid = {
+  'espoon-suunnan-kuntosuunnistukset-oittaa-2026-05-13': '6efc07b8-74a4-4ef8-bc48-4a92060635db',
+};
 global.fetch = (url) => {
+  if (url.indexOf('/trpc/eventsTrpcRouter.getEvent') !== -1) {
+    const slug = JSON.parse(decodeURIComponent(url.split('input=')[1] || '{}'))['0'];
+    const uuid = slugToUuid[slug];
+    if (!uuid) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null) });
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([{ result: { data: { id: uuid } } }]) });
+  }
   if (url.indexOf('/api/events/') === -1) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve(null) });
   const id = url.split('/api/events/')[1].split('?')[0];
   const data = eventsById[id.toLowerCase()];
@@ -181,6 +192,11 @@ P = global.KP;
 
   assert('bare slug with hyphens picked up', P.extractIds('stadin-sprintticup-2026')[0] === 'stadin-sprintticup-2026');
   assert('prose words never treated as ids', P.extractIds('[Tulokset](https://navisport.com/events/f1aa9ce7-0f79-4a5e-aad5-54b1010bb897) Livelox x Race').length === 1);
+
+  // Slug-based event pages carry a /results/<course> sub-path; the course
+  // segment must never leak into the event id.
+  const slugRes = P.extractIds('https://navisport.com/events/espoon-suunnan-kuntosuunnistukset-oittaa-2026-05-13/results/2km');
+  assert('slug results url: event slug only, course dropped', slugRes.length === 1 && slugRes[0] === 'espoon-suunnan-kuntosuunnistukset-oittaa-2026-05-13', slugRes);
 }
 
 // ── canonClass / classifyStatus ───────────────────────────────────────
@@ -399,6 +415,13 @@ P = global.KP;
   assert('lang: FI re-renders with Finnish header', out.innerHTML.indexOf('Tulostussuositus per rata') !== -1, out.innerHTML);
   assert('lang: FI status message in Finnish', getEl('status').textContent.indexOf('Valmis') !== -1, getEl('status').textContent);
   assert('lang: tagline follows language', getEl('tagline').textContent.indexOf('osallistujamäärät') !== -1, getEl('tagline').textContent);
+
+  // Slug-based page URL (navisport.com/events/<slug>/results/<course>): the
+  // tRPC lookup must resolve the slug → UUID and then render the event.
+  inp.value = 'https://navisport.com/events/espoon-suunnan-kuntosuunnistukset-oittaa-2026-05-13/results/2km';
+  (await global.KP.analyzeAll().catch(e => { console.error('e2e slug threw: ' + e.message); fail++; }));
+  assert('e2e slug: resolves and renders the event', out.innerHTML.indexOf('Eteläinen Tapiola') !== -1, out.innerHTML);
+  assert('e2e slug: no load errors reported', getEl('status').textContent.indexOf('Valmis') !== -1 && getEl('status').textContent.indexOf('epäonnistui') === -1, getEl('status').textContent);
 })().then(() => {
   console.log('karttatarpeet: ' + pass + ' passed, ' + fail + ' failed');
   if (fail) process.exit(1);
