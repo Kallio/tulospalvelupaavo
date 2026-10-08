@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Pokaalijahti - tuloslaskuri
  * Description: Shortcode [pokaalijahti] joka lataa tuloslaskurin ja proxyttää + cachettaa Navisport-API-kutsut.
- * Version: 1.1
+ * Version: 1.2
  * Author: Pietari Hyvärinen
  */
 
@@ -13,8 +13,8 @@ define('POKAALIS_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Enqueue assets
 function pokaalijahti_enqueue_assets() {
-    wp_enqueue_style('pokaalijahti-style', POKAALIS_PLUGIN_URL . 'css/pokaalijahti.css', array(), '1.2');
-    wp_enqueue_script('pokaalijahti-app', POKAALIS_PLUGIN_URL . 'js/app.js', array(), '1.7', true);
+    wp_enqueue_style('pokaalijahti-style', POKAALIS_PLUGIN_URL . 'css/pokaalijahti.css', array(), '1.3');
+    wp_enqueue_script('pokaalijahti-app', POKAALIS_PLUGIN_URL . 'js/app.js', array(), '1.8', true);
 
     wp_localize_script('pokaalijahti-app', 'PokaaliAjax',
         array(
@@ -25,6 +25,28 @@ function pokaalijahti_enqueue_assets() {
     );
 }
 add_action('wp_enqueue_scripts', 'pokaalijahti_enqueue_assets');
+
+function pokaalijahti_is_uuid($value){
+    return is_string($value) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) === 1;
+}
+
+// Jäsentää tapahtuman viitteen: UUID, slug tai Navisport-URL → UUID tai slug (null jos kelvoton)
+function pokaalijahti_parse_event_ref($value){
+    $value = trim((string)$value);
+    if ($value === '') return null;
+
+    if (pokaalijahti_is_uuid($value)) return $value;
+
+    // navisport.com|fi URL → tunniste /events/, /tapahtumat/ tai /tulokset(-new)?/ -osan jälkeen
+    if (preg_match('#/(?:events|tapahtumat|tulokset-new|tulokset)/([^/?#]+)#i', $value, $m)) {
+        return pokaalijahti_parse_event_ref(rawurldecode($m[1]));
+    }
+
+    // Suora slug
+    if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $value)) return $value;
+
+    return null;
+}
 
 // Shortcode: hyväksyy attribuutit eventid, noclublimit, noserieslimit, series
 function pokaalijahti_shortcode($atts){
@@ -44,8 +66,9 @@ function pokaalijahti_shortcode($atts){
     $valid_event_ids = array();
 
     foreach ($event_ids as $id) {
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) {
-            $valid_event_ids[] = $id;
+        $parsed = pokaalijahti_parse_event_ref($id);
+        if ($parsed !== null) {
+            $valid_event_ids[] = $parsed;
         }
     }
     $data = array(
@@ -73,7 +96,31 @@ function pokaalijahti_fetch_event() {
     if ( empty($_GET['eventid']) ) {
         wp_send_json_error('missing_eventid', 400);
     }
-    $eventid = sanitize_text_field($_GET['eventid']);
+    $eventid = pokaalijahti_parse_event_ref(sanitize_text_field($_GET['eventid']));
+    if ($eventid === null) {
+        wp_send_json_error('invalid_eventid', 400);
+    }
+
+    // Slug → UUID käännös tRPC-rajapinnan kautta (REST /api/events/ vaatii UUID:n)
+    if (!pokaalijahti_is_uuid($eventid)) {
+        $slug_cache_key = 'pokaalijahti_slug_' . md5($eventid);
+        $uuid = get_transient($slug_cache_key);
+        if ($uuid === false) {
+            $trpc_url = 'https://navisport.com/trpc/eventsTrpcRouter.getEvent?input=' . rawurlencode(json_encode($eventid));
+            $tres = wp_remote_get($trpc_url, array('timeout'=>15));
+            if (is_wp_error($tres) || wp_remote_retrieve_response_code($tres) !== 200) {
+                wp_send_json_error('slug_not_found', 404);
+            }
+            $tj = json_decode(wp_remote_retrieve_body($tres), true);
+            $uuid = is_array($tj) && isset($tj['result']['data']['id']) ? $tj['result']['data']['id'] : null;
+            if (!pokaalijahti_is_uuid($uuid)) {
+                wp_send_json_error('slug_resolve_failed', 502);
+            }
+            set_transient($slug_cache_key, $uuid, DAY_IN_SECONDS);
+        }
+        $eventid = $uuid;
+    }
+
     $cache_key = 'pokaali_event_' . md5($eventid);
     $cache_ttl = 60 * 60; // 1 tunti
 
@@ -120,17 +167,24 @@ function pokaalijahti_fetch_event() {
         $participants = $results['participants'];
     }
 
+    $slug = isset($data['slug']) ? trim((string)$data['slug']) : '';
+    $event_url = $slug !== ''
+        ? 'https://navisport.com/tapahtumat/' . rawurlencode($slug) . '/tulokset/'
+        : 'https://navisport.com/events/' . rawurlencode($eventid);
+
     $filtered = array();
     foreach ($participants as $p) {
         $series = $classMap[$p['classId']] ?? '---';
         $p['series'] = $series;
-        $p['eventUrl'] = 'https://navisport.com/events/' . esc_attr($eventid);
+        $p['eventUrl'] = $event_url;
         $filtered[] = $p;
     }
 
     $payload = array(
         'name' => $data['name'] ?? '',
         'date' => $data['begin'] ?? '',
+        'slug' => $slug,
+        'eventUrl' => $event_url,
         'participants' => $filtered,
     );
 
@@ -159,13 +213,16 @@ function pokaalijahti_settings_page(){
     <div class="wrap">
       <h1>Pokaalijahti - pistelasku plugin</h1>
 käytössä oletuksena seuraavat säännöt:
-Osakilpailun voittaja saa 100 pistettä. Seuraaviksi tulleet saavat 100 pistettä miinus aikaeroa vastaava vähennys, 1 min. = 1 piste. Keskeyttäneet ja hylätyt tulokset = 10 p. Yhteistuloksiin lasketaan 3 suurinta pistemäärää.
+Osakilpailun voittaja saa 100 pistettä. Seuraaviksi tulleet saavat 100 pistettä miinus aikaeroa vastaava vähennys, 1 min. = 1 piste. Keskeyttäneet ja hylätyt tulokset = 10 p. Ilmoittautuminen osakilpailuun = 10 p. ja osallistuminen. Yhteistuloksiin lasketaan 3 suurinta pistemäärää.
     Koodi otetaan käyttöön halutulla sivulla sijoittamalla shortcode sivulle.
+    Eventid voi olla UUID, slug tai tapahtuman URL (muodossa navisport.com/tapahtumat/&lt;slug&gt;/tulokset/).
         <h2>Shortcode-esimerkit</h2>
       <pre>
 [pokaalijahti eventid="579dc02d-ef31-47aa-955d-6e55bcd6256b"]
 [pokaalijahti eventid="id1,id2" noclublimit="1" notrophy="1"]
 [pokaalijahti eventid="id1" series="Beginner,Novice"]
+[pokaalijahti eventid="https://navisport.com/tapahtumat/espoo-sprintti-cup-2026-espoo-sprintticup-otaniemi-10-05/tulokset/"]
+[pokaalijahti eventid="espoo-sprintti-cup-2026-espoo-sprintticup-otaniemi-10-05"]
       </pre>
     </div>
     <?php

@@ -52,7 +52,7 @@ function isOpenSeries(seriesName){
   return OPEN_KEYWORDS.some(k => s.includes(k));
 }
 
-function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // --- Lue konfiguraatio ---
 const rootEl = document.getElementById('pokaali-app');
@@ -119,10 +119,12 @@ if(!series || !isSeriesAllowed(series)) return;
 
     p._timeSecs = parseTimeToSeconds(p.time);
     p._status = (p.status||'').toLowerCase();
-    const isDnsStatus = p._status.includes('dns') || p._status.includes('registered');
+    const isDnsStatus = p._status.includes('dns');
+    const isRegistered = p._status.includes('registered');
     const isDisq = ['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x));
     p._ok = !isDisq && p._timeSecs !== null;
-    p._validParticipation = !isDnsStatus && !isDisq && p._timeSecs !== null;
+    // Ilmoittautuminen (= ei tulosta) on osallistuminen: 10 p. ja mukana osallistumisten laskennassa
+    p._validParticipation = isRegistered || (!isDnsStatus && !isDisq && p._timeSecs !== null);
 
     bySeries[series].push(p);
   });
@@ -201,6 +203,16 @@ function calculateTotals(events){
 }
 
 // --- Rendering ---
+// Pisteet ja niitä vastaavat tulokset pareiksi suurimmasta pienimpään.
+// Tärkeä: pointsList lajitellaan pisteiden mukaan mutta results on tapahtumajärjestyksessä,
+// joten indeksoimalla molempia erikseen linkki/tooltip osuu väärään tapahtumaan.
+function pointsPairs(t){
+  return (t.results || [])
+    .filter(r => r.points !== undefined && r.points !== null)
+    .map(r => ({pts: r.points, r}))
+    .sort((a,b) => b.pts - a.pts);
+}
+
 function renderSeriesLinks(seriesList){
   const container = document.getElementById('seriesLinks');
   container.innerHTML = 'Siirry sarjaan: ';
@@ -367,10 +379,11 @@ renderSeriesLinks(seriesKeys);
         <td>${escapeHtml(t.club)}</td>
         <td>${t.participationCount}</td>
  <td>
-  ${t.pointsList.map((pts,j) => {
-      const r = t.results[j];
+  ${pointsPairs(t).map(({pts, r}) => {
       const link = r._seriesUrl || r.eventUrl || '#';
-      return `<a href="${link}">${pts}</a>`;
+      const dateStr = typeof r.date === 'string' && r.date ? ` (${r.date.slice(0,10)})` : '';
+      const title = r.eventName ? ` title="${escapeHtml(r.eventName + dateStr)}"` : '';
+      return `<a href="${escapeHtml(link)}"${title}>${pts}</a>`;
   }).join(', ')}
 </td>
       <td>${t.topSum}</td>

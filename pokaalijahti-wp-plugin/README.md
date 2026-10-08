@@ -49,6 +49,27 @@ To use these shortcodes:
 
 This will render the tournament results wherever the shortcode is placed.
 
+### Shortcode
+
+```
+[pokaalijahti eventid="579dc02d-ef31-47aa-955d-6e55bcd6256b"]
+[pokaalijahti eventid="event-one,event-two" noclublimit="1" notrophy="1"]
+[pokaalijahti eventid="https://navisport.com/tapahtumat/espoo-sprintti-cup-2026-espoo-sprintticup-otaniemi-10-05/tulokset/"]
+```
+
+`eventid` takes a comma-separated list, and each entry may be:
+
+* a Navisport UUID,
+* an event slug (e.g. `espoo-sprintti-cup-2026-espoo-sprintticup-otaniemi-10-05`), or
+* a full event URL — `navisport.com/events/…`, `navisport.com/tapahtumat/<slug>` or `…/<slug>/tulokset/` (the slug is extracted automatically).
+
+Slugs are resolved to UUIDs server-side (the Navisport REST API only accepts UUIDs), and results links point at the current `navisport.com/tapahtumat/<slug>/tulokset/` style.
+
+### Results table
+
+* Each number in **Top pisteet** links to that event; hover it to see the event name and date.
+* Points: winner 100, minus 1 per minute behind. DNF/DSQ = 10 points. Registering for an event (`Registered` status, no result) also scores 10 points and counts as a participation. The top 3 scores are summed.
+
 ## Support
 
 "If you choose to use this plugin, please note it is provided as-is. We do not take responsibility for its functionality or any issues that may arise. If you wish, you can report problems or ask questions on the [GitHub Issues page](https://github.com/Kallio/tulospalvelupaavo/issues), but support is not guaranteed."
