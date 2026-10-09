@@ -123,8 +123,9 @@ if(!series || !isSeriesAllowed(series)) return;
     const isRegistered = p._status.includes('registered');
     const isDisq = ['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x));
     p._ok = !isDisq && p._timeSecs !== null;
-    // Ilmoittautuminen (= ei tulosta) on osallistuminen: 10 p. ja mukana osallistumisten laskennassa
-    p._validParticipation = isRegistered || (!isDnsStatus && !isDisq && p._timeSecs !== null);
+    // Ilmoittautunut / lähtenyt ei tulosta: ei pisteitä, ei osallistumista
+    p._noStart = (isDnsStatus || isRegistered) && (p._timeSecs === null || p._timeSecs === 0);
+    p._validParticipation = !isDnsStatus && !isRegistered && !isDisq && p._timeSecs !== null;
 
     bySeries[series].push(p);
   });
@@ -139,7 +140,9 @@ if(!series || !isSeriesAllowed(series)) return;
     const winnerTime = ranked.length ? ranked[0]._timeSecs : null;
 
     list.forEach(p=>{
-      if(open) {
+      if(p._noStart) {
+        p._points = null; // ei pisteitä pelkästä ilmoittautumisesta / lähdöttömädestä
+      } else if(open) {
         p._points = 0;
       } else if(!p._ok || p._timeSecs === null) {
         p._points = MIN_POINTS_FOR_DNF;
@@ -340,9 +343,13 @@ function renderTableBySeries(totals){
     Object.keys(perSeries).forEach(series=>{
       if(!seriesMap[series]) seriesMap[series] = [];
       const resultsForSeries = perSeries[series];
-      const pointsList = resultsForSeries.map(r=>r.points);
+      // Vain pisteitä tuottavat tulokset: ilmoittautumiset (points = null) eivät näy
+      // pisteissä eivätkä Osallistumiset-sarakkeessa.
+      const pointsList = resultsForSeries
+        .filter(r => r.points !== null && r.points !== undefined)
+        .map(r => r.points);
       const topSum = pointsList.sort((a,b)=>b-a).slice(0, TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-      const participationCount = resultsForSeries.length;
+      const participationCount = pointsList.length;
       const club = t.club;
       seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
     });
