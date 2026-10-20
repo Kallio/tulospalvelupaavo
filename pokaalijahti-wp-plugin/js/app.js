@@ -52,7 +52,7 @@ function isOpenSeries(seriesName){
   return OPEN_KEYWORDS.some(k => s.includes(k));
 }
 
-function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // --- Lue konfiguraatio ---
 const rootEl = document.getElementById('pokaali-app');
@@ -119,10 +119,13 @@ if(!series || !isSeriesAllowed(series)) return;
 
     p._timeSecs = parseTimeToSeconds(p.time);
     p._status = (p.status||'').toLowerCase();
-    const isDnsStatus = p._status.includes('dns') || p._status.includes('registered');
+    const isDnsStatus = p._status.includes('dns');
+    const isRegistered = p._status.includes('registered');
     const isDisq = ['dnf','keskeytti','hylätty','disq','dsq'].some(x=>p._status.includes(x));
     p._ok = !isDisq && p._timeSecs !== null;
-    p._validParticipation = !isDnsStatus && !isDisq && p._timeSecs !== null;
+    // Ilmoittautunut / lähtenyt ei tulosta: ei pisteitä, ei osallistumista
+    p._noStart = (isDnsStatus || isRegistered) && (p._timeSecs === null || p._timeSecs === 0);
+    p._validParticipation = !isDnsStatus && !isRegistered && !isDisq && p._timeSecs !== null;
 
     bySeries[series].push(p);
   });
@@ -137,7 +140,9 @@ if(!series || !isSeriesAllowed(series)) return;
     const winnerTime = ranked.length ? ranked[0]._timeSecs : null;
 
     list.forEach(p=>{
-      if(open) {
+      if(p._noStart) {
+        p._points = null; // ei pisteitä pelkästä ilmoittautumisesta / lähdöttömädestä
+      } else if(open) {
         p._points = 0;
       } else if(!p._ok || p._timeSecs === null) {
         p._points = MIN_POINTS_FOR_DNF;
@@ -201,6 +206,16 @@ function calculateTotals(events){
 }
 
 // --- Rendering ---
+// Pisteet ja niitä vastaavat tulokset pareiksi suurimmasta pienimpään.
+// Tärkeä: pointsList lajitellaan pisteiden mukaan mutta results on tapahtumajärjestyksessä,
+// joten indeksoimalla molempia erikseen linkki/tooltip osuu väärään tapahtumaan.
+function pointsPairs(t){
+  return (t.results || [])
+    .filter(r => r.points !== undefined && r.points !== null)
+    .map(r => ({pts: r.points, r}))
+    .sort((a,b) => b.pts - a.pts);
+}
+
 function renderSeriesLinks(seriesList){
   const container = document.getElementById('seriesLinks');
   container.innerHTML = 'Siirry sarjaan: ';
@@ -328,9 +343,13 @@ function renderTableBySeries(totals){
     Object.keys(perSeries).forEach(series=>{
       if(!seriesMap[series]) seriesMap[series] = [];
       const resultsForSeries = perSeries[series];
-      const pointsList = resultsForSeries.map(r=>r.points);
+      // Vain pisteitä tuottavat tulokset: ilmoittautumiset (points = null) eivät näy
+      // pisteissä eivätkä Osallistumiset-sarakkeessa.
+      const pointsList = resultsForSeries
+        .filter(r => r.points !== null && r.points !== undefined)
+        .map(r => r.points);
       const topSum = pointsList.sort((a,b)=>b-a).slice(0, TOP_N_SCORES_TO_SUM).reduce((s,x)=>s+x,0);
-      const participationCount = resultsForSeries.length;
+      const participationCount = pointsList.length;
       const club = t.club;
       seriesMap[series].push({...t, pointsList, topSum, participationCount, club, results: resultsForSeries});
     });
@@ -367,10 +386,11 @@ renderSeriesLinks(seriesKeys);
         <td>${escapeHtml(t.club)}</td>
         <td>${t.participationCount}</td>
  <td>
-  ${t.pointsList.map((pts,j) => {
-      const r = t.results[j];
+  ${pointsPairs(t).map(({pts, r}) => {
       const link = r._seriesUrl || r.eventUrl || '#';
-      return `<a href="${link}">${pts}</a>`;
+      const dateStr = typeof r.date === 'string' && r.date ? ` (${r.date.slice(0,10)})` : '';
+      const title = r.eventName ? ` title="${escapeHtml(r.eventName + dateStr)}"` : '';
+      return `<a href="${escapeHtml(link)}"${title}>${pts}</a>`;
   }).join(', ')}
 </td>
       <td>${t.topSum}</td>
