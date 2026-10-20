@@ -1,7 +1,8 @@
 /* pdf-export.js — A4 sheet layout & pdf-lib export for map-merger.
  *
  * Placement math (computeCellPlacement, cellGeom, clipRectFor, gridDims,
- * chunkPages) is pure and Node-testable. The PDF writing (createA4Pdf)
+ * gridDimsFor, fitToCell, fitOrientation, chunkPages) is pure and
+ * Node-testable. The PDF writing (createA4Pdf)
  * requires the pdf-lib global (loaded from CDN as a classic script) and only
  * runs in the browser. Exposed as MapMergerExport.
  */
@@ -44,6 +45,37 @@
     return Math.max(1, cols * rows);
   }
 
+  /* maxRepeatCopiesAny(mapW, mapH) — maxRepeatCopies over both orientations:
+   * copies may be rotated 90° when that lets more of them fit on one A4
+   * (e.g. four 148×105 A6-landscape maps fit as a 2×2 grid of 105×148
+   * rotated copies, but only two unrotated). */
+  function maxRepeatCopiesAny(mapW, mapH) {
+    return Math.max(maxRepeatCopies(mapW, mapH), maxRepeatCopies(mapH, mapW));
+  }
+
+  /* rawFits(w, h, count) — strict version of maxRepeatCopies: true only when
+   * a cols×rows grid of count cells actually holds count copies of a w×h map
+   * at 1:1 (w>0 && h>0, cols*rows ≥ count). Unlike maxRepeatCopies it never
+   * floors at 1, so a map larger than A4 in this orientation reports false. */
+  function rawFits(w, h, count) {
+    if (!(w > 0) || !(h > 0)) return false;
+    return Math.floor(A4.w / w) * Math.floor(A4.h / h) >= count;
+  }
+
+  /* fitOrientation(mapW, mapH, count) — { w, h, rotated } dims to impose
+   * `count` 1:1 copies of a map on one A4. The original orientation is kept
+   * whenever it strictly allows `count` copies (so existing layouts never
+   * rotate); otherwise the swapped dims are used when they allow `count`
+   * (e.g. four 148×105 A6-landscape maps become a 2×2 grid of 105×148
+   * rotated copies). With count ≤ maxRepeatCopiesAny(mapW, mapH) an
+   * orientation that fits always exists, so callers clamping to that cap
+   * never hit the neither-fits fallback (which returns the original dims). */
+  function fitOrientation(mapW, mapH, count) {
+    if (rawFits(mapW, mapH, count)) return { w: mapW, h: mapH, rotated: false };
+    if (rawFits(mapH, mapW, count)) return { w: mapH, h: mapW, rotated: true };
+    return { w: mapW, h: mapH, rotated: false };
+  }
+
   /* gridDims(count, aspect, mapW, mapH) — factor `count` copies into a
    * cols×rows grid covering the full A4 page whose cell aspect (w/h) is
    * closest to `aspect` (the repeated map's crop aspect). rows = ceil(count /
@@ -80,19 +112,88 @@
     return best;
   }
 
-  /* cellGeom(cellIdx, layout, count, aspect, mapW, mapH) — the full cell rect
-   * in mm from the page top-left for one map slot.
+  /* gridDimsFor(count, aspect, dims) — like gridDims, but the fit filter
+   * accepts a candidate cell when each page in `dims` ([{w,h}, …] in mm)
+   * fits it in EITHER orientation: (cw≥w && ch≥h) || (cw≥h && ch≥w). This
+   * lets a group of e.g. four 148×105 A6-landscape pages select the 2×2 grid
+   * (each page fits its 105×148.5 cell when rotated 90°), which plain
+   * gridDims rejects. Falls back to the aspect-closest grid when no grid
+   * holds every page (same fallback as gridDims). */
+  function gridDimsFor(count, aspect, dims) {
+    count = Math.max(1, Math.floor(count) || 1);
+    aspect = isFinite(aspect) && aspect > 0 ? aspect : CELL.w / CELL.h;
+    dims = (dims || []).filter(function (d) {
+      return d && isFinite(d.w) && isFinite(d.h) && d.w > 0 && d.h > 0;
+    });
+    var best = null, bestScore = Infinity;
+    for (var cols = 1; cols <= count; cols++) {
+      var rows = Math.ceil(count / cols);
+      var cw = A4.w / cols, ch = A4.h / rows;
+      var allFit = dims.every(function (d) {
+        return (cw + 1e-6 >= d.w && ch + 1e-6 >= d.h) ||
+               (cw + 1e-6 >= d.h && ch + 1e-6 >= d.w);
+      });
+      if (!allFit) continue;
+      var score = Math.abs(cw / ch - aspect);
+      if (score < bestScore) { bestScore = score; best = { cols: cols, rows: rows }; }
+    }
+    if (!best) {
+      bestScore = Infinity;
+      for (var c2 = 1; c2 <= count; c2++) {
+        var r2 = Math.ceil(count / c2);
+        var s2 = Math.abs((A4.w / c2) / (A4.h / r2) - aspect);
+        if (s2 < bestScore) { bestScore = s2; best = { cols: c2, rows: r2 }; }
+      }
+    }
+    return best;
+  }
+
+  /* fitToCell(w, h, cw, ch, opts) — orientation to impose on one map so it
+   * best occupies a cw×ch mm cell.
+   *   opts.keepOriginal: 1:1 placement — keep the original orientation when
+   *     the map fits the cell; rotate 90° only when that is what makes it
+   *     fit; if neither fits, keep the original (the clip cuts the overhang).
+   *   Scaled (non-1:1) mode: rotate only when the rotated orientation is
+   *     printed strictly larger (contain scaling); ties keep the original.
+   * The caller chooses the 90° direction (CW/CCW) — see buildSheetModel in
+   * main.js, which turns CCW when the page-level canvas was already rotated
+   * clockwise by auto-rotate so content ends upright, not upside down.
+   * Returns { w, h, rotated } — the (possibly swapped) cell-space dims. */
+  function fitToCell(w, h, cw, ch, opts) {
+    opts = opts || {};
+    if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0 ||
+        !isFinite(cw) || !isFinite(ch) || cw <= 0 || ch <= 0) {
+      return { w: w, h: h, rotated: false };
+    }
+    var fitsOrig = w <= cw + 1e-6 && h <= ch + 1e-6;
+    var fitsRot = h <= cw + 1e-6 && w <= ch + 1e-6;
+    var rotated = false;
+    if (opts.keepOriginal) {
+      rotated = !fitsOrig && fitsRot;
+    } else {
+      var scaleO = Math.min(cw / w, ch / h);
+      var scaleR = Math.min(cw / h, ch / w);
+      rotated = scaleR > scaleO + 1e-9;
+    }
+    if (rotated) return { w: h, h: w, rotated: true };
+    return { w: w, h: h, rotated: false };
+  }
+
+  /* cellGeom(cellIdx, layout, count, aspect, mapW, mapH, grid) — the full
+   * cell rect in mm from the page top-left for one map slot.
    *   layout 'stack': two full-width CELL rows (A4.h / CELL.h = 2), cellIdx
    *     counts top → bottom (y = cellIdx * CELL.h).
    *   layout 'grid':  a gridDims grid across the full page (mapW/mapH keep the
-   *     grid large enough for 1:1 copies).
+   *     grid large enough for 1:1 copies). A precomputed grid ({cols, rows},
+   *     e.g. from gridDimsFor) short-circuits gridDims so mixed-size groups
+   *     keep the grid that was actually validated for them.
    * The margin is NOT applied to the cell rect itself (the grid/stack is laid
    * out over the full page); it insets the placement target instead — see
    * clipRectFor. */
-  function cellGeom(cellIdx, layout, count, aspect, mapW, mapH) {
+  function cellGeom(cellIdx, layout, count, aspect, mapW, mapH, grid) {
     layout = layout || 'stack';
     if (layout === 'grid') {
-      var g = gridDims(count, aspect, mapW, mapH);
+      var g = (grid && grid.cols > 0 && grid.rows > 0) ? grid : gridDims(count, aspect, mapW, mapH);
       var cw = A4.w / g.cols, ch = A4.h / g.rows;
       return {
         x: (cellIdx % g.cols) * cw,
@@ -244,10 +345,13 @@
       page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: PDFLib.rgb(1, 1, 1) });
       cells.forEach(function (cell, idx) {
         if (!cell) return;
-        var g = cellGeom(idx, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
-        // Target & clip: printable ∩ cell. Maps are centered inside this, so
-        // they never run into the unprintable margin (pdf-lib y is measured
-        // from the page bottom).
+        var g = cellGeom(idx, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH, sheet.grid);
+        // Target & clip: printable ∩ cell. Scaled maps are centered inside
+        // this, so they never run into the unprintable margin (pdf-lib y is
+        // measured from the page bottom). A 1:1 map larger than the clip is
+        // centered in the FULL cell instead: the overhang then falls on the
+        // outer paper edge (the strip the printer can't mark anyway) instead
+        // of being nibbled symmetrically off the interior of the map.
         var target = clipRectFor(g, marginMm);
         page.pushOperators(
           PDFLib.pushGraphicsState(),
@@ -260,13 +364,16 @@
           PDFLib.clip(),
           PDFLib.endPath()
         );
-        // Placement in mm from the page top-left, centered in the printable
-        // portion of the cell.
-        var r = computeCellPlacement(cell.wmm, cell.hmm, { w: target.w, h: target.h }, { keepOriginal: keepOriginal });
-        var xPt = (target.x + r.x) * PT_PER_MM;
+        // Placement in mm from the page top-left.
+        var place = target;
+        if (keepOriginal && (cell.wmm > target.w + 1e-6 || cell.hmm > target.h + 1e-6)) {
+          place = g;
+        }
+        var r = computeCellPlacement(cell.wmm, cell.hmm, { w: place.w, h: place.h }, { keepOriginal: keepOriginal });
+        var xPt = (place.x + r.x) * PT_PER_MM;
         var wPt = Math.max(1, r.w * PT_PER_MM);
         var hPt = Math.max(1, r.h * PT_PER_MM);
-        var yPt = (A4.h - (target.y + r.y) - r.h) * PT_PER_MM;
+        var yPt = (A4.h - (place.y + r.y) - r.h) * PT_PER_MM;
         page.drawImage(cell.img, { x: xPt, y: yPt, width: wPt, height: hPt });
         page.pushOperators(PDFLib.popGraphicsState());
       });
@@ -341,7 +448,11 @@
     normalizeMargin: normalizeMargin,
     printableRect: printableRect,
     maxRepeatCopies: maxRepeatCopies,
+    maxRepeatCopiesAny: maxRepeatCopiesAny,
+    fitOrientation: fitOrientation,
     gridDims: gridDims,
+    gridDimsFor: gridDimsFor,
+    fitToCell: fitToCell,
     cellGeom: cellGeom,
     clipRectFor: clipRectFor,
     computeCellPlacement: computeCellPlacement,

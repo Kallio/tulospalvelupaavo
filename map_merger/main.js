@@ -28,6 +28,7 @@ const state = {
     repeat: false,
     repeatN: 4,
     marginMm: 5,
+    pagesPerSheet: 2,
   },
   selectedId: null,
   lang: 'fi',
@@ -51,12 +52,14 @@ const I18N = {
     autoRotateHint: 'Kiertää kartan 90°, jos rajatun sisällön suunta on pystysuuntainen, jotta se täyttää vaaka-A5-arkin skaalaamisen sijaan. Päätös perustuu sisällön suuntaan, ei sivun mittoihin.',
     keepOriginal: 'Säilytä alkuperäinen koko (1:1)',
     keepOriginalHint: 'Sijoittaa kartan alkuperäisessä koossaan arkin keskelle. Reunamarginaali ei skaalaa, vaan leikkaa vain reunoja.',
+    pagesPerSheet: 'Sivuja A4-arkilla',
+    pagesPerSheetHint: '2 = nykyinen taso (kaksi sivua per A4-arkki). 4 pakkaa neljä sivua 2×2-ruudukkoon (esim. 4 × A6 yhdelle A4-arkille); sivu käännetään 90°, jos se näin mahtuu ruutunsa. 1 = yksi sivu koko arkilla. Toista-tila ohittaa tämän asetuksen.',
     mirror: 'Duplex-valoläpäisy (peilaa taustasivut)',
     mirrorHint: 'Easter egg: lisää jokaisen A4-sivun jälkeen peilatun kopion, jotta kaksipuolisesti tulostettuna takapuoli näkyy läpi ja kohdistuu etusivun kanssa.',
     mirrorOnly: 'Tulosta vain peilatut (tausta)sivut',
     mirrorOnlyHint: 'Easter egg, "lapsille": tulostaa vain peilatut taustasivut ilman etusivuja.',
     repeat: 'Toista kartat: jokainen kartta kopioina omalla A4-arkilla',
-    repeatHint: 'Ruuduttaa jokaisen sivun erikseen 1:1-kopioina omalle arkeilleen (esim. jokainen sivu 4 × A6). Määrä rajataan niin, että jokainen kopio mahtuu arkille (esim. enintään 2 × A5).',
+    repeatHint: 'Ruuduttaa jokaisen sivun erikseen 1:1-kopioina omalle arkeilleen (esim. jokainen sivu 4 × A6). Määrä rajataan niin, että jokainen kopio mahtuu arkille (esim. enintään 2 × A5); kopio kääntää tarvittaessa 90°.',
     repeatN: 'Kopioiden määrä',
     repeatCap: '{n} kopiota · {cols}×{rows} ruudukko',
     repeatMax: 'Arkille mahtuu tässä koossa enintään {max} kopiota (1:1).',
@@ -106,12 +109,14 @@ const I18N = {
     autoRotateHint: 'Rotates the map 90° when the cropped content is portrait so it fills the landscape A5 cell instead of being scaled down. The decision is based on the content orientation, not the page dimensions.',
     keepOriginal: 'Keep original size (1:1)',
     keepOriginalHint: 'Places the map at its original size, centered. The margin does not scale it — it only cuts away the edges.',
+    pagesPerSheet: 'Pages per A4 sheet',
+    pagesPerSheetHint: '2 = current behavior (two pages per A4). 4 packs four pages into a 2×2 grid (e.g. 4 × A6 on one A4 sheet); a page is rotated 90° when that is what makes it fit its slot. 1 = one page per full sheet. Repeat mode overrides this setting.',
     mirror: 'Duplex shine-through (mirror back pages)',
     mirrorHint: 'Easter egg: appends a mirrored copy after every A4 page so that when printed double-sided the back shows through and aligns with the front.',
     mirrorOnly: 'Print only the mirrored (back) pages',
     mirrorOnlyHint: 'Easter egg, "for kids": prints only the mirrored back pages, without the fronts.',
     repeat: 'Repeat maps: each map as copies on its own A4 sheet',
-    repeatHint: 'Tiles every page separately as 1:1 copies on its own A4 sheet (e.g. each page 4 × A6). The count is capped so every copy fits at 1:1 (e.g. at most 2 × A5).',
+    repeatHint: 'Tiles every page separately as 1:1 copies on its own A4 sheet (e.g. each page 4 × A6). The count is capped so every copy fits at 1:1 (e.g. at most 2 × A5); copies are rotated 90° when needed to fit.',
     repeatN: 'Number of copies',
     repeatCap: '{n} copies · {cols}×{rows} grid',
     repeatMax: 'At this size an A4 sheet fits at most {max} copies (1:1).',
@@ -165,6 +170,7 @@ function applyLang() {
   el('marginHint').textContent = t('marginHint');
   el('autoRotateHint').textContent = t('autoRotateHint');
   el('keepOriginalHint').textContent = t('keepOriginalHint');
+  el('pagesPerSheetHint').textContent = t('pagesPerSheetHint');
   el('mirrorHint').textContent = t('mirrorHint');
   el('mirrorOnlyHint').textContent = t('mirrorOnlyHint');
   el('repeatHint').textContent = t('repeatHint');
@@ -386,9 +392,25 @@ function renderFileList() {
   });
 }
 
+/* pagesPerSheet() — validated pages-per-A4-sheet setting (1 | 2 | 4). 2 is the
+ * classic two-half-sheets stack; 1 and 4 use a grid layout with fit-driven
+ * per-page rotation (see buildSheetModel). Ignored by repeat mode. */
+function pagesPerSheet() {
+  const n = Number(state.options.pagesPerSheet);
+  return n === 1 || n === 4 ? n : 2;
+}
+
 function isOversized(p) {
   const oneToOne = state.options.keepOriginal || state.options.repeat;
-  return oneToOne && (p.cropWmm > MapMergerExport.A4.w + 0.001 || p.cropHmm > MapMergerExport.A4.h + 0.001);
+  if (!oneToOne) return false;
+  const A4 = MapMergerExport.A4;
+  const fits = (w, h) => w <= A4.w + 0.001 && h <= A4.h + 0.001;
+  // Repeat & grid modes (pagesPerSheet 1/4) rotate pages when that makes them
+  // fit (fitOrientation / fitToCell), so a page that only fits rotated is not
+  // clipped there. Non-repeat stack keepOriginal never rotates, so only the
+  // original orientation counts.
+  if (fits(p.cropHmm, p.cropWmm) && (state.options.repeat || pagesPerSheet() !== 2)) return false;
+  return !fits(p.cropWmm, p.cropHmm);
 }
 
 function mirrorSheet(sheet) {
@@ -399,12 +421,27 @@ function mirrorSheet(sheet) {
     aspect: sheet.aspect,
     mapW: sheet.mapW,
     mapH: sheet.mapH,
+    grid: sheet.grid,
   };
 }
 
 function maxRepeatN() {
   if (!state.options.repeat || !state.pages.length) return 24;
-  return Math.min(...state.pages.map(p => MapMergerExport.maxRepeatCopies(p.cropWmm, p.cropHmm)));
+  return Math.min(...state.pages.map(p => MapMergerExport.maxRepeatCopiesAny(p.cropWmm, p.cropHmm)));
+}
+
+/* rotatedCrop(p, cw) — the page's crop canvas rotated 90°, cached per crop
+ * canvas + direction (recomputePage produces a fresh crop canvas, which
+ * busts the key). Default CW; CCW undoes a page-level auto-rotate so the
+ * content ends upright instead of upside down. */
+function rotatedCrop(p, cw) {
+  const dir = cw !== false;
+  if (p._rot90For !== p.cropCanvas || p._rot90Dir !== dir) {
+    p._rot90 = MapMergerCrop.rotateCanvas90(p.cropCanvas, dir);
+    p._rot90For = p.cropCanvas;
+    p._rot90Dir = dir;
+  }
+  return p._rot90;
 }
 
 function buildSheetModel() {
@@ -412,34 +449,82 @@ function buildSheetModel() {
   if (state.options.repeat) {
     const sheets = [];
     state.pages.forEach(p => {
-      const maxN = MapMergerExport.maxRepeatCopies(p.cropWmm, p.cropHmm);
+      const maxN = MapMergerExport.maxRepeatCopiesAny(p.cropWmm, p.cropHmm);
       const n = Math.min(maxN, Math.max(1, Math.floor(Number(state.options.repeatN)) || 1));
-      const cell = { canvas: p.cropCanvas, wmm: p.cropWmm, hmm: p.cropHmm, pageId: p.id, mirrored: false };
+      // Fit-driven orientation: keep the original orientation whenever it
+      // already allows n copies at 1:1; rotate 90° only when that is what
+      // makes n copies fit (independent of the autoRotate option).
+      const o = MapMergerExport.fitOrientation(p.cropWmm, p.cropHmm, n);
+      const cell = {
+        canvas: o.rotated ? rotatedCrop(p) : p.cropCanvas,
+        wmm: o.w,
+        hmm: o.h,
+        pageId: p.id,
+        mirrored: false,
+        rotated: o.rotated,
+      };
       const cells = [];
       for (let i = 0; i < n; i++) cells.push(cell);
-      const front = { cells, layout: 'grid', count: n, aspect: p.cropWmm / p.cropHmm, mapW: p.cropWmm, mapH: p.cropHmm };
+      const front = { cells, layout: 'grid', count: n, aspect: o.w / o.h, mapW: o.w, mapH: o.h };
       if (state.options.mirror && state.options.mirrorOnly) sheets.push(mirrorSheet(front));
       else if (state.options.mirror) sheets.push(front, mirrorSheet(front));
       else sheets.push(front);
     });
     return sheets;
   }
-  const pairs = MapMergerExport.chunkPages(state.pages, 2);
+  const per = pagesPerSheet();
+  const chunks = MapMergerExport.chunkPages(state.pages, per);
   const sheets = [];
-  pairs.forEach(pair => {
-    const front = {
-      cells: pair.cells.map(p => p ? { canvas: p.cropCanvas, wmm: p.cropWmm, hmm: p.cropHmm, pageId: p.id, mirrored: false } : null),
-      layout: 'stack',
-      count: 2,
-    };
-    if (state.options.mirror) {
-      if (state.options.mirrorOnly) sheets.push(mirrorSheet(front));
-      else sheets.push(front, mirrorSheet(front));
-    } else {
-      sheets.push(front);
+  chunks.forEach(chunk => {
+    if (per === 2) {
+      // Classic stack layout: two half-A4 cells, no sheet-level rotation.
+      sheets.push(mirrorMaybe({
+        cells: chunk.cells.map(p => p ? { canvas: p.cropCanvas, wmm: p.cropWmm, hmm: p.cropHmm, pageId: p.id, mirrored: false } : null),
+        layout: 'stack',
+        count: 2,
+      }));
+      return;
     }
+    // Grid layout (1 or 4 pages per sheet): pick a grid that holds every
+    // page in the chunk in some orientation, then fit-rotate each page into
+    // its cell. Direction: CW, unless the page-level canvas was already
+    // turned clockwise by auto-rotate — CCW restores the upright original.
+    const present = chunk.cells.filter(Boolean);
+    const dims = present.map(p => ({ w: p.cropWmm, h: p.cropHmm }));
+    const aspect = dims.length ? dims[0].w / dims[0].h : (MapMergerExport.CELL.w / MapMergerExport.CELL.h);
+    const grid = MapMergerExport.gridDimsFor(per, aspect, dims);
+    const cw = MapMergerExport.A4.w / grid.cols;
+    const ch = MapMergerExport.A4.h / grid.rows;
+    const oneToOne = state.options.keepOriginal;
+    const cells = chunk.cells.map(p => {
+      if (!p) return null;
+      const f = MapMergerExport.fitToCell(p.cropWmm, p.cropHmm, cw, ch, { keepOriginal: oneToOne });
+      return {
+        canvas: f.rotated ? rotatedCrop(p, !p.rotated) : p.cropCanvas,
+        wmm: f.w,
+        hmm: f.h,
+        pageId: p.id,
+        mirrored: false,
+        rotated: f.rotated,
+      };
+    });
+    sheets.push(mirrorMaybe({
+      cells,
+      layout: 'grid',
+      count: per,
+      aspect,
+      mapW: Math.max(...dims.map(d => d.w)),
+      mapH: Math.max(...dims.map(d => d.h)),
+      grid,
+    }));
   });
   return sheets;
+
+  function mirrorMaybe(front) {
+    if (state.options.mirror && state.options.mirrorOnly) return mirrorSheet(front);
+    if (state.options.mirror) { sheets.push(front); return mirrorSheet(front); }
+    return front;
+  }
 }
 
 function sheetSourceLabel(pageId) {
@@ -452,9 +537,9 @@ function countSheets() {
   const n = state.pages.length;
   if (!n) return 0;
   if (state.options.repeat) return n * (state.options.mirror && !state.options.mirrorOnly ? 2 : 1);
-  const pairs = Math.ceil(n / 2);
-  if (state.options.mirror) return pairs * (state.options.mirrorOnly ? 1 : 2);
-  return pairs;
+  const sheets = Math.ceil(n / pagesPerSheet());
+  if (state.options.mirror) return sheets * (state.options.mirrorOnly ? 1 : 2);
+  return sheets;
 }
 
 function renderAll() {
@@ -588,7 +673,7 @@ function renderSheets() {
     ctx.fillRect(0, 0, margin, h);
     ctx.fillRect(w - margin, 0, margin, h);
     sheet.cells.forEach((cell, ci) => {
-      const g = MapMergerExport.cellGeom(ci, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
+      const g = MapMergerExport.cellGeom(ci, sheet.layout, sheet.count, sheet.aspect, sheet.mapW, sheet.mapH, sheet.grid);
       const gx = g.x * pxPerMm, gy = g.y * pxPerMm, gw = g.w * pxPerMm, gh = g.h * pxPerMm;
       ctx.strokeStyle = '#d0d0d0';
       ctx.lineWidth = 1;
@@ -596,12 +681,17 @@ function renderSheets() {
       ctx.strokeRect(gx, gy, gw, gh);
       if (!cell) return;
       const clip = MapMergerExport.clipRectFor(g, state.options.marginMm);
-      const r = MapMergerExport.computeCellPlacement(cell.wmm, cell.hmm, { w: clip.w, h: clip.h }, { keepOriginal: oneToOne });
+      // Same target rule as the PDF export (createA4Pdf): scaled maps are
+      // centered in the printable clip; a 1:1 map larger than the clip is
+      // centered in the full cell so the overhang falls on the outer edge.
+      let place = clip;
+      if (oneToOne && (cell.wmm > clip.w + 1e-6 || cell.hmm > clip.h + 1e-6)) place = g;
+      const r = MapMergerExport.computeCellPlacement(cell.wmm, cell.hmm, { w: place.w, h: place.h }, { keepOriginal: oneToOne });
       ctx.save();
       ctx.beginPath();
       ctx.rect(clip.x * pxPerMm, clip.y * pxPerMm, clip.w * pxPerMm, clip.h * pxPerMm);
       ctx.clip();
-      ctx.drawImage(cell.canvas, (clip.x + r.x) * pxPerMm, (clip.y + r.y) * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
+      ctx.drawImage(cell.canvas, (place.x + r.x) * pxPerMm, (place.y + r.y) * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
       ctx.restore();
       if (cell.pageId === state.selectedId) {
         ctx.strokeStyle = '#e94560';
@@ -617,12 +707,19 @@ function renderSheets() {
     cap.className = 'sheet-cap';
     let gridInfo = '';
     if (sheet.layout === 'grid' && sheet.count > 1) {
-      const gd = MapMergerExport.gridDims(sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
+      const gd = sheet.grid || MapMergerExport.gridDims(sheet.count, sheet.aspect, sheet.mapW, sheet.mapH);
       gridInfo = ' · ' + t('repeatCap', { n: sheet.count, cols: gd.cols, rows: gd.rows });
     }
+    const srcLabels = [];
+    sheet.cells.forEach(c => {
+      if (!c) return;
+      const l = sheetSourceLabel(c.pageId);
+      if (l && !srcLabels.includes(l)) srcLabels.push(l);
+    });
     cap.textContent = t('sheetCaption', { n: si + 1, total: sheets.length }) +
-      (sheet.layout === 'grid' && sheet.cells[0] ? ' · ' + sheetSourceLabel(sheet.cells[0].pageId) : '') +
+      (srcLabels.length ? ' · ' + srcLabels.join(' + ') : '') +
       gridInfo +
+      (sheet.cells.some(c => c && c.rotated) ? ' · ↻90°' : '') +
       (sheet.cells.some(c => c && c.mirrored) ? t('sheetBack') : '');
     wrap.appendChild(cv);
     wrap.appendChild(cap);
@@ -673,7 +770,7 @@ async function exportPdf() {
         const png = await MapMergerExport.canvasToPngBytes(cell.canvas);
         row.push({ png, wmm: cell.wmm, hmm: cell.hmm });
       }
-      converted.push({ cells: row, layout: sheet.layout, count: sheet.count, aspect: sheet.aspect });
+      converted.push({ cells: row, layout: sheet.layout, count: sheet.count, aspect: sheet.aspect, mapW: sheet.mapW, mapH: sheet.mapH });
     }
     const bytes = await MapMergerExport.createA4Pdf(converted, {
       keepOriginal: state.options.keepOriginal || state.options.repeat,
@@ -751,6 +848,12 @@ function init() {
   el('optMargin').addEventListener('change', e => { state.options.marginMm = Number(e.target.value); renderSheets(); updateSummary(); });
   el('optAutoRotate').addEventListener('change', e => { state.options.autoRotate = e.target.checked; redoCrops(); });
   el('optKeepOriginal').addEventListener('change', e => { state.options.keepOriginal = e.target.checked; renderAll(); updateSummary(); });
+  el('optPagesPerSheet').addEventListener('change', e => {
+    const n = Number(e.target.value);
+    state.options.pagesPerSheet = n === 1 || n === 4 ? n : 2;
+    renderAll();
+    updateSummary();
+  });
   el('optMirror').addEventListener('change', e => {
     state.options.mirror = e.target.checked;
     el('optMirrorOnly').disabled = !e.target.checked;
